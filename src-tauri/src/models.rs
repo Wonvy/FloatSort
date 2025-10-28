@@ -64,6 +64,7 @@ pub struct Rule {
 }
 
 /// 文件事件
+#[allow(dead_code)]
 #[derive(Debug, Clone, Serialize)]
 pub struct FileEvent {
     pub event_type: String,

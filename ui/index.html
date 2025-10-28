@@ -3,122 +3,137 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>FloatSort - 智能悬浮文件整理器</title>
+    <title>FloatSort - 智能文件整理器</title>
     <link rel="stylesheet" href="styles.css">
 </head>
 <body>
     <div class="app-container">
         <!-- 头部 -->
         <header class="app-header">
-            <div class="logo">
-                <svg class="logo-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor">
-                    <path d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z"/>
-                </svg>
-                <h1>FloatSort</h1>
-            </div>
-            <div class="status-indicator" id="status">
-                <span class="status-dot"></span>
-                <span class="status-text">未监控</span>
-            </div>
+            <h1>📁 FloatSort</h1>
+            <p class="subtitle">智能文件整理助手</p>
         </header>
 
-        <!-- 主要控制区 -->
-        <main class="main-content">
-            <!-- 监控控制 -->
-            <section class="control-section">
-                <button class="btn btn-primary" id="toggleMonitor">
-                    <svg class="btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor">
-                        <polygon points="5 3 19 12 5 21 5 3"></polygon>
-                    </svg>
-                    <span>开始监控</span>
-                </button>
-                
-                <button class="btn btn-secondary" id="settingsBtn">
-                    <svg class="btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor">
-                        <circle cx="12" cy="12" r="3"></circle>
-                        <path d="M12 1v6m0 6v6m8.66-14.66l-4.24 4.24m-4.24 4.24l-4.24 4.24M23 12h-6m-6 0H1m20.66 8.66l-4.24-4.24m-4.24-4.24l-4.24-4.24"></path>
-                    </svg>
-                    <span>设置</span>
-                </button>
-            </section>
-
+        <!-- 主内容区 -->
+        <main class="app-main">
             <!-- 拖拽区域 -->
-            <section class="drop-zone" id="dropZone">
-                <svg class="drop-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor">
-                    <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4M17 8l-5-5-5 5M12 3v12"/>
-                </svg>
-                <p class="drop-text">拖拽文件到此处快速整理</p>
-                <p class="drop-hint">支持单个或多个文件</p>
-            </section>
+            <div class="drop-zone" id="dropZone">
+                <div class="drop-zone-content">
+                    <svg class="drop-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                        <path d="M7 18a4.6 4.4 0 0 1 0 -9a5 4.5 0 0 1 11 2h1a3.5 3.5 0 0 1 0 7h-1" />
+                        <polyline points="9 15 12 12 15 15" />
+                        <line x1="12" y1="12" x2="12" y2="21" />
+                    </svg>
+                    <p class="drop-text">拖拽文件到这里</p>
+                    <p class="drop-hint">或点击选择文件</p>
+                </div>
+            </div>
+
+            <!-- 快速操作 -->
+            <div class="quick-actions">
+                <button class="action-btn" id="addRuleBtn">
+                    <span>➕</span> 添加规则
+                </button>
+                <button class="action-btn" id="monitorBtn">
+                    <span>👁️</span> 开始监控
+                </button>
+                <button class="action-btn" id="settingsBtn">
+                    <span>⚙️</span> 设置
+                </button>
+            </div>
 
             <!-- 统计信息 -->
-            <section class="stats-section">
-                <div class="stat-card">
+            <div class="stats">
+                <div class="stat-item">
                     <div class="stat-value" id="filesProcessed">0</div>
-                    <div class="stat-label">已处理文件</div>
+                    <div class="stat-label">已处理</div>
                 </div>
-                <div class="stat-card">
-                    <div class="stat-value" id="filesOrganized">0</div>
-                    <div class="stat-label">已整理文件</div>
+                <div class="stat-item">
+                    <div class="stat-value" id="rulesCount">0</div>
+                    <div class="stat-label">规则数</div>
                 </div>
-            </section>
+                <div class="stat-item">
+                    <div class="stat-value" id="monitorStatus">未激活</div>
+                    <div class="stat-label">监控状态</div>
+                </div>
+            </div>
 
-            <!-- 活动日志 -->
-            <section class="activity-section">
-                <h3 class="section-title">最近活动</h3>
+            <!-- 最近活动 -->
+            <div class="recent-activity">
+                <h3>📋 最近活动</h3>
                 <div class="activity-list" id="activityList">
-                    <div class="activity-empty">暂无活动记录</div>
+                    <div class="activity-item empty">
+                        暂无活动记录
+                    </div>
                 </div>
-            </section>
+            </div>
         </main>
 
-        <!-- 设置面板 -->
-        <div class="settings-panel" id="settingsPanel">
-            <div class="settings-header">
-                <h2>设置</h2>
-                <button class="close-btn" id="closeSettings">×</button>
+        <!-- 底部 -->
+        <footer class="app-footer">
+            <span class="version">v0.1.0</span>
+            <span class="status">就绪</span>
+        </footer>
+    </div>
+
+    <!-- 规则编辑器模态框 -->
+    <!-- 添加规则模态框 -->
+    <div class="modal" id="ruleModal" style="display: none;">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>📝 创建规则</h2>
+                <button class="close-btn" id="closeModalBtn">✕</button>
             </div>
-            
-            <div class="settings-content">
-                <!-- 监控路径 -->
-                <div class="settings-group">
-                    <h3>监控路径</h3>
-                    <div id="watchPathsList"></div>
-                    <button class="btn btn-small" id="addWatchPath">+ 添加路径</button>
-                </div>
+            <div class="modal-body">
+                <form id="ruleForm">
+                    <div class="form-group">
+                        <label for="ruleName">规则名称</label>
+                        <input type="text" id="ruleName" placeholder="例如：整理图片" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="ruleType">匹配类型</label>
+                        <select id="ruleType">
+                            <option value="extension">文件扩展名</option>
+                            <option value="size">文件大小</option>
+                            <option value="name">文件名包含</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label for="ruleValue">匹配值</label>
+                        <input type="text" id="ruleValue" placeholder="例如：.jpg, .png" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="targetFolder">目标文件夹</label>
+                        <div class="folder-input">
+                            <input type="text" id="targetFolder" placeholder="选择目标文件夹" required readonly>
+                            <button type="button" class="browse-btn" id="browseFolderBtn">浏览</button>
+                        </div>
+                    </div>
+                    <div class="form-actions">
+                        <button type="button" class="btn-secondary" id="cancelBtn">取消</button>
+                        <button type="submit" class="btn-primary">保存规则</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
 
-                <!-- 规则列表 -->
-                <div class="settings-group">
-                    <h3>整理规则</h3>
-                    <div id="rulesList"></div>
-                    <button class="btn btn-small" id="addRule">+ 添加规则</button>
-                </div>
-
-                <!-- 其他选项 -->
-                <div class="settings-group">
-                    <h3>其他选项</h3>
-                    <label class="checkbox-label">
-                        <input type="checkbox" id="autoStart">
-                        <span>启动时自动开始监控</span>
-                    </label>
-                    <label class="checkbox-label">
-                        <input type="checkbox" id="showNotifications">
-                        <span>显示通知</span>
-                    </label>
-                </div>
-
-                <div class="settings-actions">
-                    <button class="btn btn-primary" id="saveSettings">保存设置</button>
+    <!-- 设置模态框 -->
+    <div class="modal" id="settingsModal" style="display: none;">
+        <div class="modal-content" style="max-width: 600px;">
+            <div class="modal-header">
+                <h2>⚙️ 设置</h2>
+                <button class="close-btn" id="closeSettingsBtn">✕</button>
+            </div>
+            <div class="modal-body">
+                <h3 style="margin-top: 0; color: #666; font-size: 14px;">当前规则</h3>
+                <div id="rulesList" style="max-height: 400px; overflow-y: auto;">
+                    <div class="activity-item empty">暂无规则</div>
                 </div>
             </div>
         </div>
-
-        <!-- 遮罩层 -->
-        <div class="overlay" id="overlay"></div>
     </div>
 
     <script src="app.js"></script>
 </body>
 </html>
-
-

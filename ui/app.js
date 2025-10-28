@@ -1,322 +1,543 @@
-// Tauri API
-const { invoke } = window.__TAURI__.tauri;
-const { open } = window.__TAURI__.dialog;
-const { listen } = window.__TAURI__.event;
-
 // 应用状态
-let appState = {
-    monitoring: false,
-    config: null,
-    filesProcessed: 0,
-    filesOrganized: 0,
-};
+let monitoringActive = false;
+let rulesCount = 0;
+let filesProcessed = 0;
 
-// DOM 元素
-const elements = {
-    toggleMonitor: document.getElementById('toggleMonitor'),
-    settingsBtn: document.getElementById('settingsBtn'),
-    closeSettings: document.getElementById('closeSettings'),
-    saveSettings: document.getElementById('saveSettings'),
-    settingsPanel: document.getElementById('settingsPanel'),
-    overlay: document.getElementById('overlay'),
-    dropZone: document.getElementById('dropZone'),
-    status: document.getElementById('status'),
-    activityList: document.getElementById('activityList'),
-    filesProcessed: document.getElementById('filesProcessed'),
-    filesOrganized: document.getElementById('filesOrganized'),
-    watchPathsList: document.getElementById('watchPathsList'),
-    rulesList: document.getElementById('rulesList'),
-    addWatchPath: document.getElementById('addWatchPath'),
-    addRule: document.getElementById('addRule'),
-    autoStart: document.getElementById('autoStart'),
-    showNotifications: document.getElementById('showNotifications'),
-};
+// Tauri API (延迟初始化)
+let invoke, open, listen, appWindow;
 
-// 初始化应用
+// DOM 元素 (延迟初始化)
+let dropZone, addRuleBtn, monitorBtn, settingsBtn, ruleModal, settingsModal;
+let closeModalBtn, cancelBtn, closeSettingsBtn, ruleForm, browseFolderBtn, activityList, rulesList;
+
+// 初始化
 async function init() {
-    console.log('FloatSort 正在初始化...');
+    console.log('FloatSort UI 初始化...');
     
-    // 加载配置
-    await loadConfig();
-    
-    // 设置事件监听器
-    setupEventListeners();
-    
-    // 监听后端事件
-    setupBackendListeners();
-    
-    console.log('FloatSort 初始化完成');
+    try {
+        // 等待 Tauri API 准备就绪
+        if (!window.__TAURI__) {
+            console.error('Tauri API 未加载');
+            return;
+        }
+        
+        // 初始化 Tauri API
+        console.log('=== Tauri API 初始化 ===');
+        console.log('__TAURI__ keys:', Object.keys(window.__TAURI__));
+        
+        // Tauri v1 API 结构 (启用 withGlobalTauri 后)
+        const { invoke: invokeFunc } = window.__TAURI__.tauri || {};
+        const { open: openFunc } = window.__TAURI__.dialog || {};
+        const { listen: listenFunc } = window.__TAURI__.event || {};
+        
+        invoke = invokeFunc;
+        open = openFunc;
+        listen = listenFunc;
+        
+        console.log('✓ invoke:', typeof invoke);
+        console.log('✓ open:', typeof open);
+        console.log('✓ listen:', typeof listen);
+        
+        if (!invoke) {
+            console.error('❌ Tauri API 加载失败！');
+            console.error('请确保 tauri.conf.json 中 withGlobalTauri 设置为 true');
+            throw new Error('无法找到 Tauri invoke 函数');
+        }
+        
+        console.log('Tauri API 已加载');
+        
+        // 初始化 DOM 元素
+        dropZone = document.getElementById('dropZone');
+        addRuleBtn = document.getElementById('addRuleBtn');
+        monitorBtn = document.getElementById('monitorBtn');
+        settingsBtn = document.getElementById('settingsBtn');
+        ruleModal = document.getElementById('ruleModal');
+        settingsModal = document.getElementById('settingsModal');
+        closeModalBtn = document.getElementById('closeModalBtn');
+        cancelBtn = document.getElementById('cancelBtn');
+        closeSettingsBtn = document.getElementById('closeSettingsBtn');
+        ruleForm = document.getElementById('ruleForm');
+        browseFolderBtn = document.getElementById('browseFolderBtn');
+        activityList = document.getElementById('activityList');
+        rulesList = document.getElementById('rulesList');
+        
+        console.log('DOM 元素已获取');
+        
+        // 加载统计信息
+        await loadStatistics();
+        
+        // 设置事件监听器
+        setupEventListeners();
+        
+        // 监听后端事件
+        setupBackendListeners();
+        
+        console.log('UI 初始化完成 ✅');
+    } catch (error) {
+        console.error('初始化失败:', error);
+    }
 }
 
-// 加载配置
-async function loadConfig() {
+// 加载统计信息
+async function loadStatistics() {
     try {
-        appState.config = await invoke('get_config');
-        console.log('配置已加载:', appState.config);
-        updateUI();
+        const stats = await invoke('get_statistics');
+        updateStats(stats);
     } catch (error) {
-        console.error('加载配置失败:', error);
-        showNotification('加载配置失败: ' + error, 'error');
+        console.error('加载统计信息失败:', error);
+    }
+}
+
+// 更新统计显示
+function updateStats(stats) {
+    if (stats) {
+        document.getElementById('filesProcessed').textContent = stats.files_processed || 0;
+        document.getElementById('rulesCount').textContent = stats.rules_count || 0;
+        document.getElementById('monitorStatus').textContent = stats.monitoring ? '监控中' : '未激活';
     }
 }
 
 // 设置事件监听器
 function setupEventListeners() {
-    // 监控开关
-    elements.toggleMonitor.addEventListener('click', toggleMonitoring);
-    
-    // 设置面板
-    elements.settingsBtn.addEventListener('click', openSettings);
-    elements.closeSettings.addEventListener('click', closeSettings);
-    elements.overlay.addEventListener('click', closeSettings);
-    elements.saveSettings.addEventListener('click', saveSettings);
-    
-    // 添加路径和规则
-    elements.addWatchPath.addEventListener('click', addWatchPath);
-    elements.addRule.addEventListener('click', () => {
-        alert('规则编辑器正在开发中...');
-    });
-    
     // 拖拽区域
-    setupDropZone();
-}
-
-// 设置后端事件监听
-async function setupBackendListeners() {
-    // 监听文件整理事件
-    await listen('file-organized', (event) => {
-        console.log('文件已整理:', event.payload);
-        appState.filesOrganized++;
-        updateStats();
-        addActivity(
-            `文件已整理: ${event.payload.file_name}`,
-            `${event.payload.original_path} → ${event.payload.new_path}`
-        );
-    });
-    
-    // 监听错误事件
-    await listen('file-error', (event) => {
-        console.error('文件处理错误:', event.payload);
-        addActivity(
-            `错误: ${event.payload.file_path}`,
-            event.payload.error,
-            'error'
-        );
-    });
-}
-
-// 切换监控状态
-async function toggleMonitoring() {
-    try {
-        if (appState.monitoring) {
-            await invoke('stop_monitoring');
-            appState.monitoring = false;
-            elements.toggleMonitor.innerHTML = `
-                <svg class="btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor">
-                    <polygon points="5 3 19 12 5 21 5 3"></polygon>
-                </svg>
-                <span>开始监控</span>
-            `;
-            elements.status.classList.remove('active');
-            elements.status.querySelector('.status-text').textContent = '未监控';
-            showNotification('监控已停止', 'info');
-        } else {
-            await invoke('start_monitoring');
-            appState.monitoring = true;
-            elements.toggleMonitor.innerHTML = `
-                <svg class="btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor">
-                    <rect x="6" y="4" width="4" height="16"></rect>
-                    <rect x="14" y="4" width="4" height="16"></rect>
-                </svg>
-                <span>停止监控</span>
-            `;
-            elements.status.classList.add('active');
-            elements.status.querySelector('.status-text').textContent = '监控中';
-            showNotification('监控已启动', 'success');
-        }
-    } catch (error) {
-        console.error('切换监控状态失败:', error);
-        showNotification('操作失败: ' + error, 'error');
-    }
-}
-
-// 打开设置面板
-function openSettings() {
-    elements.settingsPanel.classList.add('open');
-    elements.overlay.classList.add('show');
-    renderWatchPaths();
-    renderRules();
-    elements.autoStart.checked = appState.config.auto_start;
-    elements.showNotifications.checked = appState.config.show_notifications;
-}
-
-// 关闭设置面板
-function closeSettings() {
-    elements.settingsPanel.classList.remove('open');
-    elements.overlay.classList.remove('show');
-}
-
-// 保存设置
-async function saveSettings() {
-    try {
-        // 更新配置
-        appState.config.auto_start = elements.autoStart.checked;
-        appState.config.show_notifications = elements.showNotifications.checked;
-        
-        await invoke('save_config', { config: appState.config });
-        showNotification('设置已保存', 'success');
-        closeSettings();
-    } catch (error) {
-        console.error('保存设置失败:', error);
-        showNotification('保存设置失败: ' + error, 'error');
-    }
-}
-
-// 添加监控路径
-async function addWatchPath() {
-    try {
-        const selected = await open({
-            directory: true,
-            multiple: false,
-        });
-        
-        if (selected) {
-            if (!appState.config.watch_paths.includes(selected)) {
-                appState.config.watch_paths.push(selected);
-                renderWatchPaths();
+    dropZone.addEventListener('click', async () => {
+        try {
+            const selected = await open({
+                multiple: true,
+                directory: false,
+            });
+            
+            if (selected) {
+                const files = Array.isArray(selected) ? selected : [selected];
+                await processFiles(files);
             }
+        } catch (error) {
+            console.error('选择文件失败:', error);
         }
-    } catch (error) {
-        console.error('添加路径失败:', error);
-    }
-}
-
-// 渲染监控路径列表
-function renderWatchPaths() {
-    elements.watchPathsList.innerHTML = appState.config.watch_paths
-        .map((path, index) => `
-            <div class="path-item">
-                <span class="path-text">${path}</span>
-                <button class="remove-btn" onclick="removePath(${index})">删除</button>
-            </div>
-        `)
-        .join('');
-}
-
-// 删除路径
-window.removePath = function(index) {
-    appState.config.watch_paths.splice(index, 1);
-    renderWatchPaths();
-};
-
-// 渲染规则列表
-function renderRules() {
-    elements.rulesList.innerHTML = appState.config.rules
-        .map((rule, index) => `
-            <div class="rule-item">
-                <div>
-                    <div class="rule-name">${rule.name}</div>
-                    <div style="font-size: 0.75rem; color: var(--text-secondary);">
-                        ${rule.enabled ? '✓ 已启用' : '✗ 已禁用'}
-                    </div>
-                </div>
-                <button class="remove-btn" onclick="removeRule(${index})">删除</button>
-            </div>
-        `)
-        .join('');
-}
-
-// 删除规则
-window.removeRule = function(index) {
-    appState.config.rules.splice(index, 1);
-    renderRules();
-};
-
-// 设置拖拽区域
-function setupDropZone() {
-    elements.dropZone.addEventListener('dragover', (e) => {
-        e.preventDefault();
-        elements.dropZone.classList.add('drag-over');
     });
-    
-    elements.dropZone.addEventListener('dragleave', () => {
-        elements.dropZone.classList.remove('drag-over');
-    });
-    
-    elements.dropZone.addEventListener('drop', async (e) => {
+
+    dropZone.addEventListener('dragover', (e) => {
         e.preventDefault();
-        elements.dropZone.classList.remove('drag-over');
+        dropZone.classList.add('drag-over');
+    });
+
+    dropZone.addEventListener('dragleave', () => {
+        dropZone.classList.remove('drag-over');
+    });
+
+    dropZone.addEventListener('drop', (e) => {
+        e.preventDefault();
+        dropZone.classList.remove('drag-over');
+    });
+
+    // 添加规则按钮
+    addRuleBtn.addEventListener('click', () => {
+        ruleModal.style.display = 'flex';
+    });
+
+    // 监控按钮
+    monitorBtn.addEventListener('click', toggleMonitoring);
+
+    // 设置按钮
+    settingsBtn.addEventListener('click', async () => {
+        await showSettings();
+    });
+
+    // 模态框关闭
+    closeModalBtn.addEventListener('click', closeModal);
+    cancelBtn.addEventListener('click', closeModal);
+    closeSettingsBtn.addEventListener('click', closeSettingsModal);
+
+    ruleModal.addEventListener('click', (e) => {
+        if (e.target === ruleModal) {
+            closeModal();
+        }
+    });
+
+    settingsModal.addEventListener('click', (e) => {
+        if (e.target === settingsModal) {
+            closeSettingsModal();
+        }
+    });
+
+    // 浏览文件夹
+    browseFolderBtn.addEventListener('click', async () => {
+        try {
+            const selected = await open({
+                directory: true,
+                multiple: false,
+            });
+            
+            if (selected) {
+                document.getElementById('targetFolder').value = selected;
+            }
+        } catch (error) {
+            console.error('选择文件夹失败:', error);
+        }
+    });
+
+    // 规则表单提交
+    ruleForm.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        await saveRule();
+    });
+}
+
+// 设置后端监听器
+function setupBackendListeners() {
+    console.log('设置后端事件监听器...');
+    
+    // 监听文件拖拽事件
+    listen('tauri://file-drop', async (event) => {
+        console.log('文件拖拽:', event.payload);
+        const files = event.payload;
+        if (files && files.length > 0) {
+            await processFiles(files);
+        }
+    });
+
+    // 监听文件检测事件（监控模式）
+    listen('file-detected', (event) => {
+        console.log('检测到文件:', event.payload);
+        const fileName = event.payload.file_path.split(/[\\\/]/).pop();
+        addActivity(`🔍 检测: ${fileName}`);
+    });
+
+    // 监听文件处理事件
+    listen('file-processed', (event) => {
+        console.log('文件已处理:', event.payload);
+        filesProcessed++;
+        updateFileCount();
+        addActivity(`📄 已处理: ${event.payload.name || '文件'}`);
+    });
+
+    // 监听后端文件组织事件
+    listen('file-organized', (event) => {
+        console.log('✓ 文件已整理:', event.payload);
+        filesProcessed++;
+        updateFileCount();
         
-        const files = e.dataTransfer.files;
-        for (let file of files) {
-            await organizeFile(file.path);
-        }
+        const fileName = event.payload.file_name || '文件';
+        const targetPath = event.payload.new_path;
+        const targetFolder = targetPath ? targetPath.split(/[\\\/]/).slice(-2, -1)[0] : '目标';
+        
+        addActivity(`✅ 已整理: ${fileName} → ${targetFolder}/`);
+        showNotification(`已整理: ${fileName}`, 'success');
     });
+
+    // 监听文件未匹配规则事件
+    listen('file-no-match', (event) => {
+        console.log('○ 文件未匹配规则:', event.payload);
+        const fileName = event.payload.file_name || '文件';
+        addActivity(`○ 未匹配: ${fileName}`);
+    });
+
+    // 监听错误事件
+    listen('file-error', (event) => {
+        console.error('✗ 文件错误:', event.payload);
+        const fileName = event.payload.file_name || event.payload.file_path?.split(/[\\\/]/).pop() || '文件';
+        const error = event.payload.error || '未知错误';
+        addActivity(`❌ 错误: ${fileName} - ${error}`);
+        showNotification(`处理失败: ${fileName}`, 'error');
+    });
+
+    // 监听一般错误事件
+    listen('error', (event) => {
+        console.error('后端错误:', event.payload);
+        addActivity(`❌ 系统错误: ${event.payload.message || '未知错误'}`);
+    });
+    
+    console.log('后端事件监听器设置完成');
 }
 
-// 整理单个文件
-async function organizeFile(filePath) {
-    try {
-        const result = await invoke('organize_file', { filePath });
-        appState.filesProcessed++;
-        updateStats();
-        addActivity(`手动整理: ${filePath}`, result);
-    } catch (error) {
-        console.error('整理文件失败:', error);
-        addActivity(`整理失败: ${filePath}`, error, 'error');
+// 处理文件
+async function processFiles(files) {
+    console.log('处理文件:', files);
+    
+    let successCount = 0;
+    let failCount = 0;
+    
+    for (const file of files) {
+        try {
+            const result = await invoke('process_file', { path: file });
+            const fileName = file.split(/[/\\]/).pop();
+            
+            if (result && result.length > 0) {
+                addActivity(`✅ 已整理: ${fileName}`);
+                successCount++;
+            } else {
+                addActivity(`📄 已处理: ${fileName} (无匹配规则)`);
+                successCount++;
+            }
+        } catch (error) {
+            console.error('处理文件失败:', error);
+            const fileName = file.split(/[/\\]/).pop();
+            const message = typeof error === 'string' ? error : error.message || '未知错误';
+            addActivity(`❌ 失败: ${fileName} - ${message}`);
+            failCount++;
+        }
     }
-}
-
-// 更新统计信息
-function updateStats() {
-    elements.filesProcessed.textContent = appState.filesProcessed;
-    elements.filesOrganized.textContent = appState.filesOrganized;
-}
-
-// 添加活动记录
-function addActivity(title, detail, type = 'info') {
-    const activityEmpty = elements.activityList.querySelector('.activity-empty');
-    if (activityEmpty) {
-        activityEmpty.remove();
-    }
     
-    const now = new Date().toLocaleTimeString('zh-CN');
-    const item = document.createElement('div');
-    item.className = `activity-item ${type}`;
-    item.innerHTML = `
-        <div class="activity-time">${now}</div>
-        <div class="activity-text">${title}</div>
-        ${detail ? `<div style="font-size: 0.75rem; color: var(--text-secondary); margin-top: 0.25rem;">${detail}</div>` : ''}
-    `;
+    await loadStatistics();
     
-    elements.activityList.insertBefore(item, elements.activityList.firstChild);
-    
-    // 限制活动记录数量
-    const items = elements.activityList.querySelectorAll('.activity-item');
-    if (items.length > 10) {
-        items[items.length - 1].remove();
+    // 显示汇总通知
+    if (failCount === 0) {
+        showNotification(`成功处理 ${successCount} 个文件`, 'success');
+    } else {
+        showNotification(`处理完成: ${successCount} 成功, ${failCount} 失败`, 'warning');
     }
 }
 
 // 显示通知
 function showNotification(message, type = 'info') {
-    if (appState.config && appState.config.show_notifications) {
-        console.log(`[${type.toUpperCase()}] ${message}`);
-        addActivity(message, '', type);
+    // 创建通知元素
+    const notification = document.createElement('div');
+    notification.className = `notification notification-${type}`;
+    notification.textContent = message;
+    
+    // 添加到页面
+    document.body.appendChild(notification);
+    
+    // 动画显示
+    setTimeout(() => notification.classList.add('show'), 10);
+    
+    // 3秒后自动关闭
+    setTimeout(() => {
+        notification.classList.remove('show');
+        setTimeout(() => notification.remove(), 300);
+    }, 3000);
+}
+
+// 切换监控状态
+async function toggleMonitoring() {
+    try {
+        if (monitoringActive) {
+            await invoke('stop_monitoring');
+            monitoringActive = false;
+            monitorBtn.innerHTML = '<span>👁️</span> 开始监控';
+            document.getElementById('monitorStatus').textContent = '未激活';
+            addActivity('⏸️ 监控已停止');
+            showNotification('监控已停止', 'info');
+        } else {
+            // 选择要监控的文件夹
+            const watchPath = await open({
+                directory: true,
+                multiple: false,
+                title: '选择要监控的文件夹'
+            });
+            
+            if (!watchPath) {
+                showNotification('已取消', 'info');
+                return;
+            }
+            
+            await invoke('start_monitoring', { watchPath });
+            monitoringActive = true;
+            monitorBtn.innerHTML = '<span>⏸️</span> 停止监控';
+            document.getElementById('monitorStatus').textContent = '监控中';
+            addActivity(`▶️ 监控已启动: ${watchPath}`);
+            showNotification(`监控已启动: ${watchPath}`, 'success');
+        }
+    } catch (error) {
+        console.error('切换监控状态失败:', error);
+        const message = typeof error === 'string' ? error : error.message || '未知错误';
+        addActivity(`❌ 监控操作失败: ${message}`);
+        showNotification(`监控操作失败: ${message}`, 'error');
     }
 }
 
-// 更新 UI
-function updateUI() {
-    renderWatchPaths();
-    renderRules();
+// 保存规则
+async function saveRule() {
+    const name = document.getElementById('ruleName').value.trim();
+    const type = document.getElementById('ruleType').value;
+    const value = document.getElementById('ruleValue').value.trim();
+    const target = document.getElementById('targetFolder').value.trim();
+
+    // 表单验证
+    if (!name) {
+        showNotification('请输入规则名称', 'error');
+        return;
+    }
+    if (!value) {
+        showNotification('请输入匹配值', 'error');
+        return;
+    }
+    if (!target) {
+        showNotification('请选择目标文件夹', 'error');
+        return;
+    }
+
+    try {
+        // 根据类型构建条件（符合 Rust serde tagged enum 格式）
+        let condition;
+        if (type === 'extension') {
+            const extensions = value.split(',').map(ext => ext.trim().replace(/^\./, ''));
+            condition = { 
+                type: 'Extension',
+                values: extensions 
+            };
+        } else if (type === 'size') {
+            const sizeInBytes = parseInt(value) * 1024 * 1024; // 假设输入是 MB
+            condition = { 
+                type: 'SizeRange',
+                min: null,
+                max: sizeInBytes 
+            };
+        } else {
+            condition = { 
+                type: 'NameContains',
+                pattern: value 
+            };
+        }
+
+        await invoke('add_rule', {
+            rule: {
+                id: `rule_${Date.now()}`,
+                name,
+                enabled: true,
+                conditions: [condition],
+                action: { 
+                    type: 'MoveTo',
+                    destination: target 
+                },
+                priority: 0,
+            }
+        });
+
+        addActivity(`📝 规则已添加: ${name}`);
+        await loadStatistics(); // 重新加载统计信息
+        
+        closeModal();
+        ruleForm.reset();
+        showNotification(`规则 "${name}" 已添加`, 'success');
+    } catch (error) {
+        console.error('保存规则失败:', error);
+        const message = typeof error === 'string' ? error : error.message || '未知错误';
+        addActivity(`❌ 保存规则失败: ${message}`);
+        showNotification(`保存规则失败: ${message}`, 'error');
+    }
+}
+
+// 关闭模态框
+function closeModal() {
+    ruleModal.style.display = 'none';
+}
+
+// 添加活动记录
+function addActivity(message) {
+    const emptyItem = activityList.querySelector('.activity-item.empty');
+    if (emptyItem) {
+        emptyItem.remove();
+    }
+
+    const item = document.createElement('div');
+    item.className = 'activity-item';
+    const time = new Date().toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' });
+    item.textContent = `[${time}] ${message}`;
+    
+    activityList.insertBefore(item, activityList.firstChild);
+    
+    // 限制最多显示 10 条
+    while (activityList.children.length > 10) {
+        activityList.removeChild(activityList.lastChild);
+    }
+}
+
+// 更新文件计数
+function updateFileCount() {
+    document.getElementById('filesProcessed').textContent = filesProcessed;
+}
+
+// 显示设置界面
+async function showSettings() {
+    try {
+        const rules = await invoke('get_rules');
+        
+        // 清空列表
+        rulesList.innerHTML = '';
+        
+        if (rules.length === 0) {
+            rulesList.innerHTML = '<div class="activity-item empty">暂无规则</div>';
+        } else {
+            rules.forEach((rule, index) => {
+                const ruleItem = document.createElement('div');
+                ruleItem.className = 'activity-item';
+                ruleItem.style.cssText = 'display: flex; justify-content: space-between; align-items: center;';
+                
+                // 规则信息
+                const ruleInfo = document.createElement('div');
+                ruleInfo.style.flex = '1';
+                
+                // 获取条件描述
+                let conditionDesc = '';
+                if (rule.conditions && rule.conditions.length > 0) {
+                    const cond = rule.conditions[0];
+                    if (cond.type === 'Extension') {
+                        conditionDesc = `扩展名: ${cond.values.join(', ')}`;
+                    } else if (cond.type === 'SizeRange') {
+                        conditionDesc = `大小: ${cond.max ? Math.round(cond.max / 1024 / 1024) + 'MB' : '不限'}`;
+                    } else if (cond.type === 'NameContains') {
+                        conditionDesc = `包含: ${cond.pattern}`;
+                    }
+                }
+                
+                // 获取动作描述
+                let actionDesc = '';
+                if (rule.action) {
+                    if (rule.action.type === 'MoveTo') {
+                        actionDesc = `→ ${rule.action.destination}`;
+                    } else if (rule.action.type === 'CopyTo') {
+                        actionDesc = `复制到 ${rule.action.destination}`;
+                    }
+                }
+                
+                ruleInfo.innerHTML = `
+                    <div style="font-weight: bold; margin-bottom: 4px;">${rule.name}</div>
+                    <div style="font-size: 12px; color: #666;">${conditionDesc}</div>
+                    <div style="font-size: 12px; color: #999;">${actionDesc}</div>
+                `;
+                
+                // 删除按钮
+                const deleteBtn = document.createElement('button');
+                deleteBtn.textContent = '删除';
+                deleteBtn.className = 'btn-secondary';
+                deleteBtn.style.cssText = 'padding: 4px 12px; font-size: 12px; margin-left: 10px;';
+                deleteBtn.onclick = async () => {
+                    if (confirm(`确定要删除规则 "${rule.name}" 吗？`)) {
+                        try {
+                            await invoke('remove_rule', { index });
+                            showNotification(`规则 "${rule.name}" 已删除`, 'success');
+                            await showSettings(); // 重新加载列表
+                            await loadStatistics(); // 更新统计
+                        } catch (error) {
+                            console.error('删除规则失败:', error);
+                            showNotification('删除规则失败', 'error');
+                        }
+                    }
+                };
+                
+                ruleItem.appendChild(ruleInfo);
+                ruleItem.appendChild(deleteBtn);
+                rulesList.appendChild(ruleItem);
+            });
+        }
+        
+        settingsModal.style.display = 'flex';
+        addActivity('⚙️ 打开设置');
+    } catch (error) {
+        console.error('加载规则失败:', error);
+        showNotification('加载规则失败', 'error');
+    }
+}
+
+// 关闭设置模态框
+function closeSettingsModal() {
+    settingsModal.style.display = 'none';
 }
 
 // 页面加载完成后初始化
-if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', init);
-} else {
-    init();
-}
-
-
+window.addEventListener('DOMContentLoaded', () => {
+    console.log('DOM 加载完成');
+    // 给 Tauri 一点时间加载
+    setTimeout(init, 100);
+});

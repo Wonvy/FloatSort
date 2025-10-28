@@ -1,8 +1,7 @@
 use crate::models::{FileInfo, Rule, RuleAction, RuleCondition};
-use anyhow::{Context, Result};
 use regex::Regex;
 use std::path::Path;
-use tracing::{debug, info};
+use tracing::debug;
 use chrono::Utc;
 
 /// 规则引擎

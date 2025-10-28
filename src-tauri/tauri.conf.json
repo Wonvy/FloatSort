@@ -5,7 +5,7 @@
     "beforeBuildCommand": "",
     "devPath": "../ui",
     "distDir": "../ui",
-    "withGlobalTauri": false
+    "withGlobalTauri": true
   },
   "package": {
     "productName": "FloatSort",
@@ -48,7 +48,8 @@
         "resizable": true,
         "fullscreen": false,
         "decorations": true,
-        "alwaysOnTop": true
+        "alwaysOnTop": true,
+        "fileDropEnabled": true
       }
     ]
   }

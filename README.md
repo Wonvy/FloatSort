@@ -1,265 +1,192 @@
-# FloatSort - 智能悬浮文件整理器
+# FloatSort
 
-<div align="center">
+🚀 **智能悬浮文件整理器** - 轻量、高效、智能
 
-**Smart Floating File Organizer (Rust Edition)**
+## 📋 项目简介
 
-一个基于 Rust 和 Tauri 的智能桌面悬浮窗应用，用于自动整理文件。
+FloatSort 是一个基于 Rust + Tauri 构建的桌面文件整理工具，提供：
 
-[功能特性](#功能特性) • [快速开始](#快速开始) • [使用指南](#使用指南) • [开发文档](#开发文档)
+- 🎯 **拖拽即整理**：拖拽文件自动分类
+- 👁️ **实时监控**：监控文件夹变化，自动整理
+- 📝 **自定义规则**：灵活的规则引擎，多条件判断
+- ⚡ **高性能**：Rust 构建，轻量高效
+- 🎨 **现代界面**：简洁美观的用户体验
 
-</div>
+## 🛠️ 技术栈
 
----
-
-## 🎯 功能特性
-
-### ✨ 核心功能
-
-- **📁 实时文件监控**
-  - 自动监控指定文件夹
-  - 支持多路径同时监控
-  - 跨平台文件系统事件
-
-- **🎨 智能规则引擎**
-  - 多条件判断（扩展名、大小、时间、名称等）
-  - 灵活的动作系统（移动、复制、重命名、删除）
-  - 规则优先级支持
-
-- **🖱️ 拖拽快速整理**
-  - 拖拽文件到悬浮窗
-  - 即时应用规则
-  - 支持批量处理
-
-- **📊 可视化界面**
-  - 现代化深色主题
-  - 实时活动日志
-  - 统计信息展示
-
-### 🛠️ 技术亮点
-
-- **高性能**: Rust 编写，内存安全，零成本抽象
-- **跨平台**: 支持 Windows、macOS、Linux
-- **轻量级**: 小于 10MB 的可执行文件
-- **安全**: Tauri 提供的安全沙箱环境
-
----
+- **后端**: Rust + Tauri
+- **前端**: HTML + CSS + JavaScript
+- **核心库**:
+  - `notify`: 文件系统监控
+  - `serde`: 序列化/反序列化
+  - `tokio`: 异步运行时
+  - `tracing`: 日志系统
 
 ## 🚀 快速开始
 
 ### 环境要求
 
-- Rust 1.70+ (Edition 2021)
-- Node.js 16+ (可选，用于前端开发)
-- 操作系统: Windows 10+, macOS 10.15+, Ubuntu 20.04+
+- Rust 1.70+
+- Node.js 16+ (可选)
+- Visual Studio Build Tools (Windows)
 
 ### 安装依赖
 
 ```bash
-# 安装 Rust (如果尚未安装)
-curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
-
-# Windows 用户需要安装 Visual Studio Build Tools
-# macOS 用户需要安装 Xcode Command Line Tools
-```
-
-### 构建项目
-
-```bash
 # 克隆项目
-git clone https://github.com/yourusername/FloatSort.git
+git clone <your-repo-url>
 cd FloatSort
 
-# 开发模式运行
+# Rust 依赖会在构建时自动安装
+```
+
+### 开发模式
+
+```bash
+# 方式1：使用启动脚本（Windows）
+开始开发.bat
+
+# 方式2：手动启动
+cd src-tauri
+cargo run
+
+# 方式3：使用 Tauri CLI（如果已安装）
 cargo tauri dev
-
-# 生产构建
-cargo tauri build
 ```
 
----
+### 构建发布版本
 
-## 📖 使用指南
-
-### 基础配置
-
-1. **添加监控路径**
-   - 点击"设置"按钮
-   - 在"监控路径"部分点击"添加路径"
-   - 选择要监控的文件夹
-
-2. **配置整理规则**
-   - 默认提供图片和文档规则
-   - 可以自定义规则条件和动作
-   - 调整规则优先级
-
-3. **启动监控**
-   - 点击"开始监控"按钮
-   - 应用将自动整理新文件
-
-### 规则示例
-
-```json
-{
-  "id": "rule_images",
-  "name": "图片文件归类",
-  "enabled": true,
-  "conditions": [
-    {
-      "type": "Extension",
-      "values": ["jpg", "png", "gif"]
-    }
-  ],
-  "action": {
-    "type": "MoveTo",
-    "destination": "Pictures"
-  },
-  "priority": 1
-}
+```bash
+cd src-tauri
+cargo build --release
 ```
 
-### 拖拽整理
-
-直接拖拽文件到悬浮窗的拖拽区域，应用会立即根据规则进行整理。
-
----
-
-## 🔧 开发文档
-
-### 项目结构
+## 📁 项目结构
 
 ```
 FloatSort/
 ├── src-tauri/           # Rust 后端
 │   ├── src/
-│   │   ├── main.rs      # 应用入口
+│   │   ├── main.rs      # 主入口
 │   │   ├── config.rs    # 配置管理
 │   │   ├── models.rs    # 数据模型
-│   │   ├── rule_engine.rs    # 规则引擎
-│   │   ├── file_monitor.rs   # 文件监控
-│   │   └── file_ops.rs       # 文件操作
-│   ├── Cargo.toml       # Rust 依赖
-│   └── tauri.conf.json  # Tauri 配置
+│   │   ├── file_ops.rs  # 文件操作
+│   │   ├── file_monitor.rs  # 文件监控
+│   │   └── rule_engine.rs   # 规则引擎
+│   ├── Cargo.toml
+│   └── tauri.conf.json
 ├── ui/                  # 前端界面
 │   ├── index.html
 │   ├── styles.css
 │   └── app.js
-├── data/                # 配置数据 (运行时生成)
-│   └── config.json
+├── data/                # 数据目录
+│   └── config.json      # 配置文件（自动生成）
 └── README.md
 ```
 
-### 核心模块
+## ✨ 功能特性
 
-#### 规则引擎 (rule_engine.rs)
+### 已实现
 
-负责规则匹配和条件判断：
+- ✅ 基础框架搭建
+- ✅ 配置文件管理
+- ✅ 文件操作（移动、复制、重命名、删除）
+- ✅ 规则引擎（多条件匹配）
+- ✅ 现代化 UI 界面
+- ✅ 拖拽文件处理
 
-- 支持的条件类型：
-  - `Extension`: 文件扩展名
-  - `SizeRange`: 文件大小范围
-  - `NameContains`: 文件名包含
-  - `NameRegex`: 正则表达式匹配
-  - `CreatedDaysAgo`: 创建时间
-  - `ModifiedDaysAgo`: 修改时间
+### 开发中
 
-- 支持的动作类型：
-  - `MoveTo`: 移动到指定目录
-  - `CopyTo`: 复制到指定目录
-  - `Rename`: 重命名文件
-  - `Delete`: 删除文件
+- 🚧 文件夹实时监控
+- 🚧 规则管理界面
+- 🚧 批量操作
+- 🚧 撤销/恢复功能
+- 🚧 统计分析
 
-#### 文件监控 (file_monitor.rs)
+### 计划中
 
-使用 `notify` crate 实现跨平台文件监控：
+- 📅 预设规则模板
+- 📅 智能文件分类建议
+- 📅 多语言支持
+- 📅 主题定制
+- 📅 快捷键支持
 
-- 实时检测文件创建和修改
-- 自动应用规则
-- 事件通知到前端
+## 🎮 使用指南
 
-#### 配置管理 (config.rs)
+### 添加规则
 
-管理应用配置和规则：
+1. 点击 **"➕ 添加规则"** 按钮
+2. 填写规则信息：
+   - 规则名称
+   - 匹配类型（扩展名/大小/文件名）
+   - 匹配值
+   - 目标文件夹
+3. 保存规则
 
-- JSON 格式存储
-- 自动创建默认配置
-- 配置热重载
+### 处理文件
 
----
+**方式1：拖拽**
+- 将文件拖拽到主界面拖拽区
 
-## 🎨 技术栈
+**方式2：选择**
+- 点击拖拽区，选择文件
 
-| 类别 | 技术 |
-|------|------|
-| 语言 | Rust (Edition 2021) |
-| GUI 框架 | Tauri 1.5 |
-| 文件监控 | notify 6.1 |
-| 序列化 | serde, serde_json |
-| 日志 | tracing, tracing-subscriber |
-| 异步运行时 | tokio |
-| 前端 | HTML5, CSS3, JavaScript (ES6+) |
+### 监控文件夹
 
----
+1. 点击 **"👁️ 开始监控"** 按钮
+2. 系统会自动监控配置的文件夹
+3. 新增/修改的文件会自动按规则处理
+4. 点击 **"⏸️ 停止监控"** 停止监控
 
-## 📝 配置文件说明
+## ⚙️ 配置说明
 
-### config.json
+配置文件位置: `data/config.json`
 
 ```json
 {
-  "watch_paths": [
-    "C:/Users/Public/Downloads"
-  ],
-  "rules": [
-    {
-      "id": "rule_id",
-      "name": "规则名称",
-      "enabled": true,
-      "conditions": [...],
-      "action": {...},
-      "priority": 1
-    }
-  ],
+  "monitor_paths": [],
+  "rules": [],
   "auto_start": false,
-  "show_notifications": true,
-  "log_level": "info"
+  "notify_on_action": true
 }
 ```
 
+- `monitor_paths`: 监控的文件夹路径列表
+- `rules`: 整理规则列表
+- `auto_start`: 启动时自动开始监控
+- `notify_on_action`: 执行操作时显示通知
+
+## 🐛 问题排查
+
+### 编译错误
+
+```bash
+# 清理缓存重新编译
+cargo clean
+cargo build
+```
+
+### 窗口无法显示
+
+检查 `ui/` 目录是否存在所有文件：
+- index.html
+- styles.css
+- app.js
+- favicon.ico
+
+## 📄 开源协议
+
+MIT License
+
+## 🤝 贡献
+
+欢迎提交 Issue 和 Pull Request！
+
+## 📮 联系方式
+
+- Issues: [GitHub Issues](your-repo-url/issues)
+- Email: your-email@example.com
+
 ---
 
-## 🤝 贡献指南
-
-欢迎贡献代码、报告问题或提出建议！
-
-1. Fork 本项目
-2. 创建特性分支 (`git checkout -b feature/AmazingFeature`)
-3. 提交更改 (`git commit -m 'Add some AmazingFeature'`)
-4. 推送到分支 (`git push origin feature/AmazingFeature`)
-5. 开启 Pull Request
-
----
-
-## 📄 许可证
-
-本项目采用 MIT 许可证。详见 [LICENSE](LICENSE) 文件。
-
----
-
-## 🙏 致谢
-
-- [Tauri](https://tauri.app/) - 跨平台桌面应用框架
-- [notify](https://github.com/notify-rs/notify) - 文件系统监控
-- [serde](https://serde.rs/) - 序列化框架
-
----
-
-<div align="center">
-
-**用 ❤️ 和 🦀 制作**
-
-[报告问题](https://github.com/yourusername/FloatSort/issues) • [功能建议](https://github.com/yourusername/FloatSort/issues)
-
-</div>
-
-
+**Made with ❤️ using Rust & Tauri**

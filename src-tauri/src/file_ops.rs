@@ -4,7 +4,7 @@ use anyhow::{Context, Result};
 use chrono::{DateTime, Utc};
 use std::fs;
 use std::path::{Path, PathBuf};
-use tracing::{debug, info};
+use tracing::info;
 
 /// 获取文件信息
 pub fn get_file_info(path: &Path) -> Result<FileInfo> {
@@ -76,7 +76,7 @@ fn execute_action(action: &RuleAction, file_info: &FileInfo, engine: &RuleEngine
     let base_path = source_path.parent().unwrap_or(Path::new("."));
 
     match action {
-        RuleAction::MoveTo { destination } => {
+        RuleAction::MoveTo { destination: _ } => {
             let dest_path = engine
                 .get_destination_path(action, file_info, base_path)
                 .context("无法获取目标路径")?;
@@ -85,7 +85,7 @@ fn execute_action(action: &RuleAction, file_info: &FileInfo, engine: &RuleEngine
             Ok(Some(dest_path))
         }
 
-        RuleAction::CopyTo { destination } => {
+        RuleAction::CopyTo { destination: _ } => {
             let dest_path = engine
                 .get_destination_path(action, file_info, base_path)
                 .context("无法获取目标路径")?;
