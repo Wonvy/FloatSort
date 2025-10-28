@@ -4,10 +4,23 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>FloatSort - V2</title>
-    <link rel="stylesheet" href="styles_v2.css">
+    <link rel="stylesheet" href="styles_minimal.css">
 </head>
 <body>
-    <div class="app-container">
+    <!-- Mini悬浮窗模式 -->
+    <div class="mini-window" id="miniWindow" style="display: none;">
+        <div class="mini-content">
+            <div class="mini-icon">📂</div>
+            <div class="mini-text">
+                <div class="mini-label" id="miniRuleLabel">[*]</div>
+                <div class="mini-name" id="miniRuleName">所有规则</div>
+            </div>
+            <div class="mini-status" id="miniStatus">滚轮切换</div>
+        </div>
+    </div>
+
+    <!-- 完整界面 -->
+    <div class="app-container" id="appContainer">
         <!-- 顶部标题栏 -->
         <header class="app-header">
             <div class="logo">
@@ -21,16 +34,19 @@
                 <button class="icon-btn" id="globalStopBtn" title="停止所有监控" style="display: none;">
                     <span>⏸️</span>
                 </button>
+                <button class="icon-btn" id="minimizeBtn" title="最小化为悬浮窗">
+                    <span>➖</span>
+                </button>
             </div>
         </header>
 
         <!-- Tab 切换 -->
         <nav class="tab-nav">
-            <button class="tab-btn active" data-tab="folders">
-                📁 文件夹
-            </button>
-            <button class="tab-btn" data-tab="rules">
+            <button class="tab-btn active" data-tab="rules">
                 📋 规则
+            </button>
+            <button class="tab-btn" data-tab="folders">
+                📁 文件夹
             </button>
             <button class="tab-btn" data-tab="activity">
                 📊 活动
@@ -40,25 +56,8 @@
         <!-- Tab 内容区域 -->
         <main class="tab-content">
             
-            <!-- 文件夹 Tab -->
-            <section class="tab-pane active" id="folders-pane">
-                <div class="pane-header">
-                    <h2>监控文件夹</h2>
-                    <button class="btn-primary" id="addFolderBtn">
-                        ➕ 添加文件夹
-                    </button>
-                </div>
-                <div class="folder-list" id="folderList">
-                    <div class="empty-state">
-                        <span class="empty-icon">📂</span>
-                        <p>暂无监控文件夹</p>
-                        <p class="empty-hint">点击上方按钮添加文件夹开始监控</p>
-                    </div>
-                </div>
-            </section>
-
             <!-- 规则 Tab -->
-            <section class="tab-pane" id="rules-pane">
+            <section class="tab-pane active" id="rules-pane">
                 <div class="pane-header">
                     <h2>整理规则</h2>
                     <button class="btn-primary" id="addRuleBtn">
@@ -70,6 +69,23 @@
                         <span class="empty-icon">📋</span>
                         <p>暂无规则</p>
                         <p class="empty-hint">创建规则来自动整理文件</p>
+                    </div>
+                </div>
+            </section>
+
+            <!-- 文件夹 Tab -->
+            <section class="tab-pane" id="folders-pane">
+                <div class="pane-header">
+                    <h2>监控文件夹</h2>
+                    <button class="btn-primary" id="addFolderBtn">
+                        ➕ 添加文件夹
+                    </button>
+                </div>
+                <div class="folder-list" id="folderList">
+                    <div class="empty-state">
+                        <span class="empty-icon">📂</span>
+                        <p>暂无监控文件夹</p>
+                        <p class="empty-hint">点击上方按钮添加文件夹开始监控</p>
                     </div>
                 </div>
             </section>
@@ -221,6 +237,11 @@
                 <button class="btn-primary" id="confirmBatch">确认整理</button>
             </div>
         </div>
+    </div>
+
+    <!-- 右键菜单 -->
+    <div class="context-menu" id="contextMenu">
+        <!-- 菜单项将动态生成 -->
     </div>
 
     <!-- 通知容器 -->

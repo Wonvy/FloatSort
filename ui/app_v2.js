@@ -11,7 +11,14 @@ const appState = {
     pendingBatch: [],  // 待整理文件队列
     batchThreshold: 5,  // 批量确认阈值
     currentConditions: [],  // 当前规则的条件列表
+    currentRuleIndex: -1,  // 当前选中的规则索引（-1表示所有规则）
+    isMiniMode: false,  // 是否处于Mini模式
 };
+
+// 为规则生成字母编号
+function getRuleLabel(index) {
+    return String.fromCharCode(65 + index); // A, B, C, ...
+}
 
 // ========== Tauri API ==========
 let invoke, dialog, listen;
@@ -82,6 +89,16 @@ function setupEventListeners() {
     // 全局监控按钮
     document.getElementById('globalStartBtn').addEventListener('click', startAllMonitoring);
     document.getElementById('globalStopBtn').addEventListener('click', stopAllMonitoring);
+    
+    // Mini窗口控制
+    document.getElementById('minimizeBtn').addEventListener('click', enterMiniMode);
+    document.getElementById('miniWindow').addEventListener('click', exitMiniMode);
+    
+    // 滚轮切换规则
+    document.getElementById('miniWindow').addEventListener('wheel', handleMiniWheel);
+    
+    // 右键菜单
+    document.getElementById('miniWindow').addEventListener('contextmenu', handleMiniRightClick);
     
     // 文件夹管理
     document.getElementById('addFolderBtn').addEventListener('click', () => openFolderModal());
@@ -172,6 +189,13 @@ function setupBackendListeners() {
         console.log('拖拽文件:', files);
         
         if (files && files.length > 0) {
+            // Mini模式下的处理
+            if (appState.isMiniMode) {
+                handleMiniFileDrop(files);
+                return;
+            }
+            
+            // 完整模式下的处理
             addActivity(`📥 拖入 ${files.length} 个文件/文件夹`);
             
             // 将拖入的文件添加到批量队列
@@ -333,10 +357,11 @@ function renderRules() {
         return;
     }
     
-    rulesList.innerHTML = appState.rules.map(rule => {
+    rulesList.innerHTML = appState.rules.map((rule, index) => {
         const usedByFolders = appState.folders.filter(f => f.rule_ids.includes(rule.id));
         const condition = rule.conditions[0];
         let conditionText = '';
+        const ruleLabel = getRuleLabel(index);
         
         if (condition.type === 'Extension') {
             conditionText = `扩展名: ${condition.values.join(', ')}`;
@@ -352,7 +377,10 @@ function renderRules() {
         return `
             <div class="rule-card compact">
                 <div class="rule-info">
-                    <div class="rule-name">${rule.name}</div>
+                    <div class="rule-name">
+                        <span class="rule-label">${ruleLabel}</span>
+                        ${rule.name}
+                    </div>
                     <div class="rule-details">${conditionText} → ${rule.action.destination}</div>
                 </div>
                 <div class="rule-usage" title="${folderNames}">
@@ -368,59 +396,60 @@ function renderRules() {
     }).join('');
 }
 
-// ========== 拖拽排序功能 ==========
-let draggedElement = null;
-
-function enableRuleDragSort() {
-    const ruleItems = document.querySelectorAll('.rule-item-sortable');
+// ========== 规则排序功能 ==========
+window.moveRuleUp = function(index) {
+    const container = document.getElementById('folderRules');
+    const items = Array.from(container.querySelectorAll('.rule-sort-item'));
     
-    ruleItems.forEach(item => {
-        item.addEventListener('dragstart', handleDragStart);
-        item.addEventListener('dragover', handleDragOver);
-        item.addEventListener('drop', handleDrop);
-        item.addEventListener('dragend', handleDragEnd);
-    });
-}
-
-function handleDragStart(e) {
-    draggedElement = e.currentTarget;
-    e.currentTarget.classList.add('dragging');
-    e.dataTransfer.effectAllowed = 'move';
-}
-
-function handleDragOver(e) {
-    if (e.preventDefault) {
-        e.preventDefault();
-    }
-    e.dataTransfer.dropEffect = 'move';
-    
-    const targetElement = e.currentTarget;
-    if (draggedElement !== targetElement) {
-        const container = targetElement.parentNode;
-        const allItems = [...container.querySelectorAll('.rule-item-sortable')];
-        const draggedIndex = allItems.indexOf(draggedElement);
-        const targetIndex = allItems.indexOf(targetElement);
+    if (index > 0 && index < items.length) {
+        const currentItem = items[index];
+        const previousItem = items[index - 1];
         
-        if (draggedIndex < targetIndex) {
-            targetElement.parentNode.insertBefore(draggedElement, targetElement.nextSibling);
-        } else {
-            targetElement.parentNode.insertBefore(draggedElement, targetElement);
-        }
+        // 交换DOM元素
+        container.insertBefore(currentItem, previousItem);
+        
+        // 重新渲染以更新按钮状态
+        refreshRuleSortButtons();
     }
+};
+
+window.moveRuleDown = function(index) {
+    const container = document.getElementById('folderRules');
+    const items = Array.from(container.querySelectorAll('.rule-sort-item'));
     
-    return false;
-}
-
-function handleDrop(e) {
-    if (e.stopPropagation) {
-        e.stopPropagation();
+    if (index >= 0 && index < items.length - 1) {
+        const currentItem = items[index];
+        const nextItem = items[index + 1];
+        
+        // 交换DOM元素
+        container.insertBefore(nextItem, currentItem);
+        
+        // 重新渲染以更新按钮状态
+        refreshRuleSortButtons();
     }
-    return false;
-}
+};
 
-function handleDragEnd(e) {
-    e.currentTarget.classList.remove('dragging');
-    draggedElement = null;
+function refreshRuleSortButtons() {
+    const container = document.getElementById('folderRules');
+    const items = Array.from(container.querySelectorAll('.rule-sort-item'));
+    
+    items.forEach((item, index) => {
+        const upBtn = item.querySelector('.sort-btn:first-child');
+        const downBtn = item.querySelector('.sort-btn:last-child');
+        
+        // 更新按钮状态
+        if (upBtn) {
+            upBtn.disabled = index === 0;
+            upBtn.onclick = () => moveRuleUp(index);
+        }
+        if (downBtn) {
+            downBtn.disabled = index === items.length - 1;
+            downBtn.onclick = () => moveRuleDown(index);
+        }
+        
+        // 更新data-index
+        item.setAttribute('data-index', index);
+    });
 }
 
 // ========== 文件夹管理函数 ==========
@@ -453,15 +482,21 @@ async function openFolderModal(folderId = null) {
         }
         
         rulesCheckboxes.innerHTML = orderedRules.map((rule, index) => `
-            <label class="checkbox-label rule-item-sortable" draggable="true" data-rule-id="${rule.id}" data-index="${index}">
-                <span class="drag-handle">⋮⋮</span>
-                <input type="checkbox" value="${rule.id}" ${folderId && appState.folders.find(f => f.id === folderId)?.rule_ids.includes(rule.id) ? 'checked' : ''}>
-                <span>${rule.name}</span>
-            </label>
+            <div class="rule-sort-item" data-rule-id="${rule.id}" data-index="${index}">
+                <label class="checkbox-label">
+                    <input type="checkbox" value="${rule.id}" ${folderId && appState.folders.find(f => f.id === folderId)?.rule_ids.includes(rule.id) ? 'checked' : ''}>
+                    <span>${rule.name}</span>
+                </label>
+                <div class="rule-sort-buttons">
+                    <button type="button" class="sort-btn" onclick="moveRuleUp(${index})" ${index === 0 ? 'disabled' : ''}>
+                        ▲
+                    </button>
+                    <button type="button" class="sort-btn" onclick="moveRuleDown(${index})" ${index === orderedRules.length - 1 ? 'disabled' : ''}>
+                        ▼
+                    </button>
+                </div>
+            </div>
         `).join('');
-        
-        // 启用拖拽排序
-        enableRuleDragSort();
     }
     
     if (folderId) {
@@ -517,8 +552,8 @@ async function saveFolder() {
         return;
     }
     
-    // 获取选中的规则（按照DOM顺序，体现拖拽排序结果）
-    const allRuleItems = document.querySelectorAll('#folderRules .rule-item-sortable');
+    // 获取选中的规则（按照DOM顺序，体现排序结果）
+    const allRuleItems = document.querySelectorAll('#folderRules .rule-sort-item');
     const ruleIds = Array.from(allRuleItems)
         .filter(item => item.querySelector('input[type="checkbox"]').checked)
         .map(item => item.getAttribute('data-rule-id'));
@@ -1087,10 +1122,229 @@ async function confirmBatch() {
     }
 }
 
+// ========== Mini窗口模式 ==========
+
+// 进入Mini模式
+async function enterMiniMode() {
+    appState.isMiniMode = true;
+    
+    // 隐藏完整界面，显示Mini窗口
+    document.getElementById('appContainer').style.display = 'none';
+    document.getElementById('miniWindow').style.display = 'flex';
+    
+    // 调整窗口大小
+    try {
+        const { appWindow } = window.__TAURI__.window;
+        await appWindow.setSize(new window.__TAURI__.window.LogicalSize(300, 300));
+        await appWindow.setResizable(false);
+    } catch (error) {
+        console.error('调整窗口大小失败:', error);
+    }
+    
+    // 更新Mini显示
+    updateMiniDisplay();
+    
+    addActivity('🔽 进入Mini模式');
+}
+
+// 退出Mini模式
+async function exitMiniMode() {
+    appState.isMiniMode = false;
+    
+    // 隐藏右键菜单
+    hideContextMenu();
+    
+    // 显示完整界面，隐藏Mini窗口
+    document.getElementById('miniWindow').style.display = 'none';
+    document.getElementById('appContainer').style.display = 'flex';
+    
+    // 恢复窗口大小
+    try {
+        const { appWindow } = window.__TAURI__.window;
+        await appWindow.setSize(new window.__TAURI__.window.LogicalSize(360, 520));
+        await appWindow.setResizable(true);
+    } catch (error) {
+        console.error('恢复窗口大小失败:', error);
+    }
+    
+    addActivity('🔼 退出Mini模式');
+}
+
+// 更新Mini显示
+function updateMiniDisplay() {
+    const labelEl = document.getElementById('miniRuleLabel');
+    const nameEl = document.getElementById('miniRuleName');
+    
+    if (appState.currentRuleIndex === -1) {
+        labelEl.textContent = '[*]';
+        nameEl.textContent = '所有规则';
+    } else {
+        const rule = appState.rules[appState.currentRuleIndex];
+        const label = getRuleLabel(appState.currentRuleIndex);
+        labelEl.textContent = `[${label}]`;
+        nameEl.textContent = rule.name;
+    }
+}
+
+// 处理滚轮切换规则
+function handleMiniWheel(e) {
+    e.preventDefault();
+    e.stopPropagation();
+    
+    if (e.deltaY < 0) {
+        // 向上滚：上一个规则
+        appState.currentRuleIndex = Math.max(-1, appState.currentRuleIndex - 1);
+    } else {
+        // 向下滚：下一个规则
+        appState.currentRuleIndex = Math.min(appState.rules.length - 1, appState.currentRuleIndex + 1);
+    }
+    
+    updateMiniDisplay();
+    
+    // 更新状态提示
+    const statusEl = document.getElementById('miniStatus');
+    statusEl.textContent = '规则已切换';
+    setTimeout(() => {
+        statusEl.textContent = '滚轮切换';
+    }, 1000);
+}
+
+// 处理右键菜单
+function handleMiniRightClick(e) {
+    e.preventDefault();
+    e.stopPropagation();
+    
+    showContextMenu(e.clientX, e.clientY);
+}
+
+// 显示右键菜单
+function showContextMenu(x, y) {
+    const menu = document.getElementById('contextMenu');
+    
+    // 生成菜单项
+    let menuHTML = '';
+    
+    // "所有规则"选项
+    menuHTML += `
+        <div class="context-menu-item ${appState.currentRuleIndex === -1 ? 'selected' : ''}" 
+             onclick="selectRule(-1)">
+            <span class="label">
+                <span class="menu-badge">*</span>
+                所有规则
+            </span>
+            ${appState.currentRuleIndex === -1 ? '✓' : ''}
+        </div>
+    `;
+    
+    if (appState.rules.length > 0) {
+        menuHTML += '<div class="context-menu-divider"></div>';
+    }
+    
+    // 各个规则选项
+    appState.rules.forEach((rule, index) => {
+        const label = getRuleLabel(index);
+        const isSelected = appState.currentRuleIndex === index;
+        menuHTML += `
+            <div class="context-menu-item ${isSelected ? 'selected' : ''}" 
+                 onclick="selectRule(${index})">
+                <span class="label">
+                    <span class="menu-badge">${label}</span>
+                    ${rule.name}
+                </span>
+                ${isSelected ? '✓' : ''}
+            </div>
+        `;
+    });
+    
+    menu.innerHTML = menuHTML;
+    
+    // 定位菜单
+    menu.style.left = `${x}px`;
+    menu.style.top = `${y}px`;
+    menu.classList.add('show');
+    
+    // 点击其他地方关闭菜单
+    setTimeout(() => {
+        document.addEventListener('click', hideContextMenu, { once: true });
+    }, 0);
+}
+
+// 隐藏右键菜单
+function hideContextMenu() {
+    const menu = document.getElementById('contextMenu');
+    menu.classList.remove('show');
+}
+
+// 选择规则
+function selectRule(index) {
+    appState.currentRuleIndex = index;
+    updateMiniDisplay();
+    hideContextMenu();
+}
+
+// 处理Mini模式下的文件拖拽
+async function handleMiniFileDrop(files) {
+    const statusEl = document.getElementById('miniStatus');
+    const miniWindow = document.getElementById('miniWindow');
+    
+    // 添加拖拽视觉反馈
+    miniWindow.classList.add('drag-over');
+    
+    try {
+        statusEl.textContent = `处理中... (${files.length} 个)`;
+        
+        let successCount = 0;
+        let failCount = 0;
+        
+        for (const filePath of files) {
+            const fileName = filePath.split('\\').pop() || filePath.split('/').pop();
+            
+            try {
+                // 根据当前选择的规则处理文件
+                const result = await invoke('process_file', { path: filePath });
+                
+                if (result) {
+                    successCount++;
+                    console.log(`✓ ${fileName} 已整理`);
+                } else {
+                    console.log(`⚠ ${fileName} 未匹配规则`);
+                }
+            } catch (error) {
+                failCount++;
+                console.error(`✗ ${fileName} 处理失败:`, error);
+            }
+        }
+        
+        // 显示结果
+        if (successCount > 0) {
+            statusEl.textContent = `✓ 已整理 ${successCount} 个`;
+        } else if (failCount > 0) {
+            statusEl.textContent = `✗ 处理失败`;
+        } else {
+            statusEl.textContent = `⚠ 未匹配规则`;
+        }
+        
+        // 2秒后恢复提示
+        setTimeout(() => {
+            statusEl.textContent = '滚轮切换';
+            miniWindow.classList.remove('drag-over');
+        }, 2000);
+        
+    } catch (error) {
+        console.error('处理文件失败:', error);
+        statusEl.textContent = '✗ 处理失败';
+        setTimeout(() => {
+            statusEl.textContent = '滚轮切换';
+            miniWindow.classList.remove('drag-over');
+        }, 2000);
+    }
+}
+
 // 导出函数供 HTML 内联调用
 window.toggleFolderMonitoring = toggleFolderMonitoring;
 window.editFolder = editFolder;
 window.deleteFolder = deleteFolder;
 window.editRule = editRule;
 window.deleteRule = deleteRule;
+window.selectRule = selectRule;
 
