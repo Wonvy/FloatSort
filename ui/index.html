@@ -1,0 +1,124 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>FloatSort - 智能悬浮文件整理器</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <div class="app-container">
+        <!-- 头部 -->
+        <header class="app-header">
+            <div class="logo">
+                <svg class="logo-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                    <path d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z"/>
+                </svg>
+                <h1>FloatSort</h1>
+            </div>
+            <div class="status-indicator" id="status">
+                <span class="status-dot"></span>
+                <span class="status-text">未监控</span>
+            </div>
+        </header>
+
+        <!-- 主要控制区 -->
+        <main class="main-content">
+            <!-- 监控控制 -->
+            <section class="control-section">
+                <button class="btn btn-primary" id="toggleMonitor">
+                    <svg class="btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                        <polygon points="5 3 19 12 5 21 5 3"></polygon>
+                    </svg>
+                    <span>开始监控</span>
+                </button>
+                
+                <button class="btn btn-secondary" id="settingsBtn">
+                    <svg class="btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                        <circle cx="12" cy="12" r="3"></circle>
+                        <path d="M12 1v6m0 6v6m8.66-14.66l-4.24 4.24m-4.24 4.24l-4.24 4.24M23 12h-6m-6 0H1m20.66 8.66l-4.24-4.24m-4.24-4.24l-4.24-4.24"></path>
+                    </svg>
+                    <span>设置</span>
+                </button>
+            </section>
+
+            <!-- 拖拽区域 -->
+            <section class="drop-zone" id="dropZone">
+                <svg class="drop-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                    <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4M17 8l-5-5-5 5M12 3v12"/>
+                </svg>
+                <p class="drop-text">拖拽文件到此处快速整理</p>
+                <p class="drop-hint">支持单个或多个文件</p>
+            </section>
+
+            <!-- 统计信息 -->
+            <section class="stats-section">
+                <div class="stat-card">
+                    <div class="stat-value" id="filesProcessed">0</div>
+                    <div class="stat-label">已处理文件</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-value" id="filesOrganized">0</div>
+                    <div class="stat-label">已整理文件</div>
+                </div>
+            </section>
+
+            <!-- 活动日志 -->
+            <section class="activity-section">
+                <h3 class="section-title">最近活动</h3>
+                <div class="activity-list" id="activityList">
+                    <div class="activity-empty">暂无活动记录</div>
+                </div>
+            </section>
+        </main>
+
+        <!-- 设置面板 -->
+        <div class="settings-panel" id="settingsPanel">
+            <div class="settings-header">
+                <h2>设置</h2>
+                <button class="close-btn" id="closeSettings">×</button>
+            </div>
+            
+            <div class="settings-content">
+                <!-- 监控路径 -->
+                <div class="settings-group">
+                    <h3>监控路径</h3>
+                    <div id="watchPathsList"></div>
+                    <button class="btn btn-small" id="addWatchPath">+ 添加路径</button>
+                </div>
+
+                <!-- 规则列表 -->
+                <div class="settings-group">
+                    <h3>整理规则</h3>
+                    <div id="rulesList"></div>
+                    <button class="btn btn-small" id="addRule">+ 添加规则</button>
+                </div>
+
+                <!-- 其他选项 -->
+                <div class="settings-group">
+                    <h3>其他选项</h3>
+                    <label class="checkbox-label">
+                        <input type="checkbox" id="autoStart">
+                        <span>启动时自动开始监控</span>
+                    </label>
+                    <label class="checkbox-label">
+                        <input type="checkbox" id="showNotifications">
+                        <span>显示通知</span>
+                    </label>
+                </div>
+
+                <div class="settings-actions">
+                    <button class="btn btn-primary" id="saveSettings">保存设置</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- 遮罩层 -->
+        <div class="overlay" id="overlay"></div>
+    </div>
+
+    <script src="app.js"></script>
+</body>
+</html>
+
+

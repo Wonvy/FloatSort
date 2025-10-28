@@ -1,0 +1,40 @@
+# Rust
+target/
+Cargo.lock
+**/*.rs.bk
+*.pdb
+
+# Tauri
+src-tauri/target/
+
+# macOS
+.DS_Store
+*.swp
+*.swo
+*~
+
+# Windows
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+
+# IDE
+.vscode/
+.idea/
+*.iml
+*.sublime-*
+
+# Node.js
+node_modules/
+npm-debug.log
+yarn-error.log
+
+# 配置文件（运行时生成）
+data/
+*.log
+
+# 构建输出
+dist/
+build/
+
+

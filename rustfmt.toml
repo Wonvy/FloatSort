@@ -1,0 +1,82 @@
+# Rust 代码格式化配置
+# https://rust-lang.github.io/rustfmt/
+
+# 每行最大宽度
+max_width = 100
+
+# 硬标签宽度
+tab_spaces = 4
+
+# 换行风格
+newline_style = "Unix"
+
+# 使用小缩进
+use_small_heuristics = "Default"
+
+# 函数调用宽度
+fn_call_width = 80
+
+# 属性宽度
+attr_fn_like_width = 80
+
+# 结构体字面量宽度
+struct_lit_width = 18
+
+# 结构体变体宽度
+struct_variant_width = 35
+
+# 数组宽度
+array_width = 80
+
+# 链式调用宽度
+chain_width = 60
+
+# 单行 if-else 最大宽度
+single_line_if_else_max_width = 50
+
+# 导入合并
+imports_granularity = "Crate"
+
+# 重新排序导入
+reorder_imports = true
+
+# 重新排序模块
+reorder_modules = true
+
+# 移除嵌套导入
+imports_indent = "Block"
+
+# 格式化代码注释
+wrap_comments = true
+
+# 注释宽度
+comment_width = 80
+
+# 格式化字符串
+format_strings = true
+
+# 格式化宏
+format_macro_matchers = true
+format_macro_bodies = true
+
+# 使用字段初始化简写
+use_field_init_shorthand = true
+
+# 使用 try 简写
+use_try_shorthand = true
+
+# 强制显式泛型参数
+force_explicit_abi = true
+
+# 条件格式化
+condense_wildcard_suffixes = true
+
+# 颜色输出
+color = "Auto"
+
+# 版本
+version = "Two"
+
+# 不稳定特性
+unstable_features = false
+
