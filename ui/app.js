@@ -2,6 +2,7 @@
 let monitoringActive = false;
 let rulesCount = 0;
 let filesProcessed = 0;
+let editingRuleId = null; // 当前编辑的规则 ID
 
 // Tauri API (延迟初始化)
 let invoke, open, listen, appWindow;
@@ -132,7 +133,7 @@ function setupEventListeners() {
 
     // 添加规则按钮
     addRuleBtn.addEventListener('click', () => {
-        ruleModal.style.display = 'flex';
+        openRuleModal();
     });
 
     // 监控按钮
@@ -390,26 +391,35 @@ async function saveRule() {
             };
         }
 
-        await invoke('add_rule', {
-            rule: {
-                id: `rule_${Date.now()}`,
-                name,
-                enabled: true,
-                conditions: [condition],
-                action: { 
-                    type: 'MoveTo',
-                    destination: target 
-                },
-                priority: 0,
-            }
-        });
+        const rule = {
+            id: editingRuleId || `rule_${Date.now()}`,
+            name,
+            enabled: true,
+            conditions: [condition],
+            action: { 
+                type: 'MoveTo',
+                destination: target 
+            },
+            priority: 0,
+        };
 
-        addActivity(`📝 规则已添加: ${name}`);
+        if (editingRuleId) {
+            // 编辑模式
+            await invoke('update_rule', {
+                ruleId: editingRuleId,
+                rule
+            });
+            addActivity(`✏️ 规则已更新: ${name}`);
+            showNotification(`规则 "${name}" 已更新`, 'success');
+        } else {
+            // 新增模式
+            await invoke('add_rule', { rule });
+            addActivity(`📝 规则已添加: ${name}`);
+            showNotification(`规则 "${name}" 已添加`, 'success');
+        }
+
         await loadStatistics(); // 重新加载统计信息
-        
         closeModal();
-        ruleForm.reset();
-        showNotification(`规则 "${name}" 已添加`, 'success');
     } catch (error) {
         console.error('保存规则失败:', error);
         const message = typeof error === 'string' ? error : error.message || '未知错误';
@@ -418,9 +428,51 @@ async function saveRule() {
     }
 }
 
+// 打开规则模态框（新增或编辑）
+function openRuleModal(rule = null) {
+    if (rule) {
+        // 编辑模式
+        editingRuleId = rule.id;
+        document.querySelector('#ruleModal .modal-header h2').textContent = '✏️ 编辑规则';
+        
+        // 填充表单
+        document.getElementById('ruleName').value = rule.name;
+        document.getElementById('targetFolder').value = '';
+        
+        // 解析条件
+        if (rule.conditions && rule.conditions.length > 0) {
+            const cond = rule.conditions[0];
+            if (cond.type === 'Extension') {
+                document.getElementById('ruleType').value = 'extension';
+                document.getElementById('ruleValue').value = cond.values.join(', ');
+            } else if (cond.type === 'SizeRange') {
+                document.getElementById('ruleType').value = 'size';
+                document.getElementById('ruleValue').value = cond.max ? Math.round(cond.max / 1024 / 1024) : '';
+            } else if (cond.type === 'NameContains') {
+                document.getElementById('ruleType').value = 'name';
+                document.getElementById('ruleValue').value = cond.pattern;
+            }
+        }
+        
+        // 解析目标文件夹
+        if (rule.action && rule.action.destination) {
+            document.getElementById('targetFolder').value = rule.action.destination;
+        }
+    } else {
+        // 新增模式
+        editingRuleId = null;
+        document.querySelector('#ruleModal .modal-header h2').textContent = '📝 创建规则';
+        ruleForm.reset();
+    }
+    
+    ruleModal.style.display = 'flex';
+}
+
 // 关闭模态框
 function closeModal() {
     ruleModal.style.display = 'none';
+    editingRuleId = null;
+    ruleForm.reset();
 }
 
 // 添加活动记录
@@ -497,15 +549,29 @@ async function showSettings() {
                     <div style="font-size: 12px; color: #999;">${actionDesc}</div>
                 `;
                 
+                // 按钮容器
+                const btnContainer = document.createElement('div');
+                btnContainer.style.cssText = 'display: flex; gap: 8px; margin-left: 10px;';
+                
+                // 编辑按钮
+                const editBtn = document.createElement('button');
+                editBtn.textContent = '编辑';
+                editBtn.className = 'btn-primary';
+                editBtn.style.cssText = 'padding: 4px 12px; font-size: 12px;';
+                editBtn.onclick = () => {
+                    closeSettingsModal();
+                    openRuleModal(rule);
+                };
+                
                 // 删除按钮
                 const deleteBtn = document.createElement('button');
                 deleteBtn.textContent = '删除';
                 deleteBtn.className = 'btn-secondary';
-                deleteBtn.style.cssText = 'padding: 4px 12px; font-size: 12px; margin-left: 10px;';
+                deleteBtn.style.cssText = 'padding: 4px 12px; font-size: 12px;';
                 deleteBtn.onclick = async () => {
                     if (confirm(`确定要删除规则 "${rule.name}" 吗？`)) {
                         try {
-                            await invoke('remove_rule', { index });
+                            await invoke('remove_rule', { ruleId: rule.id });
                             showNotification(`规则 "${rule.name}" 已删除`, 'success');
                             await showSettings(); // 重新加载列表
                             await loadStatistics(); // 更新统计
@@ -516,8 +582,11 @@ async function showSettings() {
                     }
                 };
                 
+                btnContainer.appendChild(editBtn);
+                btnContainer.appendChild(deleteBtn);
+                
                 ruleItem.appendChild(ruleInfo);
-                ruleItem.appendChild(deleteBtn);
+                ruleItem.appendChild(btnContainer);
                 rulesList.appendChild(ruleItem);
             });
         }

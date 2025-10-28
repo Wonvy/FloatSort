@@ -69,29 +69,32 @@ fn get_rules(state: State<AppState>) -> Result<Vec<Rule>, String> {
 
 // Tauri 命令：删除规则
 #[tauri::command]
-fn remove_rule(index: usize, state: State<AppState>) -> Result<(), String> {
+fn remove_rule(rule_id: String, state: State<AppState>) -> Result<(), String> {
     let mut config = state.config.lock().map_err(|e| e.to_string())?;
-    if index < config.rules.len() {
+    
+    if let Some(index) = config.rules.iter().position(|r| r.id == rule_id) {
+        let rule_name = config.rules[index].name.clone();
         config.rules.remove(index);
         config.save_to_file("data/config.json").map_err(|e| e.to_string())?;
-        info!("规则已删除");
+        info!("规则已删除: {}", rule_name);
         Ok(())
     } else {
-        Err("规则索引无效".to_string())
+        Err("规则不存在".to_string())
     }
 }
 
 // Tauri 命令：更新规则
 #[tauri::command]
-fn update_rule(index: usize, rule: Rule, state: State<AppState>) -> Result<(), String> {
+fn update_rule(rule_id: String, rule: Rule, state: State<AppState>) -> Result<(), String> {
     let mut config = state.config.lock().map_err(|e| e.to_string())?;
-    if index < config.rules.len() {
+    
+    if let Some(index) = config.rules.iter().position(|r| r.id == rule_id) {
         config.rules[index] = rule;
         config.save_to_file("data/config.json").map_err(|e| e.to_string())?;
         info!("规则已更新");
         Ok(())
     } else {
-        Err("规则索引无效".to_string())
+        Err("规则不存在".to_string())
     }
 }
 
