@@ -1,0 +1,139 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>FloatSort - 智能文件整理器</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <div class="app-container">
+        <!-- 头部 -->
+        <header class="app-header">
+            <h1>📁 FloatSort</h1>
+            <p class="subtitle">智能文件整理助手</p>
+        </header>
+
+        <!-- 主内容区 -->
+        <main class="app-main">
+            <!-- 拖拽区域 -->
+            <div class="drop-zone" id="dropZone">
+                <div class="drop-zone-content">
+                    <svg class="drop-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                        <path d="M7 18a4.6 4.4 0 0 1 0 -9a5 4.5 0 0 1 11 2h1a3.5 3.5 0 0 1 0 7h-1" />
+                        <polyline points="9 15 12 12 15 15" />
+                        <line x1="12" y1="12" x2="12" y2="21" />
+                    </svg>
+                    <p class="drop-text">拖拽文件到这里</p>
+                    <p class="drop-hint">或点击选择文件</p>
+                </div>
+            </div>
+
+            <!-- 快速操作 -->
+            <div class="quick-actions">
+                <button class="action-btn" id="addRuleBtn">
+                    <span>➕</span> 添加规则
+                </button>
+                <button class="action-btn" id="monitorBtn">
+                    <span>👁️</span> 开始监控
+                </button>
+                <button class="action-btn" id="settingsBtn">
+                    <span>⚙️</span> 设置
+                </button>
+            </div>
+
+            <!-- 统计信息 -->
+            <div class="stats">
+                <div class="stat-item">
+                    <div class="stat-value" id="filesProcessed">0</div>
+                    <div class="stat-label">已处理</div>
+                </div>
+                <div class="stat-item">
+                    <div class="stat-value" id="rulesCount">0</div>
+                    <div class="stat-label">规则数</div>
+                </div>
+                <div class="stat-item">
+                    <div class="stat-value" id="monitorStatus">未激活</div>
+                    <div class="stat-label">监控状态</div>
+                </div>
+            </div>
+
+            <!-- 最近活动 -->
+            <div class="recent-activity">
+                <h3>📋 最近活动</h3>
+                <div class="activity-list" id="activityList">
+                    <div class="activity-item empty">
+                        暂无活动记录
+                    </div>
+                </div>
+            </div>
+        </main>
+
+        <!-- 底部 -->
+        <footer class="app-footer">
+            <span class="version">v0.1.0</span>
+            <span class="status">就绪</span>
+        </footer>
+    </div>
+
+    <!-- 规则编辑器模态框 -->
+    <!-- 添加规则模态框 -->
+    <div class="modal" id="ruleModal" style="display: none;">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>📝 创建规则</h2>
+                <button class="close-btn" id="closeModalBtn">✕</button>
+            </div>
+            <div class="modal-body">
+                <form id="ruleForm">
+                    <div class="form-group">
+                        <label for="ruleName">规则名称</label>
+                        <input type="text" id="ruleName" placeholder="例如：整理图片" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="ruleType">匹配类型</label>
+                        <select id="ruleType">
+                            <option value="extension">文件扩展名</option>
+                            <option value="size">文件大小</option>
+                            <option value="name">文件名包含</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label for="ruleValue">匹配值</label>
+                        <input type="text" id="ruleValue" placeholder="例如：.jpg, .png" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="targetFolder">目标文件夹</label>
+                        <div class="folder-input">
+                            <input type="text" id="targetFolder" placeholder="选择目标文件夹" required readonly>
+                            <button type="button" class="browse-btn" id="browseFolderBtn">浏览</button>
+                        </div>
+                    </div>
+                    <div class="form-actions">
+                        <button type="button" class="btn-secondary" id="cancelBtn">取消</button>
+                        <button type="submit" class="btn-primary">保存规则</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- 设置模态框 -->
+    <div class="modal" id="settingsModal" style="display: none;">
+        <div class="modal-content" style="max-width: 600px;">
+            <div class="modal-header">
+                <h2>⚙️ 设置</h2>
+                <button class="close-btn" id="closeSettingsBtn">✕</button>
+            </div>
+            <div class="modal-body">
+                <h3 style="margin-top: 0; color: #666; font-size: 14px;">当前规则</h3>
+                <div id="rulesList" style="max-height: 400px; overflow-y: auto;">
+                    <div class="activity-item empty">暂无规则</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="app.js"></script>
+</body>
+</html>

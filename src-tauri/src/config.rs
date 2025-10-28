@@ -5,29 +5,62 @@ use std::fs;
 use std::path::Path;
 use tracing::{info, warn};
 
+/// 监控文件夹配置
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct WatchFolder {
+    /// 文件夹 ID
+    pub id: String,
+    
+    /// 文件夹路径
+    pub path: String,
+    
+    /// 文件夹名称（用于显示）
+    pub name: String,
+    
+    /// 是否启用监控
+    pub enabled: bool,
+    
+    /// 关联的规则 ID 列表
+    pub rule_ids: Vec<String>,
+}
+
 /// 应用配置
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AppConfig {
-    /// 监控的文件夹路径列表
-    pub watch_paths: Vec<String>,
+    /// 配置文件版本（用于迁移）
+    #[serde(default = "default_version")]
+    pub version: u32,
     
-    /// 整理规则列表
+    /// 监控文件夹列表
+    #[serde(default)]
+    pub folders: Vec<WatchFolder>,
+    
+    /// 整理规则列表（全局规则库）
     pub rules: Vec<Rule>,
-    
-    /// 是否自动启动监控
-    pub auto_start: bool,
     
     /// 是否显示通知
     pub show_notifications: bool,
     
     /// 日志级别
     pub log_level: String,
+    
+    // 保留旧字段以支持迁移
+    #[serde(skip_serializing, default)]
+    pub watch_paths: Option<Vec<String>>,
+    
+    #[serde(skip_serializing, default)]
+    pub auto_start: Option<bool>,
+}
+
+fn default_version() -> u32 {
+    2
 }
 
 impl Default for AppConfig {
     fn default() -> Self {
         Self {
-            watch_paths: vec![],
+            version: 2,
+            folders: vec![],
             rules: vec![
                 // 默认规则示例
                 Rule {
@@ -72,25 +105,68 @@ impl Default for AppConfig {
                     priority: 2,
                 },
             ],
-            auto_start: false,
             show_notifications: true,
             log_level: "info".to_string(),
+            watch_paths: None,
+            auto_start: None,
         }
     }
 }
 
 impl AppConfig {
-    /// 从文件加载配置
+    /// 从文件加载配置并自动迁移
     pub fn load_from_file<P: AsRef<Path>>(path: P) -> Result<Self> {
         let path = path.as_ref();
         let content = fs::read_to_string(path)
             .with_context(|| format!("无法读取配置文件: {:?}", path))?;
         
-        let config: AppConfig = serde_json::from_str(&content)
+        let mut config: AppConfig = serde_json::from_str(&content)
             .with_context(|| "配置文件格式错误")?;
         
-        info!("配置已从 {:?} 加载", path);
+        // 自动迁移旧版本配置
+        if config.version < 2 {
+            config = Self::migrate_v1_to_v2(config)?;
+            info!("配置已从 V1 迁移到 V2");
+            // 保存迁移后的配置
+            config.save_to_file(path)?;
+        }
+        
+        info!("配置已从 {:?} 加载 (版本: {})", path, config.version);
         Ok(config)
+    }
+    
+    /// 将 V1 配置迁移到 V2
+    fn migrate_v1_to_v2(old_config: AppConfig) -> Result<Self> {
+        let mut folders = Vec::new();
+        
+        // 迁移旧的 watch_paths 到 folders
+        if let Some(watch_paths) = old_config.watch_paths {
+            for (index, path) in watch_paths.iter().enumerate() {
+                let folder_name = Path::new(path)
+                    .file_name()
+                    .and_then(|n| n.to_str())
+                    .unwrap_or("未命名文件夹")
+                    .to_string();
+                
+                folders.push(WatchFolder {
+                    id: format!("folder_{}", index + 1),
+                    path: path.clone(),
+                    name: folder_name,
+                    enabled: old_config.auto_start.unwrap_or(false),
+                    rule_ids: old_config.rules.iter().map(|r| r.id.clone()).collect(),
+                });
+            }
+        }
+        
+        Ok(AppConfig {
+            version: 2,
+            folders,
+            rules: old_config.rules,
+            show_notifications: old_config.show_notifications,
+            log_level: old_config.log_level,
+            watch_paths: None,
+            auto_start: None,
+        })
     }
 
     /// 加载配置或使用默认值

@@ -101,22 +101,54 @@ impl RuleEngine {
         }
     }
 
+    /// 解析路径中的占位符
+    fn resolve_placeholders(&self, template: &str, file_info: &FileInfo) -> String {
+        let mut result = template.to_string();
+        
+        // 文件名（不含扩展名）
+        let name_without_ext = file_info.name
+            .strip_suffix(&format!(".{}", file_info.extension))
+            .unwrap_or(&file_info.name);
+        result = result.replace("{name}", name_without_ext);
+        
+        // 扩展名
+        result = result.replace("{ext}", &file_info.extension);
+        
+        // 时间相关占位符 - 优先使用修改时间，其次是创建时间
+        let datetime = file_info.modified_at.or(file_info.created_at);
+        
+        if let Some(dt) = datetime {
+            result = result.replace("{year}", &dt.format("%Y").to_string());
+            result = result.replace("{month}", &dt.format("%m").to_string());
+            result = result.replace("{day}", &dt.format("%d").to_string());
+        } else {
+            // 如果没有时间信息，使用当前时间
+            let now = Utc::now();
+            result = result.replace("{year}", &now.format("%Y").to_string());
+            result = result.replace("{month}", &now.format("%m").to_string());
+            result = result.replace("{day}", &now.format("%d").to_string());
+        }
+        
+        result
+    }
+    
     /// 获取目标路径
     pub fn get_destination_path(&self, action: &RuleAction, file_info: &FileInfo, base_path: &Path) -> Option<String> {
         match action {
             RuleAction::MoveTo { destination } | RuleAction::CopyTo { destination } => {
-                let dest_path = if Path::new(destination).is_absolute() {
-                    Path::new(destination).to_path_buf()
+                // 解析占位符
+                let resolved_destination = self.resolve_placeholders(destination, file_info);
+                
+                let dest_path = if Path::new(&resolved_destination).is_absolute() {
+                    Path::new(&resolved_destination).to_path_buf()
                 } else {
-                    base_path.join(destination)
+                    base_path.join(&resolved_destination)
                 };
                 Some(dest_path.to_string_lossy().to_string())
             }
             RuleAction::Rename { pattern } => {
-                // 简单的模板替换
-                let new_name = pattern
-                    .replace("{name}", &file_info.name)
-                    .replace("{ext}", &file_info.extension);
+                // 解析占位符
+                let new_name = self.resolve_placeholders(pattern, file_info);
                 
                 let parent = Path::new(&file_info.path).parent()?;
                 Some(parent.join(new_name).to_string_lossy().to_string())

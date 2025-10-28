@@ -7,7 +7,7 @@ mod rule_engine;
 mod file_ops;
 mod models;
 
-use config::AppConfig;
+use config::{AppConfig, WatchFolder};
 use file_monitor::FileMonitor;
 use models::Rule;
 use std::sync::{Arc, Mutex};
@@ -98,31 +98,117 @@ fn update_rule(rule_id: String, rule: Rule, state: State<AppState>) -> Result<()
     }
 }
 
-// Tauri 命令：启动文件监控
+// ============ 文件夹管理命令 ============
+
+// Tauri 命令：获取所有文件夹
+#[tauri::command]
+fn get_folders(state: State<AppState>) -> Result<Vec<WatchFolder>, String> {
+    let config = state.config.lock().map_err(|e| e.to_string())?;
+    Ok(config.folders.clone())
+}
+
+// Tauri 命令：添加文件夹
+#[tauri::command]
+fn add_folder(folder: WatchFolder, state: State<AppState>) -> Result<(), String> {
+    let mut config = state.config.lock().map_err(|e| e.to_string())?;
+    
+    // 检查路径是否已存在
+    if config.folders.iter().any(|f| f.path == folder.path) {
+        return Err("该文件夹已存在".to_string());
+    }
+    
+    config.folders.push(folder.clone());
+    config.save_to_file("data/config.json").map_err(|e| e.to_string())?;
+    info!("文件夹已添加: {}", folder.name);
+    Ok(())
+}
+
+// Tauri 命令：更新文件夹
+#[tauri::command]
+fn update_folder(folder_id: String, folder: WatchFolder, state: State<AppState>) -> Result<(), String> {
+    let mut config = state.config.lock().map_err(|e| e.to_string())?;
+    
+    if let Some(index) = config.folders.iter().position(|f| f.id == folder_id) {
+        config.folders[index] = folder;
+        config.save_to_file("data/config.json").map_err(|e| e.to_string())?;
+        info!("文件夹已更新");
+        Ok(())
+    } else {
+        Err("文件夹不存在".to_string())
+    }
+}
+
+// Tauri 命令：删除文件夹
+#[tauri::command]
+fn remove_folder(folder_id: String, state: State<AppState>) -> Result<(), String> {
+    let mut config = state.config.lock().map_err(|e| e.to_string())?;
+    
+    if let Some(index) = config.folders.iter().position(|f| f.id == folder_id) {
+        let folder_name = config.folders[index].name.clone();
+        config.folders.remove(index);
+        config.save_to_file("data/config.json").map_err(|e| e.to_string())?;
+        info!("文件夹已删除: {}", folder_name);
+        Ok(())
+    } else {
+        Err("文件夹不存在".to_string())
+    }
+}
+
+// Tauri 命令：切换文件夹监控状态
+#[tauri::command]
+fn toggle_folder(folder_id: String, state: State<AppState>) -> Result<bool, String> {
+    let mut config = state.config.lock().map_err(|e| e.to_string())?;
+    
+    let (new_state, folder_name) = {
+        if let Some(folder) = config.folders.iter_mut().find(|f| f.id == folder_id) {
+            folder.enabled = !folder.enabled;
+            (folder.enabled, folder.name.clone())
+        } else {
+            return Err("文件夹不存在".to_string());
+        }
+    };
+    
+    config.save_to_file("data/config.json").map_err(|e| e.to_string())?;
+    info!("文件夹 {} 监控状态: {}", folder_name, new_state);
+    Ok(new_state)
+}
+
+// Tauri 命令：更新文件夹关联的规则
+#[tauri::command]
+fn update_folder_rules(folder_id: String, rule_ids: Vec<String>, state: State<AppState>) -> Result<(), String> {
+    let mut config = state.config.lock().map_err(|e| e.to_string())?;
+    
+    let folder_name = {
+        if let Some(folder) = config.folders.iter_mut().find(|f| f.id == folder_id) {
+            folder.rule_ids = rule_ids;
+            folder.name.clone()
+        } else {
+            return Err("文件夹不存在".to_string());
+        }
+    };
+    
+    config.save_to_file("data/config.json").map_err(|e| e.to_string())?;
+    info!("文件夹 {} 的规则已更新", folder_name);
+    Ok(())
+}
+
+// ============ 监控命令（更新版） ============
+
+// Tauri 命令：启动所有已启用文件夹的监控
 #[tauri::command]
 async fn start_monitoring(
     state: State<'_, AppState>,
     window: tauri::Window,
-    watch_path: Option<String>,
 ) -> Result<(), String> {
-    let mut config = state.config.lock().map_err(|e| e.to_string())?.clone();
+    let config = state.config.lock().map_err(|e| e.to_string())?.clone();
     
-    // 如果提供了监控路径，添加到配置中
-    if let Some(path) = watch_path {
-        if !config.watch_paths.contains(&path) {
-            config.watch_paths.push(path.clone());
-            config.save_to_file("data/config.json").map_err(|e| e.to_string())?;
-            *state.config.lock().map_err(|e| e.to_string())? = config.clone();
-            info!("已添加监控路径: {}", path);
-        }
+    // 检查是否有已启用的文件夹
+    let enabled_folders: Vec<_> = config.folders.iter().filter(|f| f.enabled).collect();
+    if enabled_folders.is_empty() {
+        return Err("没有已启用的监控文件夹，请先添加并启用文件夹".to_string());
     }
     
-    // 检查是否有监控路径
-    if config.watch_paths.is_empty() {
-        return Err("请先添加要监控的文件夹路径".to_string());
-    }
-    
-    // 创建并启动文件监控器（监控在 new() 中自动启动）
+    // 创建并启动文件监控器
     let monitor = FileMonitor::new(config.clone(), window)
         .map_err(|e| format!("创建并启动监控器失败: {}", e))?;
     
@@ -130,8 +216,23 @@ async fn start_monitoring(
     let mut monitor_guard = state.monitor.lock().map_err(|e| e.to_string())?;
     *monitor_guard = Some(monitor);
     
-    info!("文件监控已启动，监控路径: {:?}", config.watch_paths);
+    let folder_names: Vec<_> = enabled_folders.iter().map(|f| f.name.as_str()).collect();
+    info!("文件监控已启动，监控文件夹: {:?}", folder_names);
     Ok(())
+}
+
+// Tauri 命令：启动特定文件夹的监控
+#[tauri::command]
+async fn start_folder_monitoring(
+    folder_id: String,
+    state: State<'_, AppState>,
+    window: tauri::Window,
+) -> Result<(), String> {
+    // 先启用该文件夹
+    let _ = toggle_folder(folder_id.clone(), state.clone())?;
+    
+    // 重新启动监控
+    start_monitoring(state, window).await
 }
 
 // Tauri 命令：停止文件监控
@@ -160,6 +261,43 @@ async fn process_file(path: String, state: State<'_, AppState>) -> Result<String
     stats.last_activity = Some(chrono::Local::now().to_rfc3339());
     
     Ok(result)
+}
+
+// Tauri 命令：预览文件整理（不实际移动文件）
+#[tauri::command]
+async fn preview_file_organization(path: String, state: State<'_, AppState>) -> Result<serde_json::Value, String> {
+    use std::path::Path;
+    
+    let config = state.config.lock().map_err(|e| e.to_string())?.clone();
+    
+    // 获取文件信息
+    let file_info = file_ops::get_file_info(Path::new(&path))
+        .map_err(|e| e.to_string())?;
+    
+    // 查找匹配的规则
+    let engine = crate::rule_engine::RuleEngine::new(config.rules.clone());
+    
+    if let Some(rule) = engine.find_matching_rule(&file_info) {
+        // 计算目标路径（使用当前目录作为基础路径）
+        let base_path = Path::new(&path).parent()
+            .ok_or_else(|| "无法获取父目录".to_string())?;
+        
+        if let Some(dest_path) = engine.get_destination_path(&rule.action, &file_info, base_path) {
+            return Ok(serde_json::json!({
+                "matched": true,
+                "rule_name": rule.name,
+                "original_path": path,
+                "target_path": dest_path,
+            }));
+        }
+    }
+    
+    // 未匹配任何规则
+    Ok(serde_json::json!({
+        "matched": false,
+        "original_path": path,
+        "target_path": null,
+    }))
 }
 
 // Tauri 命令：获取文件统计
@@ -209,9 +347,17 @@ fn main() {
             get_rules,
             remove_rule,
             update_rule,
+            get_folders,
+            add_folder,
+            update_folder,
+            remove_folder,
+            toggle_folder,
+            update_folder_rules,
             start_monitoring,
+            start_folder_monitoring,
             stop_monitoring,
             process_file,
+            preview_file_organization,
             get_statistics
         ])
         .setup(|_app| {

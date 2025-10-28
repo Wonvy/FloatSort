@@ -33,16 +33,21 @@ impl FileMonitor {
             Config::default(),
         ).map_err(|e| e.to_string())?;
 
-        // 添加监控路径（非递归，只监控根目录文件）
-        for path in &config.watch_paths {
-            let path_buf = PathBuf::from(path);
+        // 添加监控路径（非递归，只监控根目录文件）- 仅监控已启用的文件夹
+        let enabled_folders: Vec<_> = config.folders.iter().filter(|f| f.enabled).collect();
+        if enabled_folders.is_empty() {
+            return Err("没有已启用的监控文件夹".to_string());
+        }
+        
+        for folder in &enabled_folders {
+            let path_buf = PathBuf::from(&folder.path);
             if path_buf.exists() {
                 watcher
                     .watch(&path_buf, RecursiveMode::NonRecursive) // ✅ 改为非递归
-                    .map_err(|e| format!("无法监控路径 {:?}: {}", path, e))?;
-                info!("开始监控路径（仅根目录文件）: {:?}", path);
+                    .map_err(|e| format!("无法监控路径 {:?}: {}", folder.path, e))?;
+                info!("开始监控路径（仅根目录文件）: {} ({})", folder.name, folder.path);
             } else {
-                warn!("监控路径不存在: {:?}", path);
+                warn!("监控路径不存在: {} ({})", folder.name, folder.path);
             }
         }
 
@@ -123,48 +128,62 @@ impl FileMonitor {
             Ok(file_info) => {
                 info!("✓ 获取文件信息成功: {} ({})", file_info.name, file_info.extension);
 
-                // 使用监控根目录作为基础路径（而不是文件当前目录）
-                let watch_root = config.watch_paths.first().cloned().unwrap_or_default();
+                // 根据文件路径找到对应的文件夹配置
+                let folder = config.folders.iter()
+                    .filter(|f| f.enabled)
+                    .find(|f| path.starts_with(&f.path));
                 
-                // 尝试整理文件（使用监控根目录）
-                match Self::organize_file_with_base(&file_info, &config.rules, &watch_root) {
-                    Ok(Some(new_path)) => {
-                        info!("✓ 文件已整理: {} -> {}", file_info.path, new_path);
-                        
-                        // 发送通知到前端
-                        let _ = window.emit(
-                            "file-organized",
-                            serde_json::json!({
-                                "original_path": file_info.path,
-                                "new_path": new_path.clone(),
-                                "file_name": file_info.name.clone(),
-                            }),
-                        );
+                if let Some(folder) = folder {
+                    // 获取该文件夹关联的规则
+                    let applicable_rules: Vec<Rule> = config.rules.iter()
+                        .filter(|r| folder.rule_ids.contains(&r.id))
+                        .cloned()
+                        .collect();
+                    
+                    info!("文件夹 '{}' 应用 {} 条规则", folder.name, applicable_rules.len());
+                    
+                    // 尝试整理文件（使用文件夹路径作为基础路径）
+                    match Self::organize_file_with_base(&file_info, &applicable_rules, &folder.path) {
+                        Ok(Some(new_path)) => {
+                            info!("✓ 文件已整理: {} -> {}", file_info.path, new_path);
+                            
+                            // 发送通知到前端
+                            let _ = window.emit(
+                                "file-organized",
+                                serde_json::json!({
+                                    "original_path": file_info.path,
+                                    "new_path": new_path.clone(),
+                                    "file_name": file_info.name.clone(),
+                                }),
+                            );
+                        }
+                        Ok(None) => {
+                            info!("○ 文件未匹配任何规则: {}", file_info.name);
+                            
+                            // 发送未匹配通知到前端
+                            let _ = window.emit(
+                                "file-no-match",
+                                serde_json::json!({
+                                    "file_name": file_info.name,
+                                    "file_path": file_info.path,
+                                }),
+                            );
+                        }
+                        Err(e) => {
+                            error!("✗ 整理文件失败: {} - {}", file_info.name, e);
+                            
+                            let _ = window.emit(
+                                "file-error",
+                                serde_json::json!({
+                                    "file_path": file_info.path,
+                                    "file_name": file_info.name,
+                                    "error": e.to_string(),
+                                }),
+                            );
+                        }
                     }
-                    Ok(None) => {
-                        info!("○ 文件未匹配任何规则: {}", file_info.name);
-                        
-                        // 发送未匹配通知到前端
-                        let _ = window.emit(
-                            "file-no-match",
-                            serde_json::json!({
-                                "file_name": file_info.name,
-                                "file_path": file_info.path,
-                            }),
-                        );
-                    }
-                    Err(e) => {
-                        error!("✗ 整理文件失败: {} - {}", file_info.name, e);
-                        
-                        let _ = window.emit(
-                            "file-error",
-                            serde_json::json!({
-                                "file_path": file_info.path,
-                                "file_name": file_info.name,
-                                "error": e.to_string(),
-                            }),
-                        );
-                    }
+                } else {
+                    warn!("文件 {} 不属于任何已启用的监控文件夹", file_info.name);
                 }
             }
             Err(e) => {
