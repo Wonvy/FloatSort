@@ -44,6 +44,18 @@ pub struct AppConfig {
     /// 日志级别
     pub log_level: String,
     
+    /// 批量确认阈值（超过此数量的文件需要确认）
+    #[serde(default = "default_batch_threshold")]
+    pub batch_threshold: u32,
+    
+    /// 窗口宽度
+    #[serde(default = "default_window_width")]
+    pub window_width: u32,
+    
+    /// 窗口高度
+    #[serde(default = "default_window_height")]
+    pub window_height: u32,
+    
     // 保留旧字段以支持迁移
     #[serde(skip_serializing, default)]
     pub watch_paths: Option<Vec<String>>,
@@ -54,6 +66,18 @@ pub struct AppConfig {
 
 fn default_version() -> u32 {
     2
+}
+
+fn default_batch_threshold() -> u32 {
+    1
+}
+
+fn default_window_width() -> u32 {
+    360
+}
+
+fn default_window_height() -> u32 {
+    520
 }
 
 impl Default for AppConfig {
@@ -107,6 +131,9 @@ impl Default for AppConfig {
             ],
             show_notifications: true,
             log_level: "info".to_string(),
+            batch_threshold: 1,
+            window_width: 360,
+            window_height: 520,
             watch_paths: None,
             auto_start: None,
         }
@@ -164,6 +191,9 @@ impl AppConfig {
             rules: old_config.rules,
             show_notifications: old_config.show_notifications,
             log_level: old_config.log_level,
+            batch_threshold: 1,
+            window_width: 360,
+            window_height: 520,
             watch_paths: None,
             auto_start: None,
         })

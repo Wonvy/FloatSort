@@ -50,6 +50,16 @@ fn save_config(config: AppConfig, state: State<AppState>) -> Result<(), String> 
     Ok(())
 }
 
+// Tauri 命令：保存窗口大小
+#[tauri::command]
+fn save_window_size(width: u32, height: u32, state: State<AppState>) -> Result<(), String> {
+    let mut config = state.config.lock().map_err(|e| e.to_string())?;
+    config.window_width = width;
+    config.window_height = height;
+    config.save_to_file("data/config.json").map_err(|e| e.to_string())?;
+    Ok(())
+}
+
 // Tauri 命令：添加规则
 #[tauri::command]
 fn add_rule(rule: Rule, state: State<AppState>) -> Result<(), String> {
@@ -263,6 +273,31 @@ async fn process_file(path: String, state: State<'_, AppState>) -> Result<String
     Ok(result)
 }
 
+// Tauri 命令：使用指定规则整理文件
+#[tauri::command]
+async fn process_file_with_rule(path: String, rule_id: String, state: State<'_, AppState>) -> Result<String, String> {
+    let config = state.config.lock().map_err(|e| e.to_string())?.clone();
+    
+    // 查找指定的规则
+    let rule = config.rules.iter()
+        .find(|r| r.id == rule_id)
+        .ok_or_else(|| "规则不存在".to_string())?;
+    
+    // 使用单个规则进行整理
+    let result = file_ops::organize_single_file(&path, &vec![rule.clone()])
+        .map_err(|e| e.to_string())?;
+    
+    // 更新统计
+    let mut stats = state.stats.lock().map_err(|e| e.to_string())?;
+    stats.files_processed += 1;
+    if !result.is_empty() {
+        stats.files_organized += 1;
+    }
+    stats.last_activity = Some(chrono::Local::now().to_rfc3339());
+    
+    Ok(result)
+}
+
 // Tauri 命令：预览文件整理（不实际移动文件）
 #[tauri::command]
 async fn preview_file_organization(path: String, state: State<'_, AppState>) -> Result<serde_json::Value, String> {
@@ -343,6 +378,7 @@ fn main() {
         .invoke_handler(tauri::generate_handler![
             get_config,
             save_config,
+            save_window_size,
             add_rule,
             get_rules,
             remove_rule,
@@ -357,6 +393,7 @@ fn main() {
             start_folder_monitoring,
             stop_monitoring,
             process_file,
+            process_file_with_rule,
             preview_file_organization,
             get_statistics
         ])

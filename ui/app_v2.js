@@ -9,7 +9,7 @@ const appState = {
     editingFolderId: null,
     editingRuleId: null,
     pendingBatch: [],  // 待整理文件队列
-    batchThreshold: 5,  // 批量确认阈值
+    batchThreshold: 1,  // 批量确认阈值（从配置读取）
     currentConditions: [],  // 当前规则的条件列表
     currentRuleIndex: -1,  // 当前选中的规则索引（-1表示所有规则）
     isMiniMode: false,  // 是否处于Mini模式
@@ -52,6 +52,7 @@ function initializeApp() {
     setupTabs();
     setupEventListeners();
     setupBackendListeners();
+    setupWindowListeners();
     loadAppData();
     
     console.log('✓ FloatSort V2 已就绪');
@@ -86,13 +87,12 @@ function setupTabs() {
 
 // ========== 事件监听器 ==========
 function setupEventListeners() {
-    // 全局监控按钮
-    document.getElementById('globalStartBtn').addEventListener('click', startAllMonitoring);
-    document.getElementById('globalStopBtn').addEventListener('click', stopAllMonitoring);
+    // 窗口控制按钮
+    document.getElementById('minimizeBtn').addEventListener('click', enterMiniMode);
+    document.getElementById('closeWindowBtn').addEventListener('click', closeWindow);
     
     // Mini窗口控制
-    document.getElementById('minimizeBtn').addEventListener('click', enterMiniMode);
-    document.getElementById('miniWindow').addEventListener('click', exitMiniMode);
+    document.getElementById('miniWindow').addEventListener('click', handleMiniClick);
     
     // 滚轮切换规则
     document.getElementById('miniWindow').addEventListener('wheel', handleMiniWheel);
@@ -134,6 +134,32 @@ function setupEventListeners() {
     });
     document.getElementById('batchConfirmModal').addEventListener('click', (e) => {
         if (e.target.id === 'batchConfirmModal') closeBatchModal();
+    });
+}
+
+// ========== 窗口事件监听 ==========
+function setupWindowListeners() {
+    const { appWindow } = window.__TAURI__.window;
+    
+    // 监听窗口大小变化（仅在非Mini模式下保存）
+    let resizeTimeout;
+    appWindow.onResized(async ({ payload }) => {
+        // 防抖：用户停止调整大小后1秒才保存
+        clearTimeout(resizeTimeout);
+        resizeTimeout = setTimeout(async () => {
+            if (!appState.isMiniMode) {
+                const { width, height } = payload;
+                try {
+                    await invoke('save_window_size', { 
+                        width: Math.round(width), 
+                        height: Math.round(height) 
+                    });
+                    console.log(`✓ 窗口大小已保存: ${width}x${height}`);
+                } catch (error) {
+                    console.error('保存窗口大小失败:', error);
+                }
+            }
+        }, 1000);
     });
 }
 
@@ -260,15 +286,139 @@ async function processDraggedFiles(files) {
     }
 }
 
+// ========== 规则卡片拖放处理 ==========
+function setupRuleDragDrop() {
+    const ruleCards = document.querySelectorAll('.rule-card');
+    
+    ruleCards.forEach(card => {
+        const ruleId = card.dataset.ruleId;
+        
+        // 拖拽进入
+        card.addEventListener('dragenter', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            if (!card.classList.contains('disabled')) {
+                card.classList.add('drag-over');
+            }
+        });
+        
+        // 拖拽悬停
+        card.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+        });
+        
+        // 拖拽离开
+        card.addEventListener('dragleave', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            // 只有当离开卡片本身时才移除样式
+            if (e.target === card || !card.contains(e.relatedTarget)) {
+                card.classList.remove('drag-over');
+            }
+        });
+        
+        // 放下文件
+        card.addEventListener('drop', async (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            card.classList.remove('drag-over');
+            
+            // 禁用的规则不处理
+            if (card.classList.contains('disabled')) {
+                showNotification('该规则已禁用，无法处理文件', 'error');
+                return;
+            }
+            
+            const files = Array.from(e.dataTransfer.files);
+            if (files.length > 0) {
+                await processFilesWithRule(files, ruleId);
+            }
+        });
+    });
+}
+
+// 使用指定规则处理文件
+async function processFilesWithRule(files, ruleId) {
+    const rule = appState.rules.find(r => r.id === ruleId);
+    if (!rule) {
+        showNotification('规则不存在', 'error');
+        return;
+    }
+    
+    addActivity(`📋 使用规则 [${rule.name}] 处理 ${files.length} 个文件`);
+    
+    let successCount = 0;
+    let failCount = 0;
+    
+    for (const file of files) {
+        try {
+            // 调用后端处理，传入规则ID
+            const result = await invoke('process_file_with_rule', {
+                path: file.path,
+                ruleId: ruleId
+            });
+            
+            if (result) {
+                addActivity(
+                    `✅ <strong>${file.name}</strong>`,
+                    'success',
+                    `从: ${file.path}<br>到: ${result}<br>规则: ${rule.name}`
+                );
+                successCount++;
+                appState.filesProcessed++;
+            } else {
+                addActivity(`⚠️ 不符合规则: ${file.name}`, 'error');
+                failCount++;
+            }
+        } catch (error) {
+            console.error('处理文件失败:', error);
+            addActivity(`❌ ${file.name} 处理失败: ${error}`, 'error');
+            failCount++;
+        }
+    }
+    
+    updateStats();
+    
+    if (successCount > 0) {
+        showNotification(`成功整理 ${successCount} 个文件`, 'success');
+    }
+    if (failCount > 0) {
+        showNotification(`${failCount} 个文件处理失败`, 'error');
+    }
+}
+
 // ========== 加载数据 ==========
 async function loadAppData() {
     try {
+        await loadConfig();
         await loadFolders();
         await loadRules();
         updateStats();
     } catch (error) {
         console.error('加载数据失败:', error);
         showNotification('加载数据失败', 'error');
+    }
+}
+
+async function loadConfig() {
+    try {
+        const config = await invoke('get_config');
+        appState.batchThreshold = config.batch_threshold || 1;
+        console.log(`✓ 批量确认阈值: ${appState.batchThreshold}`);
+        
+        // 恢复窗口大小（仅在完整模式下）
+        if (!appState.isMiniMode) {
+            const { appWindow } = window.__TAURI__.window;
+            const width = config.window_width || 360;
+            const height = config.window_height || 520;
+            await appWindow.setSize(new window.__TAURI__.window.LogicalSize(width, height));
+            console.log(`✓ 窗口大小已恢复: ${width}x${height}`);
+        }
+    } catch (error) {
+        console.error('加载配置失败:', error);
+        // 使用默认值
+        appState.batchThreshold = 1;
     }
 }
 
@@ -375,7 +525,10 @@ function renderRules() {
         const folderNames = usedByFolders.map(f => f.name).join('、') || '暂未被任何文件夹使用';
         
         return `
-            <div class="rule-card compact">
+            <div class="rule-card compact ${!rule.enabled ? 'disabled' : ''}" data-rule-id="${rule.id}">
+                <button class="rule-toggle ${rule.enabled ? 'active' : ''}" 
+                        onclick="toggleRule('${rule.id}')">
+                </button>
                 <div class="rule-info">
                     <div class="rule-name">
                         <span class="rule-label">${ruleLabel}</span>
@@ -391,9 +544,13 @@ function renderRules() {
                     <button class="btn-secondary btn-sm" onclick="editRule('${rule.id}')">编辑</button>
                     <button class="btn-secondary btn-sm" onclick="deleteRule('${rule.id}')">删除</button>
                 </div>
+                <div class="rule-drop-hint">拖放文件到此</div>
             </div>
         `;
     }).join('');
+    
+    // 为规则卡片添加拖放事件监听
+    setupRuleDragDrop();
 }
 
 // ========== 规则排序功能 ==========
@@ -940,32 +1097,30 @@ async function deleteRule(ruleId) {
     }
 }
 
-// ========== 监控控制 ==========
-async function startAllMonitoring() {
+// 切换规则启用/禁用状态
+async function toggleRule(ruleId) {
+    const rule = appState.rules.find(r => r.id === ruleId);
+    if (!rule) return;
+    
     try {
-        await invoke('start_monitoring');
-        appState.monitoring = true;
-        document.getElementById('globalStartBtn').style.display = 'none';
-        document.getElementById('globalStopBtn').style.display = 'block';
-        showNotification('全局监控已启动', 'success');
-        addActivity('🟢 启动全局监控');
+        // 切换状态
+        rule.enabled = !rule.enabled;
+        
+        // 调用后端更新
+        await invoke('update_rule', { ruleId, rule });
+        
+        const status = rule.enabled ? '启用' : '禁用';
+        showNotification(`规则 "${rule.name}" 已${status}`, 'success');
+        addActivity(`${rule.enabled ? '[启用]' : '[停用]'} ${status}规则: ${rule.name}`);
+        
+        // 重新渲染
+        await loadRules();
+        updateStats();
     } catch (error) {
-        console.error('启动监控失败:', error);
-        showNotification(`启动失败: ${error}`, 'error');
-    }
-}
-
-async function stopAllMonitoring() {
-    try {
-        await invoke('stop_monitoring');
-        appState.monitoring = false;
-        document.getElementById('globalStartBtn').style.display = 'block';
-        document.getElementById('globalStopBtn').style.display = 'none';
-        showNotification('全局监控已停止', 'info');
-        addActivity('🔴 停止全局监控');
-    } catch (error) {
-        console.error('停止监控失败:', error);
-        showNotification('停止失败', 'error');
+        console.error('切换规则状态失败:', error);
+        showNotification('操作失败', 'error');
+        // 恢复状态
+        rule.enabled = !rule.enabled;
     }
 }
 
@@ -973,7 +1128,7 @@ async function stopAllMonitoring() {
 function updateStats() {
     document.getElementById('filesProcessedCount').textContent = appState.filesProcessed;
     document.getElementById('foldersCount').textContent = appState.folders.filter(f => f.enabled).length;
-    document.getElementById('rulesCount').textContent = appState.rules.length;
+    document.getElementById('rulesCount').textContent = appState.rules.filter(r => r.enabled).length;
 }
 
 // ========== 活动日志 ==========
@@ -1022,7 +1177,7 @@ function showNotification(message, type = 'info') {
     const notification = document.createElement('div');
     notification.className = `notification notification-${type}`;
     
-    const icon = type === 'success' ? '✅' : type === 'error' ? '❌' : 'ℹ️';
+    const icon = type === 'success' ? '[成功]' : type === 'error' ? '[错误]' : '[信息]';
     
     notification.innerHTML = `
         <span>${icon}</span>
@@ -1102,14 +1257,14 @@ function closeBatchModal() {
     document.getElementById('batchConfirmModal').style.display = 'none';
     // 取消整理，清空队列
     appState.pendingBatch = [];
-    addActivity(`❌ 已取消批量整理`);
+    addActivity(`[取消] 已取消批量整理`);
 }
 
 async function confirmBatch() {
     const files = [...appState.pendingBatch];
     document.getElementById('batchConfirmModal').style.display = 'none';
     
-    addActivity(`✅ 开始批量整理 (${files.length} 个文件)`);
+    addActivity(`[批量] 开始批量整理 (${files.length} 个文件)`);
     
     // 逐个处理文件
     for (const file of files) {
@@ -1119,6 +1274,18 @@ async function confirmBatch() {
             console.error(`处理文件失败: ${file.name}`, error);
             addActivity(`❌ ${file.name} 处理失败: ${error}`, 'error');
         }
+    }
+}
+
+// ========== 窗口控制 ==========
+
+// 关闭窗口
+async function closeWindow() {
+    try {
+        const { appWindow } = window.__TAURI__.window;
+        await appWindow.close();
+    } catch (error) {
+        console.error('关闭窗口失败:', error);
     }
 }
 
@@ -1144,7 +1311,7 @@ async function enterMiniMode() {
     // 更新Mini显示
     updateMiniDisplay();
     
-    addActivity('🔽 进入Mini模式');
+    addActivity('[Mini] 进入Mini模式');
 }
 
 // 退出Mini模式
@@ -1155,7 +1322,8 @@ async function exitMiniMode() {
     hideContextMenu();
     
     // 显示完整界面，隐藏Mini窗口
-    document.getElementById('miniWindow').style.display = 'none';
+    const miniWindow = document.getElementById('miniWindow');
+    miniWindow.style.display = 'none';
     document.getElementById('appContainer').style.display = 'flex';
     
     // 恢复窗口大小
@@ -1167,7 +1335,17 @@ async function exitMiniMode() {
         console.error('恢复窗口大小失败:', error);
     }
     
-    addActivity('🔼 退出Mini模式');
+    addActivity('[Mini] 退出Mini模式');
+}
+
+// 处理Mini窗口点击（直接退出）
+async function handleMiniClick(e) {
+    await exitMiniMode();
+}
+
+// 获取启用的规则列表
+function getEnabledRules() {
+    return appState.rules.filter(r => r.enabled);
 }
 
 // 更新Mini显示
@@ -1177,26 +1355,36 @@ function updateMiniDisplay() {
     
     if (appState.currentRuleIndex === -1) {
         labelEl.textContent = '[*]';
-        nameEl.textContent = '所有规则';
+        nameEl.textContent = '所有启用规则';
     } else {
-        const rule = appState.rules[appState.currentRuleIndex];
-        const label = getRuleLabel(appState.currentRuleIndex);
-        labelEl.textContent = `[${label}]`;
-        nameEl.textContent = rule.name;
+        const enabledRules = getEnabledRules();
+        if (appState.currentRuleIndex < enabledRules.length) {
+            const rule = enabledRules[appState.currentRuleIndex];
+            const label = getRuleLabel(appState.currentRuleIndex);
+            labelEl.textContent = `[${label}]`;
+            nameEl.textContent = rule.name;
+        } else {
+            // 索引超出范围，重置为"所有规则"
+            appState.currentRuleIndex = -1;
+            labelEl.textContent = '[*]';
+            nameEl.textContent = '所有启用规则';
+        }
     }
 }
 
-// 处理滚轮切换规则
+// 处理滚轮切换规则（只切换启用的规则）
 function handleMiniWheel(e) {
     e.preventDefault();
     e.stopPropagation();
+    
+    const enabledRules = getEnabledRules();
     
     if (e.deltaY < 0) {
         // 向上滚：上一个规则
         appState.currentRuleIndex = Math.max(-1, appState.currentRuleIndex - 1);
     } else {
         // 向下滚：下一个规则
-        appState.currentRuleIndex = Math.min(appState.rules.length - 1, appState.currentRuleIndex + 1);
+        appState.currentRuleIndex = Math.min(enabledRules.length - 1, appState.currentRuleIndex + 1);
     }
     
     updateMiniDisplay();
@@ -1217,9 +1405,10 @@ function handleMiniRightClick(e) {
     showContextMenu(e.clientX, e.clientY);
 }
 
-// 显示右键菜单
+// 显示右键菜单（只显示启用的规则）
 function showContextMenu(x, y) {
     const menu = document.getElementById('contextMenu');
+    const enabledRules = getEnabledRules();
     
     // 生成菜单项
     let menuHTML = '';
@@ -1230,18 +1419,18 @@ function showContextMenu(x, y) {
              onclick="selectRule(-1)">
             <span class="label">
                 <span class="menu-badge">*</span>
-                所有规则
+                所有启用规则
             </span>
             ${appState.currentRuleIndex === -1 ? '✓' : ''}
         </div>
     `;
     
-    if (appState.rules.length > 0) {
+    if (enabledRules.length > 0) {
         menuHTML += '<div class="context-menu-divider"></div>';
     }
     
-    // 各个规则选项
-    appState.rules.forEach((rule, index) => {
+    // 各个启用的规则选项
+    enabledRules.forEach((rule, index) => {
         const label = getRuleLabel(index);
         const isSelected = appState.currentRuleIndex === index;
         menuHTML += `
@@ -1346,5 +1535,6 @@ window.editFolder = editFolder;
 window.deleteFolder = deleteFolder;
 window.editRule = editRule;
 window.deleteRule = deleteRule;
+window.toggleRule = toggleRule;
 window.selectRule = selectRule;
 
