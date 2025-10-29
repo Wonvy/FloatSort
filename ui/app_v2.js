@@ -13,7 +13,6 @@ const appState = {
     currentConditions: [],  // 当前规则的条件列表
     currentRuleIndex: -1,  // 当前选中的规则索引（-1表示所有规则）
     editingConditionIndex: -1,  // 正在编辑的条件索引（-1表示新增）
-    isMiniMode: false,  // 是否处于Mini模式
     isCollapsed: false,  // 窗口是否折叠
     collapseEdge: null,  // 折叠在哪个边缘（'left', 'right', 'top', 'bottom'）
     positionCheckInterval: null,  // 位置检查定时器
@@ -70,8 +69,8 @@ function initializeApp() {
     setupEventListeners();
     setupBackendListeners();
     setupWindowListeners();
-    setupCollapseExpand();
-    startPositionMonitoring();
+    // setupCollapseExpand(); // 已禁用：不再需要窗口折叠功能
+    // startPositionMonitoring(); // 已禁用：不再需要窗口折叠功能
     loadAppData();
     
     console.log('✓ FloatSort V2 已就绪');
@@ -142,8 +141,8 @@ function setupPlaceholderButtons() {
 // ========== 事件监听器 ==========
 function setupEventListeners() {
     // 窗口控制按钮
-    document.getElementById('minimizeBtn').addEventListener('click', enterMiniMode);
-    document.getElementById('closeWindowBtn').addEventListener('click', closeWindow);
+    document.getElementById('minimizeBtn').addEventListener('click', minimizeToTray);
+    document.getElementById('closeWindowBtn').addEventListener('click', exitProgram);
     
     // 拖拽区域监听（检测拖拽状态）
     const appHeader = document.querySelector('.app-header');
@@ -235,103 +234,11 @@ function setupEventListeners() {
         });
     }
     
-    const miniContent = document.querySelector('.mini-content');
-    if (miniContent) {
-        miniContent.addEventListener('mousedown', () => {
-            appState.isDragging = true;
-            console.log('[拖拽] 开始拖拽Mini窗口');
-        });
-    }
-    
     // 全局监听 mouseup（拖拽结束）
     document.addEventListener('mouseup', () => {
         if (appState.isDragging) {
             appState.isDragging = false;
             console.log('[拖拽] 拖拽结束');
-        }
-    });
-    
-    // Mini窗口控制
-    document.getElementById('miniWindow').addEventListener('click', handleMiniClick);
-    
-    // 滚轮切换规则
-    document.getElementById('miniWindow').addEventListener('wheel', handleMiniWheel);
-    
-    // 右键菜单
-    document.getElementById('miniWindow').addEventListener('contextmenu', handleMiniRightClick);
-    
-    // Mini窗口的鼠标进入/离开事件（用于折叠/展开）
-    const miniWindow = document.getElementById('miniWindow');
-    miniWindow.addEventListener('mouseenter', () => {
-        appState.isMouseOver = true;
-        
-        // 清除待执行的折叠定时器
-        if (appState.collapseTimer) {
-            clearTimeout(appState.collapseTimer);
-            appState.collapseTimer = null;
-            console.log('[鼠标] 取消折叠定时器');
-        }
-        
-        if (appState.isCollapsed) {
-            expandWindow();
-        }
-    });
-    
-    miniWindow.addEventListener('mouseleave', async () => {
-        appState.isMouseOver = false;
-        console.log('[鼠标] 离开Mini窗口');
-        
-        // 清除之前的折叠定时器（如果有）
-        if (appState.collapseTimer) {
-            clearTimeout(appState.collapseTimer);
-            appState.collapseTimer = null;
-        }
-        
-        // 鼠标离开后延迟800ms再检查是否需要折叠，给用户拖拽的机会
-        if (!appState.isCollapsed && appState.isMiniMode) {
-            appState.collapseTimer = setTimeout(async () => {
-                // 如果正在拖拽或冷却期，不执行折叠
-                if (appState.isDragging || appState.expandCooldown) {
-                    console.log('[鼠标] 正在拖拽/冷却期中，取消折叠');
-                    appState.collapseTimer = null;
-                    return;
-                }
-                
-                try {
-                    const { appWindow } = window.__TAURI__.window;
-                    const position = await appWindow.outerPosition();
-                    const size = await appWindow.outerSize();
-                    
-                    const screenWidth = window.screen.width;
-                    const screenHeight = window.screen.height;
-                    // 边缘阈值：只有真正贴在边缘时才折叠（≤5px）
-                    const edgeThreshold = 5;
-                    
-                    let nearEdge = null;
-                    if (position.x <= edgeThreshold) {
-                        nearEdge = 'left';
-                    } else if (position.x + size.width >= screenWidth - edgeThreshold) {
-                        nearEdge = 'right';
-                    } else if (position.y <= edgeThreshold) {
-                        nearEdge = 'top';
-                    } else if (position.y + size.height >= screenHeight - edgeThreshold) {
-                        nearEdge = 'bottom';
-                    }
-                    
-                    // 如果窗口真正贴在边缘，执行折叠
-                    if (nearEdge) {
-                        console.log('[鼠标] Mini窗口延迟检测到窗口贴边，执行折叠');
-                        collapseWindow(nearEdge);
-                    }
-                    
-                    appState.collapseTimer = null;
-                } catch (error) {
-                    console.error('[鼠标] 检查窗口位置失败:', error);
-                    appState.collapseTimer = null;
-                }
-            }, 800); // 800ms延迟，给用户足够时间拖拽窗口
-            
-            console.log('[鼠标] 设置Mini窗口折叠定时器（800ms后执行）');
         }
     });
     
@@ -2568,13 +2475,25 @@ async function confirmBatch() {
 
 // ========== 窗口控制 ==========
 
-// 关闭窗口（隐藏到托盘）
-async function closeWindow() {
+// 最小化到托盘
+async function minimizeToTray() {
     try {
         await invoke('hide_to_tray');
         addActivity('[托盘] 已最小化到系统托盘');
+        showNotification('已最小化到托盘', 'info');
     } catch (error) {
-        console.error('隐藏到托盘失败:', error);
+        console.error('最小化到托盘失败:', error);
+        showNotification('最小化失败', 'error');
+    }
+}
+
+// 退出程序
+async function exitProgram() {
+    try {
+        await invoke('exit_app');
+    } catch (error) {
+        console.error('退出程序失败:', error);
+        showNotification('退出失败', 'error');
     }
 }
 

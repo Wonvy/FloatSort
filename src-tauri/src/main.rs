@@ -538,6 +538,14 @@ fn show_from_tray(window: tauri::Window) -> Result<(), String> {
     Ok(())
 }
 
+// Tauri 命令：退出应用程序
+#[tauri::command]
+fn exit_app(app_handle: tauri::AppHandle) -> Result<(), String> {
+    info!("用户请求退出程序");
+    app_handle.exit(0);
+    Ok(())
+}
+
 fn main() {
     // 初始化日志系统
     tracing_subscriber::fmt()
@@ -637,7 +645,8 @@ fn main() {
             preview_file_organization_with_rule,
             get_statistics,
             hide_to_tray,
-            show_from_tray
+            show_from_tray,
+            exit_app
         ])
         .setup(|_app| {
             info!("FloatSort 初始化完成");
