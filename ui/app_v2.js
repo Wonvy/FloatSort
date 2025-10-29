@@ -23,7 +23,8 @@ const appState = {
     collapseTimer: null,  // 折叠延迟定时器
     isDragging: false,  // 窗口是否正在拖拽中
     animation: 'none',  // 动画效果: none, fade, slide
-    animationSpeed: 'normal'  // 动画速度: fast(150ms), normal(300ms), slow(500ms)
+    animationSpeed: 'normal',  // 动画速度: fast(150ms), normal(300ms), slow(500ms)
+    processedFiles: new Set()  // 记录已处理过的文件路径，避免重复处理
 };
 
 // 为规则生成字母编号
@@ -689,7 +690,8 @@ function renderRules() {
         const folderNames = usedByFolders.map(f => f.name).join('、') || '暂未被任何文件夹使用';
         
         return `
-            <div class="rule-card compact ${!rule.enabled ? 'disabled' : ''}" data-rule-id="${rule.id}">
+            <div class="rule-card compact ${!rule.enabled ? 'disabled' : ''}" data-rule-id="${rule.id}" data-index="${index}">
+                <span class="rule-order-number">${index + 1}</span>
                 <button class="rule-toggle ${rule.enabled ? 'active' : ''}" 
                         onclick="toggleRule('${rule.id}')">
                 </button>
@@ -703,6 +705,18 @@ function renderRules() {
                 <div class="rule-usage" title="${folderNames}">
                     <span class="usage-badge">${usedByFolders.length}</span>
                     <span class="usage-text">个文件夹</span>
+                </div>
+                <div class="rule-order-controls">
+                    <button class="order-btn order-left" onclick="moveRuleUp(${index})" ${index === 0 ? 'disabled' : ''} title="上移">
+                        <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
+                            <path d="M6 3L9 6H3L6 3Z" fill="currentColor"/>
+                        </svg>
+                    </button>
+                    <button class="order-btn order-right" onclick="moveRuleDown(${index})" ${index === appState.rules.length - 1 ? 'disabled' : ''} title="下移">
+                        <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
+                            <path d="M6 9L3 6H9L6 9Z" fill="currentColor"/>
+                        </svg>
+                    </button>
                 </div>
                 <div class="rule-actions">
                     <button class="btn-secondary btn-sm" onclick="editRule('${rule.id}')">编辑</button>
@@ -718,59 +732,51 @@ function renderRules() {
 }
 
 // ========== 规则排序功能 ==========
-window.moveRuleUp = function(index) {
-    const container = document.getElementById('folderRules');
-    const items = Array.from(container.querySelectorAll('.rule-sort-item'));
+window.moveRuleUp = async function(index) {
+    if (index <= 0 || index >= appState.rules.length) return;
     
-    if (index > 0 && index < items.length) {
-        const currentItem = items[index];
-        const previousItem = items[index - 1];
-        
-        // 交换DOM元素
-        container.insertBefore(currentItem, previousItem);
-        
-        // 重新渲染以更新按钮状态
-        refreshRuleSortButtons();
-    }
+    // 交换规则在数组中的位置
+    const temp = appState.rules[index];
+    appState.rules[index] = appState.rules[index - 1];
+    appState.rules[index - 1] = temp;
+    
+    // 保存到后端
+    await saveRulesOrder();
+    
+    // 重新渲染
+    renderRules();
+    
+    addActivity(`↑ 规则 [${temp.name}] 已上移`);
 };
 
-window.moveRuleDown = function(index) {
-    const container = document.getElementById('folderRules');
-    const items = Array.from(container.querySelectorAll('.rule-sort-item'));
+window.moveRuleDown = async function(index) {
+    if (index < 0 || index >= appState.rules.length - 1) return;
     
-    if (index >= 0 && index < items.length - 1) {
-        const currentItem = items[index];
-        const nextItem = items[index + 1];
-        
-        // 交换DOM元素
-        container.insertBefore(nextItem, currentItem);
-        
-        // 重新渲染以更新按钮状态
-        refreshRuleSortButtons();
-    }
+    // 交换规则在数组中的位置
+    const temp = appState.rules[index];
+    appState.rules[index] = appState.rules[index + 1];
+    appState.rules[index + 1] = temp;
+    
+    // 保存到后端
+    await saveRulesOrder();
+    
+    // 重新渲染
+    renderRules();
+    
+    addActivity(`↓ 规则 [${temp.name}] 已下移`);
 };
 
-function refreshRuleSortButtons() {
-    const container = document.getElementById('folderRules');
-    const items = Array.from(container.querySelectorAll('.rule-sort-item'));
-    
-    items.forEach((item, index) => {
-        const upBtn = item.querySelector('.sort-btn:first-child');
-        const downBtn = item.querySelector('.sort-btn:last-child');
-        
-        // 更新按钮状态
-        if (upBtn) {
-            upBtn.disabled = index === 0;
-            upBtn.onclick = () => moveRuleUp(index);
-        }
-        if (downBtn) {
-            downBtn.disabled = index === items.length - 1;
-            downBtn.onclick = () => moveRuleDown(index);
-        }
-        
-        // 更新data-index
-        item.setAttribute('data-index', index);
-    });
+// 保存规则顺序到后端
+async function saveRulesOrder() {
+    try {
+        await invoke('reorder_rules', { 
+            ruleIds: appState.rules.map(r => r.id) 
+        });
+        console.log('✓ 规则顺序已保存');
+    } catch (error) {
+        console.error('保存规则顺序失败:', error);
+        showNotification('保存规则顺序失败', 'error');
+    }
 }
 
 // ========== 文件夹管理函数 ==========
@@ -1339,7 +1345,7 @@ async function saveAnimationSettings() {
 }
 
 // 清空活动日志
-function clearActivity() {
+async function clearActivity() {
     const activityLog = document.getElementById('activityLog');
     activityLog.innerHTML = `
         <div class="activity-item">
@@ -1348,6 +1354,16 @@ function clearActivity() {
         </div>
     `;
     appState.filesProcessed = 0;
+    appState.processedFiles.clear(); // 清空前端记录
+    
+    // 清空后端记录
+    try {
+        await invoke('clear_processed_files');
+        console.log('✓ 已处理文件记录已清空');
+    } catch (error) {
+        console.error('清空已处理文件记录失败:', error);
+    }
+    
     updateStats();
 }
 

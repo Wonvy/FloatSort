@@ -11,6 +11,7 @@ use config::{AppConfig, WatchFolder};
 use file_monitor::FileMonitor;
 use models::Rule;
 use std::sync::{Arc, Mutex};
+use std::collections::HashSet;
 use tauri::{State, SystemTray, SystemTrayMenu, SystemTrayMenuItem, CustomMenuItem, SystemTrayEvent, Manager};
 use tracing::info;
 use tracing_subscriber;
@@ -21,6 +22,7 @@ struct AppState {
     config: Arc<Mutex<AppConfig>>,
     monitor: Arc<Mutex<Option<FileMonitor>>>,
     stats: Arc<Mutex<Statistics>>,
+    processed_files: Arc<Mutex<HashSet<String>>>, // 记录已处理的文件路径
 }
 
 // 统计信息
@@ -116,6 +118,40 @@ fn update_rule(rule_id: String, rule: Rule, state: State<AppState>) -> Result<()
     } else {
         Err("规则不存在".to_string())
     }
+}
+
+// Tauri 命令：重新排序规则
+#[tauri::command]
+fn reorder_rules(rule_ids: Vec<String>, state: State<AppState>) -> Result<(), String> {
+    let mut config = state.config.lock().map_err(|e| e.to_string())?;
+    
+    // 根据传入的ID顺序重新排序规则
+    let mut new_rules = Vec::new();
+    for id in &rule_ids {
+        if let Some(rule) = config.rules.iter().find(|r| &r.id == id) {
+            new_rules.push(rule.clone());
+        }
+    }
+    
+    // 验证所有规则都被包含了
+    if new_rules.len() != config.rules.len() {
+        return Err("规则ID列表不完整".to_string());
+    }
+    
+    config.rules = new_rules;
+    config.save_to_file("data/config.json").map_err(|e| e.to_string())?;
+    info!("规则顺序已更新");
+    Ok(())
+}
+
+// Tauri 命令：清除已处理文件记录
+#[tauri::command]
+fn clear_processed_files(state: State<AppState>) -> Result<(), String> {
+    let mut processed = state.processed_files.lock().map_err(|e| e.to_string())?;
+    let count = processed.len();
+    processed.clear();
+    info!("已清除 {} 条已处理文件记录", count);
+    Ok(())
 }
 
 // ============ 文件夹管理命令 ============
@@ -267,10 +303,26 @@ fn stop_monitoring(state: State<AppState>) -> Result<(), String> {
 // Tauri 命令：手动整理文件
 #[tauri::command]
 async fn process_file(path: String, state: State<'_, AppState>) -> Result<String, String> {
+    // 检查文件是否已处理过
+    {
+        let processed = state.processed_files.lock().map_err(|e| e.to_string())?;
+        if processed.contains(&path) {
+            info!("文件已处理过，跳过: {}", path);
+            return Ok(String::new()); // 返回空字符串表示跳过
+        }
+    }
+    
     let config = state.config.lock().map_err(|e| e.to_string())?.clone();
     
     let result = file_ops::organize_single_file(&path, &config.rules)
         .map_err(|e| e.to_string())?;
+    
+    // 如果文件被成功处理，记录到已处理集合中
+    if !result.is_empty() {
+        let mut processed = state.processed_files.lock().map_err(|e| e.to_string())?;
+        processed.insert(path.clone());
+        info!("文件已记录为已处理: {}", path);
+    }
     
     // 更新统计
     let mut stats = state.stats.lock().map_err(|e| e.to_string())?;
@@ -398,6 +450,7 @@ fn main() {
         config: Arc::new(Mutex::new(config)),
         monitor: Arc::new(Mutex::new(None)),
         stats: Arc::new(Mutex::new(Statistics::default())),
+        processed_files: Arc::new(Mutex::new(HashSet::new())),
     };
 
     // 创建系统托盘菜单
@@ -457,6 +510,8 @@ fn main() {
             get_rules,
             remove_rule,
             update_rule,
+            reorder_rules,
+            clear_processed_files,
             get_folders,
             add_folder,
             update_folder,
