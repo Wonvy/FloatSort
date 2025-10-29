@@ -12,6 +12,7 @@ const appState = {
     batchThreshold: 1,  // 批量确认阈值（从配置读取）
     currentConditions: [],  // 当前规则的条件列表
     currentRuleIndex: -1,  // 当前选中的规则索引（-1表示所有规则）
+    editingConditionIndex: -1,  // 正在编辑的条件索引（-1表示新增）
     isMiniMode: false,  // 是否处于Mini模式
     isCollapsed: false,  // 窗口是否折叠
     collapseEdge: null,  // 折叠在哪个边缘（'left', 'right', 'top', 'bottom'）
@@ -24,7 +25,11 @@ const appState = {
     isDragging: false,  // 窗口是否正在拖拽中
     animation: 'none',  // 动画效果: none, fade, slide
     animationSpeed: 'normal',  // 动画速度: fast(150ms), normal(300ms), slow(500ms)
-    processedFiles: new Set()  // 记录已处理过的文件路径，避免重复处理
+    processedFiles: new Set(),  // 记录已处理过的文件路径，避免重复处理
+    isFullscreen: false,  // 窗口是否处于全屏状态
+    selectedRuleId: null,  // 选中的单个规则ID（用于拖拽文件到特定规则）
+    selectedRuleIds: null,  // 选中的多个规则IDs（用于拖拽文件到多个规则）
+    pendingDeleteRuleId: null  // 待删除的规则ID
 };
 
 // 为规则生成字母编号
@@ -100,6 +105,40 @@ function setupTabs() {
     });
 }
 
+// ========== 占位符按钮 ==========
+function setupPlaceholderButtons() {
+    const targetFolderInput = document.getElementById('targetFolder');
+    const placeholderButtons = document.querySelectorAll('.tag-btn');
+    
+    placeholderButtons.forEach(btn => {
+        btn.addEventListener('click', () => {
+            const placeholder = btn.dataset.placeholder;
+            const input = targetFolderInput;
+            
+            // 获取当前光标位置
+            const start = input.selectionStart;
+            const end = input.selectionEnd;
+            const currentValue = input.value;
+            
+            // 在光标位置插入占位符
+            const newValue = currentValue.substring(0, start) + placeholder + currentValue.substring(end);
+            input.value = newValue;
+            
+            // 将光标移动到插入内容之后
+            const newCursorPos = start + placeholder.length;
+            input.setSelectionRange(newCursorPos, newCursorPos);
+            
+            // 聚焦输入框
+            input.focus();
+            
+            // 触发input事件以更新任何绑定
+            input.dispatchEvent(new Event('input', { bubbles: true }));
+            
+            console.log(`[占位符] 已插入: ${placeholder}`);
+        });
+    });
+}
+
 // ========== 事件监听器 ==========
 function setupEventListeners() {
     // 窗口控制按钮
@@ -112,6 +151,87 @@ function setupEventListeners() {
         appHeader.addEventListener('mousedown', () => {
             appState.isDragging = true;
             console.log('[拖拽] 开始拖拽完整窗口');
+        });
+        
+        // 双击标题栏全屏/还原
+        appHeader.addEventListener('dblclick', async (e) => {
+            // 如果双击的是按钮，不处理
+            if (e.target.closest('button')) {
+                return;
+            }
+            
+            // 如果处于 Mini 模式或折叠状态，不处理
+            if (appState.isMiniMode || appState.isCollapsed) {
+                return;
+            }
+            
+            // 清除任何待执行的折叠定时器
+            if (appState.collapseTimer) {
+                clearTimeout(appState.collapseTimer);
+                appState.collapseTimer = null;
+                console.log('[全屏] 清除折叠定时器');
+            }
+            
+            try {
+                const { appWindow } = window.__TAURI__.window;
+                
+                if (appState.isFullscreen) {
+                    // 退出全屏，还原到默认大小
+                    await appWindow.setFullscreen(false);
+                    
+                    // 等待全屏状态完全退出
+                    await new Promise(resolve => setTimeout(resolve, 100));
+                    
+                    // 恢复默认大小并居中
+                    await appWindow.setSize(new window.__TAURI__.window.LogicalSize(360, 520));
+                    await appWindow.center();
+                    
+                    // 确保窗口可调整大小
+                    await appWindow.setResizable(true);
+                    
+                    appState.isFullscreen = false;
+                    
+                    // 清除任何待执行的折叠定时器
+                    if (appState.collapseTimer) {
+                        clearTimeout(appState.collapseTimer);
+                        appState.collapseTimer = null;
+                        console.log('[全屏] 清除折叠定时器');
+                    }
+                    
+                    // 设置冷却期，防止立即折叠
+                    appState.expandCooldown = true;
+                    setTimeout(() => {
+                        appState.expandCooldown = false;
+                        console.log('[全屏] 冷却期结束');
+                    }, 3000); // 3秒冷却期，给用户足够时间
+                    
+                    console.log('[全屏] 退出全屏，已还原到默认大小 360x520（冷却期 3 秒）');
+                    showNotification('已还原到默认大小', 'info');
+                } else {
+                    // 进入全屏前，停止位置监控
+                    if (appState.positionCheckInterval) {
+                        clearInterval(appState.positionCheckInterval);
+                        appState.positionCheckInterval = null;
+                        console.log('[全屏] 停止位置监控');
+                    }
+                    
+                    // 清除任何待执行的折叠定时器
+                    if (appState.collapseTimer) {
+                        clearTimeout(appState.collapseTimer);
+                        appState.collapseTimer = null;
+                        console.log('[全屏] 清除折叠定时器');
+                    }
+                    
+                    // 进入全屏
+                    await appWindow.setFullscreen(true);
+                    appState.isFullscreen = true;
+                    console.log('[全屏] 进入全屏模式');
+                    showNotification('已进入全屏模式', 'info');
+                }
+            } catch (error) {
+                console.error('[全屏] 切换失败:', error);
+                showNotification('全屏切换失败', 'error');
+            }
         });
     }
     
@@ -170,9 +290,9 @@ function setupEventListeners() {
         // 鼠标离开后延迟800ms再检查是否需要折叠，给用户拖拽的机会
         if (!appState.isCollapsed && appState.isMiniMode) {
             appState.collapseTimer = setTimeout(async () => {
-                // 如果正在拖拽，不执行折叠
-                if (appState.isDragging) {
-                    console.log('[鼠标] 正在拖拽中，取消折叠');
+                // 如果正在拖拽或冷却期，不执行折叠
+                if (appState.isDragging || appState.expandCooldown) {
+                    console.log('[鼠标] 正在拖拽/冷却期中，取消折叠');
                     appState.collapseTimer = null;
                     return;
                 }
@@ -184,7 +304,8 @@ function setupEventListeners() {
                     
                     const screenWidth = window.screen.width;
                     const screenHeight = window.screen.height;
-                    const edgeThreshold = 10;
+                    // 边缘阈值：只有真正贴在边缘时才折叠（≤5px）
+                    const edgeThreshold = 5;
                     
                     let nearEdge = null;
                     if (position.x <= edgeThreshold) {
@@ -197,9 +318,9 @@ function setupEventListeners() {
                         nearEdge = 'bottom';
                     }
                     
-                    // 如果窗口在边缘，执行折叠
+                    // 如果窗口真正贴在边缘，执行折叠
                     if (nearEdge) {
-                        console.log('[鼠标] Mini窗口延迟检测到靠近边缘，执行折叠');
+                        console.log('[鼠标] Mini窗口延迟检测到窗口贴边，执行折叠');
                         collapseWindow(nearEdge);
                     }
                     
@@ -231,6 +352,9 @@ function setupEventListeners() {
     document.getElementById('conditionType').addEventListener('change', updateConditionInputs);
     document.getElementById('addConditionBtn').addEventListener('click', addCondition);
     
+    // 占位符标签按钮
+    setupPlaceholderButtons();
+    
     // 设置
     document.getElementById('animationSelect').addEventListener('change', (e) => {
         appState.animation = e.target.value;
@@ -246,21 +370,93 @@ function setupEventListeners() {
     
     // 清空活动日志
     document.getElementById('clearActivityBtn').addEventListener('click', clearActivity);
+    document.getElementById('clearProcessedBtn').addEventListener('click', clearProcessedFiles);
     
     // 批量确认窗口
     document.getElementById('closeBatchModal').addEventListener('click', closeBatchModal);
     document.getElementById('cancelBatch').addEventListener('click', closeBatchModal);
     document.getElementById('confirmBatch').addEventListener('click', confirmBatch);
     
+    // 删除确认窗口
+    document.getElementById('closeDeleteConfirm').addEventListener('click', closeDeleteConfirm);
+    document.getElementById('cancelDelete').addEventListener('click', closeDeleteConfirm);
+    document.getElementById('confirmDelete').addEventListener('click', executeDeleteRule);
+    
     // 模态框点击背景关闭
     document.getElementById('folderModal').addEventListener('click', (e) => {
         if (e.target.id === 'folderModal') closeFolderModal();
     });
-    document.getElementById('ruleModal').addEventListener('click', (e) => {
-        if (e.target.id === 'ruleModal') closeRuleModal();
-    });
+    // 规则模态框不允许点击外部关闭，只能通过按钮关闭
+    // document.getElementById('ruleModal').addEventListener('click', (e) => {
+    //     if (e.target.id === 'ruleModal') closeRuleModal();
+    // });
     document.getElementById('batchConfirmModal').addEventListener('click', (e) => {
         if (e.target.id === 'batchConfirmModal') closeBatchModal();
+    });
+    // 删除确认模态框不允许点击外部关闭，防止误操作
+    // document.getElementById('deleteConfirmModal').addEventListener('click', (e) => {
+    //     if (e.target.id === 'deleteConfirmModal') closeDeleteConfirm();
+    // });
+    
+    // 点击空白处取消规则选中
+    document.addEventListener('click', (e) => {
+        // 如果点击的是规则卡片或其子元素，不处理
+        if (e.target.closest('.rule-card')) {
+            return;
+        }
+        
+        // 如果点击的是模态框或按钮，不处理
+        if (e.target.closest('.modal') || e.target.closest('button') || e.target.closest('.modal-content')) {
+            return;
+        }
+        
+        // 取消所有规则的选中状态
+        const selectedCard = document.querySelector('.rule-card.selected');
+        if (selectedCard) {
+            selectedCard.classList.remove('selected');
+            console.log('[规则选择] 点击空白处，取消选中');
+        }
+    });
+    
+    // ESC 键退出全屏
+    document.addEventListener('keydown', async (e) => {
+        if (e.key === 'Escape' && appState.isFullscreen) {
+            try {
+                const { appWindow } = window.__TAURI__.window;
+                await appWindow.setFullscreen(false);
+                
+                // 等待全屏状态完全退出
+                await new Promise(resolve => setTimeout(resolve, 100));
+                
+                // 恢复默认大小并居中
+                await appWindow.setSize(new window.__TAURI__.window.LogicalSize(360, 520));
+                await appWindow.center();
+                
+                // 确保窗口可调整大小
+                await appWindow.setResizable(true);
+                
+                appState.isFullscreen = false;
+                
+                // 清除任何待执行的折叠定时器
+                if (appState.collapseTimer) {
+                    clearTimeout(appState.collapseTimer);
+                    appState.collapseTimer = null;
+                    console.log('[全屏] 清除折叠定时器');
+                }
+                
+                // 设置冷却期，防止立即折叠
+                appState.expandCooldown = true;
+                setTimeout(() => {
+                    appState.expandCooldown = false;
+                    console.log('[全屏] 冷却期结束');
+                }, 3000); // 3秒冷却期，给用户足够时间
+                
+                console.log('[全屏] ESC 退出全屏，已还原到默认大小 360x520（冷却期 3 秒）');
+                showNotification('已退出全屏', 'info');
+            } catch (error) {
+                console.error('[全屏] ESC 退出全屏失败:', error);
+            }
+        }
     });
 }
 
@@ -338,18 +534,37 @@ function setupBackendListeners() {
     });
     
     // 监听拖拽文件事件
-    listen('tauri://file-drop', event => {
+    listen('tauri://file-drop', async event => {
         const files = event.payload;
         console.log('拖拽文件:', files);
         
         if (files && files.length > 0) {
+            // 检查是否有选中的规则（支持多选）
+            const selectedRuleCards = document.querySelectorAll('.rule-card.selected');
+            
+            if (selectedRuleCards.length > 0) {
+                // 获取所有选中的规则ID
+                const selectedRuleIds = Array.from(selectedRuleCards).map(card => card.dataset.ruleId);
+                console.log('[拖放] 使用选中的规则:', selectedRuleIds);
+                
+                // 转换为文件对象格式
+                const fileObjects = files.map(filePath => ({
+                    path: filePath,
+                    name: filePath.split('\\').pop() || filePath.split('/').pop()
+                }));
+                
+                // 使用选中的规则处理（支持多个规则）
+                await processFilesWithRules(fileObjects, selectedRuleIds);
+                return;
+            }
+            
             // Mini模式下的处理
             if (appState.isMiniMode) {
                 handleMiniFileDrop(files);
                 return;
             }
             
-            // 完整模式下的处理
+            // 完整模式下的处理（没有选中规则，使用所有启用的规则）
             addActivity(`📥 拖入 ${files.length} 个文件/文件夹`);
             
             // 将拖入的文件添加到批量队列
@@ -369,16 +584,6 @@ function setupBackendListeners() {
                 processDraggedFiles(files);
             }
         }
-    });
-    
-    // 监听拖拽悬停事件（可选）
-    listen('tauri://file-drop-hover', event => {
-        console.log('文件悬停:', event.payload);
-    });
-    
-    // 监听拖拽取消事件（可选）
-    listen('tauri://file-drop-cancelled', () => {
-        console.log('拖拽已取消');
     });
     
     // 监听窗口焦点事件（从托盘恢复时）
@@ -424,59 +629,95 @@ async function processDraggedFiles(files) {
     }
 }
 
-// ========== 规则卡片拖放处理 ==========
-function setupRuleDragDrop() {
+// ========== 规则卡片点击选择 ==========
+function setupRuleSelection() {
     const ruleCards = document.querySelectorAll('.rule-card');
+    console.log(`[规则选择] 初始化 ${ruleCards.length} 个规则卡片`);
     
     ruleCards.forEach(card => {
-        const ruleId = card.dataset.ruleId;
+        // 移除之前的监听器（如果有）
+        const newCard = card.cloneNode(true);
+        card.parentNode.replaceChild(newCard, card);
         
-        // 拖拽进入
-        card.addEventListener('dragenter', (e) => {
-            e.preventDefault();
-            e.stopPropagation();
-            if (!card.classList.contains('disabled')) {
-                card.classList.add('drag-over');
-            }
-        });
-        
-        // 拖拽悬停
-        card.addEventListener('dragover', (e) => {
-            e.preventDefault();
-            e.stopPropagation();
-        });
-        
-        // 拖拽离开
-        card.addEventListener('dragleave', (e) => {
-            e.preventDefault();
-            e.stopPropagation();
-            // 只有当离开卡片本身时才移除样式
-            if (e.target === card || !card.contains(e.relatedTarget)) {
-                card.classList.remove('drag-over');
-            }
-        });
-        
-        // 放下文件
-        card.addEventListener('drop', async (e) => {
-            e.preventDefault();
-            e.stopPropagation();
-            card.classList.remove('drag-over');
-            
-            // 禁用的规则不处理
-            if (card.classList.contains('disabled')) {
-                showNotification('该规则已禁用，无法处理文件', 'error');
+        // 添加点击事件
+        newCard.addEventListener('click', (e) => {
+            // 如果点击的是按钮，不处理
+            if (e.target.closest('button')) {
                 return;
             }
             
-            const files = Array.from(e.dataTransfer.files);
-            if (files.length > 0) {
-                await processFilesWithRule(files, ruleId);
+            // 禁用的规则不能选择
+            if (newCard.classList.contains('disabled')) {
+                showNotification('该规则已禁用', 'error');
+                return;
+            }
+            
+            const ruleId = newCard.dataset.ruleId;
+            const isCtrlPressed = e.ctrlKey || e.metaKey; // Ctrl 或 Mac 的 Command 键
+            
+            // 切换选中状态
+            if (newCard.classList.contains('selected')) {
+                // 取消选中
+                newCard.classList.remove('selected');
+                console.log('[规则选择] 取消选中:', ruleId);
+                
+                const selectedCount = document.querySelectorAll('.rule-card.selected').length;
+                if (selectedCount > 0) {
+                    showNotification(`已取消选中，还有 ${selectedCount} 个规则被选中`, 'info');
+                } else {
+                    showNotification('已取消选中规则', 'info');
+                }
+            } else {
+                // 如果没有按 Ctrl，取消其他规则的选中状态（单选）
+                if (!isCtrlPressed) {
+                    document.querySelectorAll('.rule-card.selected').forEach(c => {
+                        c.classList.remove('selected');
+                    });
+                }
+                
+                // 选中当前规则
+                newCard.classList.add('selected');
+                const ruleName = appState.rules.find(r => r.id === ruleId)?.name || '';
+                console.log('[规则选择] 选中规则:', ruleId, ruleName);
+                
+                const selectedCount = document.querySelectorAll('.rule-card.selected').length;
+                if (selectedCount > 1) {
+                    showNotification(`已选中 ${selectedCount} 个规则 (按住 Ctrl 多选)`, 'success');
+                } else {
+                    showNotification(`已选中规则: ${ruleName}`, 'success');
+                }
             }
         });
     });
 }
 
-// 使用指定规则处理文件
+// 使用指定规则处理文件（支持多个规则）
+async function processFilesWithRules(files, ruleIds) {
+    // 如果只有一个规则，使用单规则逻辑
+    if (ruleIds.length === 1) {
+        return await processFilesWithRule(files, ruleIds[0]);
+    }
+    
+    // 多规则处理
+    const rules = ruleIds.map(id => appState.rules.find(r => r.id === id)).filter(r => r);
+    if (rules.length === 0) {
+        showNotification('规则不存在', 'error');
+        return;
+    }
+    
+    // 将文件添加到待处理队列，并保存选中的规则IDs
+    appState.pendingBatch = files.map(f => ({
+        path: typeof f === 'string' ? f : f.path,
+        name: typeof f === 'string' ? (f.split('\\').pop() || f.split('/').pop()) : f.name
+    }));
+    appState.selectedRuleIds = ruleIds; // 保存多个规则ID
+    appState.selectedRuleId = null; // 清除单规则ID
+    
+    // 显示批量确认窗口（使用多个规则预览）
+    await showBatchConfirmWithMultipleRules(ruleIds);
+}
+
+// 使用单个指定规则处理文件
 async function processFilesWithRule(files, ruleId) {
     const rule = appState.rules.find(r => r.id === ruleId);
     if (!rule) {
@@ -484,9 +725,331 @@ async function processFilesWithRule(files, ruleId) {
         return;
     }
     
-    addActivity(`📋 使用规则 [${rule.name}] 处理 ${files.length} 个文件`);
+    // 将文件添加到待处理队列，并标记使用的规则
+    appState.pendingBatch = files.map(f => ({
+        path: typeof f === 'string' ? f : f.path,
+        name: typeof f === 'string' ? (f.split('\\').pop() || f.split('/').pop()) : f.name
+    }));
+    appState.selectedRuleId = ruleId; // 保存选中的规则ID
+    appState.selectedRuleIds = null; // 清除多规则IDs
+    
+    // 显示批量确认窗口（使用特定规则预览）
+    await showBatchConfirmWithRule(ruleId);
+}
+
+// 使用特定规则的批量确认
+async function showBatchConfirmWithRule(ruleId) {
+    const rule = appState.rules.find(r => r.id === ruleId);
+    if (!rule) {
+        showNotification('规则不存在', 'error');
+        return;
+    }
+    
+    const modal = document.getElementById('batchConfirmModal');
+    const list = document.getElementById('batchFileList');
+    
+    // 重置模态框状态
+    document.getElementById('batchProgress').style.display = 'none';
+    list.style.display = 'block';
+    document.getElementById('batchModalTitle').textContent = `规则 [${rule.name}] 批量整理确认`;
+    
+    // 重置 subtitle
+    document.getElementById('batchModalSubtitle').innerHTML = `
+        检测到 <span id="batchCount" style="color: #667eea; font-weight: bold;">${appState.pendingBatch.length}</span> 个文件待整理
+    `;
+    
+    document.getElementById('confirmBatch').style.display = 'inline-block';
+    document.getElementById('confirmBatch').disabled = false;
+    document.getElementById('cancelBatch').disabled = false;
+    document.getElementById('cancelBatch').textContent = '取消';
+    
+    // 重置进度
+    document.getElementById('progressBar').style.width = '0%';
+    document.getElementById('successCount').textContent = '0';
+    document.getElementById('skipCount').textContent = '0';
+    document.getElementById('failCount').textContent = '0';
+    
+    // 显示加载状态
+    list.innerHTML = `
+        <div style="text-align: center; padding: 40px; color: #667eea;">
+            <div style="font-size: 32px;">⏳</div>
+            <div style="margin-top: 10px;">正在计算目标位置...</div>
+        </div>
+    `;
+    
+    modal.style.display = 'flex';
+    
+    // 预先计算每个文件的目标位置（使用特定规则）
+    const filesPreviews = await Promise.all(
+        appState.pendingBatch.map(async file => {
+            try {
+                const preview = await invoke('preview_file_organization_with_rule', { 
+                    path: file.path,
+                    ruleId: ruleId
+                });
+                return {
+                    ...file,
+                    matched: preview.matched,
+                    ruleName: preview.rule_name || null,
+                    targetPath: preview.target_path || '不符合规则条件'
+                };
+            } catch (error) {
+                console.error('预览失败:', error);
+                return {
+                    ...file,
+                    matched: false,
+                    targetPath: `错误: ${error}`
+                };
+            }
+        })
+    );
+    
+    // 分离匹配和未匹配的文件
+    const matchedFiles = filesPreviews.filter(f => f.matched);
+    const unmatchedFiles = filesPreviews.filter(f => !f.matched);
+    
+    // 渲染文件列表（与 showBatchConfirm 相同的 UI）
+    let html = '';
+    
+    // 匹配的文件
+    if (matchedFiles.length > 0) {
+        html += `
+            <div class="batch-section">
+                <div class="batch-section-header matched">
+                    <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+                        <circle cx="8" cy="8" r="7" stroke="#27ae60" stroke-width="2" fill="none"/>
+                        <path d="M5 8L7 10L11 6" stroke="#27ae60" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                    </svg>
+                    <span class="section-title">将被整理的文件</span>
+                    <span class="section-count">${matchedFiles.length}</span>
+                </div>
+                <div class="batch-section-content">
+                    ${matchedFiles.map(file => `
+                        <div class="batch-file-item">
+                            <div class="file-icon">📄</div>
+                            <div class="file-info">
+                                <div class="file-name">${file.name}</div>
+                                <div class="file-path from">来自: ${file.path}</div>
+                                <div class="file-path to">移至: ${file.targetPath}</div>
+                            </div>
+                        </div>
+                    `).join('')}
+                </div>
+            </div>
+        `;
+    }
+    
+    // 未匹配的文件
+    if (unmatchedFiles.length > 0) {
+        html += `
+            <div class="batch-section">
+                <div class="batch-section-header unmatched" onclick="toggleBatchSection(this)">
+                    <svg class="collapse-icon" width="12" height="12" viewBox="0 0 12 12" fill="none" style="transform: rotate(0deg);">
+                        <path d="M3 4.5L6 7.5L9 4.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+                    </svg>
+                    <svg class="warning-icon" width="16" height="16" viewBox="0 0 16 16" fill="none">
+                        <circle cx="8" cy="8" r="7" stroke="#e74c3c" stroke-width="2" fill="none"/>
+                        <path d="M8 4V8" stroke="#e74c3c" stroke-width="2" stroke-linecap="round"/>
+                        <circle cx="8" cy="11" r="0.5" fill="#e74c3c" stroke="#e74c3c" stroke-width="1"/>
+                    </svg>
+                    <span class="section-title">不符合规则的文件</span>
+                    <span class="section-count">${unmatchedFiles.length}</span>
+                    <span class="collapse-hint">点击收起</span>
+                </div>
+                <div class="batch-section-content">
+                    ${unmatchedFiles.map(file => `
+                        <div class="batch-file-item unmatched">
+                            <div class="file-icon">📄</div>
+                            <div class="file-info">
+                                <div class="file-name">${file.name}</div>
+                                <div class="file-path from">位置: ${file.path}</div>
+                                <div class="file-path error">原因: ${file.targetPath}</div>
+                            </div>
+                        </div>
+                    `).join('')}
+                </div>
+            </div>
+        `;
+    }
+    
+    if (matchedFiles.length === 0 && unmatchedFiles.length === 0) {
+        html = `<div style="text-align: center; padding: 40px; color: #999;">没有可整理的文件</div>`;
+    }
+    
+    list.innerHTML = html;
+}
+
+// 使用多个规则的批量确认
+async function showBatchConfirmWithMultipleRules(ruleIds) {
+    const rules = ruleIds.map(id => appState.rules.find(r => r.id === id)).filter(r => r);
+    if (rules.length === 0) {
+        showNotification('规则不存在', 'error');
+        return;
+    }
+    
+    const modal = document.getElementById('batchConfirmModal');
+    const list = document.getElementById('batchFileList');
+    
+    // 重置模态框状态
+    document.getElementById('batchProgress').style.display = 'none';
+    list.style.display = 'block';
+    const ruleNames = rules.map(r => r.name).join('、');
+    document.getElementById('batchModalTitle').textContent = `规则 [${ruleNames}] 批量整理确认`;
+    
+    // 重置 subtitle
+    document.getElementById('batchModalSubtitle').innerHTML = `
+        检测到 <span id="batchCount" style="color: #667eea; font-weight: bold;">${appState.pendingBatch.length}</span> 个文件待整理 (使用 ${rules.length} 个规则)
+    `;
+    
+    document.getElementById('confirmBatch').style.display = 'inline-block';
+    document.getElementById('confirmBatch').disabled = false;
+    document.getElementById('cancelBatch').disabled = false;
+    document.getElementById('cancelBatch').textContent = '取消';
+    
+    // 重置进度
+    document.getElementById('progressBar').style.width = '0%';
+    document.getElementById('successCount').textContent = '0';
+    document.getElementById('skipCount').textContent = '0';
+    document.getElementById('failCount').textContent = '0';
+    
+    // 显示加载状态
+    list.innerHTML = `
+        <div style="text-align: center; padding: 40px; color: #667eea;">
+            <div style="font-size: 32px;">⏳</div>
+            <div style="margin-top: 10px;">正在计算目标位置...</div>
+        </div>
+    `;
+    
+    modal.style.display = 'flex';
+    
+    // 预先计算每个文件的目标位置（按顺序尝试多个规则）
+    const filesPreviews = await Promise.all(
+        appState.pendingBatch.map(async file => {
+            try {
+                // 按顺序尝试每个规则
+                for (const ruleId of ruleIds) {
+                    const preview = await invoke('preview_file_organization_with_rule', { 
+                        path: file.path,
+                        ruleId: ruleId
+                    });
+                    
+                    if (preview.matched) {
+                        // 找到匹配的规则，返回结果
+                        return {
+                            ...file,
+                            matched: true,
+                            ruleName: preview.rule_name,
+                            targetPath: preview.target_path
+                        };
+                    }
+                }
+                
+                // 所有规则都不匹配
+                return {
+                    ...file,
+                    matched: false,
+                    targetPath: '不符合任何选中规则'
+                };
+            } catch (error) {
+                console.error('预览失败:', error);
+                return {
+                    ...file,
+                    matched: false,
+                    targetPath: `错误: ${error}`
+                };
+            }
+        })
+    );
+    
+    // 分离匹配和未匹配的文件
+    const matchedFiles = filesPreviews.filter(f => f.matched);
+    const unmatchedFiles = filesPreviews.filter(f => !f.matched);
+    
+    // 渲染文件列表（与 showBatchConfirmWithRule 相同的 UI）
+    let html = '';
+    
+    // 匹配的文件
+    if (matchedFiles.length > 0) {
+        html += `
+            <div class="batch-section">
+                <div class="batch-section-header matched">
+                    <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+                        <circle cx="8" cy="8" r="7" stroke="#27ae60" stroke-width="2" fill="none"/>
+                        <path d="M5 8L7 10L11 6" stroke="#27ae60" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                    </svg>
+                    <span class="section-title">将被整理的文件</span>
+                    <span class="section-count">${matchedFiles.length}</span>
+                </div>
+                <div class="batch-section-content">
+                    ${matchedFiles.map(file => `
+                        <div class="batch-file-item">
+                            <div class="file-icon">📄</div>
+                            <div class="file-info">
+                                <div class="file-name">${file.name}</div>
+                                <div class="file-path from">来自: ${file.path}</div>
+                                <div class="file-path to">移至: ${file.targetPath}</div>
+                                <div class="file-path" style="color: #667eea; font-size: 11px;">规则: ${file.ruleName}</div>
+                            </div>
+                        </div>
+                    `).join('')}
+                </div>
+            </div>
+        `;
+    }
+    
+    // 未匹配的文件
+    if (unmatchedFiles.length > 0) {
+        html += `
+            <div class="batch-section">
+                <div class="batch-section-header unmatched" onclick="toggleBatchSection(this)">
+                    <svg class="collapse-icon" width="12" height="12" viewBox="0 0 12 12" fill="none" style="transform: rotate(0deg);">
+                        <path d="M3 4.5L6 7.5L9 4.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+                    </svg>
+                    <svg class="warning-icon" width="16" height="16" viewBox="0 0 16 16" fill="none">
+                        <circle cx="8" cy="8" r="7" stroke="#e74c3c" stroke-width="2" fill="none"/>
+                        <path d="M8 4V8" stroke="#e74c3c" stroke-width="2" stroke-linecap="round"/>
+                        <circle cx="8" cy="11" r="0.5" fill="#e74c3c" stroke="#e74c3c" stroke-width="1"/>
+                    </svg>
+                    <span class="section-title">不符合规则的文件</span>
+                    <span class="section-count">${unmatchedFiles.length}</span>
+                    <span class="collapse-hint">点击收起</span>
+                </div>
+                <div class="batch-section-content">
+                    ${unmatchedFiles.map(file => `
+                        <div class="batch-file-item unmatched">
+                            <div class="file-icon">📄</div>
+                            <div class="file-info">
+                                <div class="file-name">${file.name}</div>
+                                <div class="file-path from">位置: ${file.path}</div>
+                                <div class="file-path error">原因: ${file.targetPath}</div>
+                            </div>
+                        </div>
+                    `).join('')}
+                </div>
+            </div>
+        `;
+    }
+    
+    if (matchedFiles.length === 0 && unmatchedFiles.length === 0) {
+        html = `<div style="text-align: center; padding: 40px; color: #999;">没有可整理的文件</div>`;
+    }
+    
+    list.innerHTML = html;
+}
+
+// 原始的 processFilesWithRule 逻辑现在移到 confirmBatch 中处理（当 appState.selectedRuleId 存在时）
+async function processFilesWithRuleDirectly(files, ruleId) {
+    const rule = appState.rules.find(r => r.id === ruleId);
+    if (!rule) {
+        showNotification('规则不存在', 'error');
+        return;
+    }
+    
+    showNotification(`使用选中规则 [${rule.name}] 处理 ${files.length} 个文件`, 'info');
+    addActivity(`📋 使用选中规则 [${rule.name}] 处理 ${files.length} 个文件`);
     
     let successCount = 0;
+    let skipCount = 0;
     let failCount = 0;
     
     for (const file of files) {
@@ -497,7 +1060,7 @@ async function processFilesWithRule(files, ruleId) {
                 ruleId: ruleId
             });
             
-            if (result) {
+            if (result && result !== '文件未匹配任何规则') {
                 addActivity(
                     `✅ <strong>${file.name}</strong>`,
                     'success',
@@ -506,8 +1069,8 @@ async function processFilesWithRule(files, ruleId) {
                 successCount++;
                 appState.filesProcessed++;
             } else {
-                addActivity(`⚠️ 不符合规则: ${file.name}`, 'error');
-                failCount++;
+                addActivity(`⊘ ${file.name} 不符合规则 [${rule.name}]`);
+                skipCount++;
             }
         } catch (error) {
             console.error('处理文件失败:', error);
@@ -518,12 +1081,20 @@ async function processFilesWithRule(files, ruleId) {
     
     updateStats();
     
-    if (successCount > 0) {
-        showNotification(`成功整理 ${successCount} 个文件`, 'success');
+    // 显示统计结果
+    const total = files.length;
+    let message = `规则 [${rule.name}] 处理完成\n`;
+    message += `成功: ${successCount} | 跳过: ${skipCount} | 失败: ${failCount}`;
+    
+    if (successCount > 0 && failCount === 0) {
+        showNotification(message, 'success');
+    } else if (successCount > 0) {
+        showNotification(message, 'info');
+    } else {
+        showNotification(`没有文件匹配规则 [${rule.name}]`, 'error');
     }
-    if (failCount > 0) {
-        showNotification(`${failCount} 个文件处理失败`, 'error');
-    }
+    
+    addActivity(`✓ 完成 - 成功:${successCount} 跳过:${skipCount} 失败:${failCount}`);
 }
 
 // ========== 加载数据 ==========
@@ -697,7 +1268,6 @@ function renderRules() {
                 </button>
                 <div class="rule-info">
                     <div class="rule-name">
-                        <span class="rule-label">${ruleLabel}</span>
                         ${rule.name}
                     </div>
                     <div class="rule-details">${conditionText} → ${rule.action.destination}</div>
@@ -708,27 +1278,38 @@ function renderRules() {
                 </div>
                 <div class="rule-order-controls">
                     <button class="order-btn order-left" onclick="moveRuleUp(${index})" ${index === 0 ? 'disabled' : ''} title="上移">
-                        <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
-                            <path d="M6 3L9 6H3L6 3Z" fill="currentColor"/>
+                        <svg width="12" height="12" viewBox="0 0 16 16" fill="none">
+                            <path d="M4 10L8 6L12 10" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
                         </svg>
                     </button>
                     <button class="order-btn order-right" onclick="moveRuleDown(${index})" ${index === appState.rules.length - 1 ? 'disabled' : ''} title="下移">
-                        <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
-                            <path d="M6 9L3 6H9L6 9Z" fill="currentColor"/>
+                        <svg width="12" height="12" viewBox="0 0 16 16" fill="none">
+                            <path d="M4 6L8 10L12 6" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
                         </svg>
                     </button>
                 </div>
                 <div class="rule-actions">
-                    <button class="btn-secondary btn-sm" onclick="editRule('${rule.id}')">编辑</button>
-                    <button class="btn-secondary btn-sm" onclick="deleteRule('${rule.id}')">删除</button>
+                    <button class="btn-icon btn-sm" onclick="editRule('${rule.id}')" title="编辑">
+                        <svg width="14" height="14" viewBox="0 0 16 16" fill="none">
+                            <path d="M11.5 2L14 4.5L5.5 13H3V10.5L11.5 2Z" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+                            <path d="M10 3.5L12.5 6" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+                        </svg>
+                    </button>
+                    <button class="btn-icon btn-sm" onclick="deleteRule('${rule.id}')" title="删除">
+                        <svg width="14" height="14" viewBox="0 0 16 16" fill="none">
+                            <path d="M3 4H13" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+                            <path d="M5 4V3C5 2.5 5.5 2 6 2H10C10.5 2 11 2.5 11 3V4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+                            <path d="M5 4V13C5 13.5 5.5 14 6 14H10C10.5 14 11 13.5 11 13V4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+                            <path d="M7 7V11M9 7V11" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+                        </svg>
+                    </button>
                 </div>
-                <div class="rule-drop-hint">拖放文件到此</div>
             </div>
         `;
     }).join('');
     
-    // 为规则卡片添加拖放事件监听
-    setupRuleDragDrop();
+    // 为规则卡片添加点击选择事件监听
+    setupRuleSelection();
 }
 
 // ========== 规则排序功能 ==========
@@ -988,9 +1569,17 @@ function updateConditionInputs() {
             break;
         case 'created':
         case 'modified':
+            const timeLabel = type === 'created' ? '创建时间' : '修改时间';
             container.innerHTML = `
-                <input type="number" id="minDays" placeholder="最少天数" min="0" style="flex: 1;" />
-                <input type="number" id="maxDays" placeholder="最多天数" min="0" style="flex: 1;" />
+                <input type="number" id="minDays" placeholder="至少N天前" min="0" style="flex: 1;" title="文件${timeLabel}距今至少多少天（留空表示不限制）" />
+                <span style="margin: 0 8px; color: #999;">~</span>
+                <input type="number" id="maxDays" placeholder="至多N天前" min="0" style="flex: 1;" title="文件${timeLabel}距今至多多少天（留空表示不限制）" />
+                <p class="hint" style="margin-top: 8px; font-size: 12px; color: #666;">
+                    📅 示例：<br>
+                    • 最近7天${timeLabel}的文件：至少留空，至多填 7<br>
+                    • 30天前或更早${timeLabel}的文件：至少填 30，至多留空<br>
+                    • 7-30天前${timeLabel}的文件：至少填 7，至多填 30
+                </p>
             `;
             break;
     }
@@ -1068,7 +1657,11 @@ function addCondition() {
                 type: 'CreatedDaysAgo',
                 min: min ? parseInt(min) : null,
                 max: max ? parseInt(max) : null,
-                displayText: `创建于: ${min ? min + '天' : '无限制'} ~ ${max ? max + '天' : '无限制'}前`
+                displayText: min && max 
+                    ? `创建时间: ${min}-${max}天前` 
+                    : min 
+                        ? `创建时间: ${min}天前或更早` 
+                        : `创建时间: ${max}天内`
             };
             break;
         }
@@ -1083,14 +1676,26 @@ function addCondition() {
                 type: 'ModifiedDaysAgo',
                 min: min ? parseInt(min) : null,
                 max: max ? parseInt(max) : null,
-                displayText: `修改于: ${min ? min + '天' : '无限制'} ~ ${max ? max + '天' : '无限制'}前`
+                displayText: min && max 
+                    ? `修改时间: ${min}-${max}天前` 
+                    : min 
+                        ? `修改时间: ${min}天前或更早` 
+                        : `修改时间: ${max}天内`
             };
             break;
         }
     }
     
     if (condition) {
-        appState.currentConditions.push(condition);
+        if (appState.editingConditionIndex >= 0) {
+            // 更新现有条件
+            appState.currentConditions[appState.editingConditionIndex] = condition;
+            appState.editingConditionIndex = -1;
+            document.getElementById('addConditionBtn').textContent = '添加条件';
+        } else {
+            // 添加新条件
+            appState.currentConditions.push(condition);
+        }
         renderConditions();
         
         // 清空输入
@@ -1102,6 +1707,70 @@ function addCondition() {
 // 删除条件（全局暴露）
 window.removeCondition = function(index) {
     appState.currentConditions.splice(index, 1);
+    appState.editingConditionIndex = -1;
+    document.getElementById('addConditionBtn').textContent = '添加条件';
+    renderConditions();
+};
+
+// 编辑条件（全局暴露）
+window.editCondition = function(index) {
+    const condition = appState.currentConditions[index];
+    appState.editingConditionIndex = index;
+    
+    // 根据条件类型设置下拉框
+    const typeSelect = document.getElementById('conditionType');
+    
+    switch(condition.type) {
+        case 'Extension':
+            typeSelect.value = 'extension';
+            break;
+        case 'NameContains':
+            typeSelect.value = 'name';
+            break;
+        case 'NameRegex':
+            typeSelect.value = 'regex';
+            break;
+        case 'SizeRange':
+            typeSelect.value = 'size';
+            break;
+        case 'CreatedDaysAgo':
+            typeSelect.value = 'created';
+            break;
+        case 'ModifiedDaysAgo':
+            typeSelect.value = 'modified';
+            break;
+    }
+    
+    // 触发类型改变事件，更新输入框
+    updateConditionInputs();
+    
+    // 填充输入值
+    setTimeout(() => {
+        const inputField = document.getElementById('conditionInput');
+        
+        switch(condition.type) {
+            case 'Extension':
+                if (inputField) inputField.value = condition.values ? condition.values.join(', ') : '';
+                break;
+            case 'NameContains':
+            case 'NameRegex':
+                if (inputField) inputField.value = condition.pattern || '';
+                break;
+            case 'SizeRange':
+                if (condition.min) document.getElementById('minSize').value = Math.round(condition.min / 1024 / 1024);
+                if (condition.max) document.getElementById('maxSize').value = Math.round(condition.max / 1024 / 1024);
+                break;
+            case 'CreatedDaysAgo':
+            case 'ModifiedDaysAgo':
+                if (condition.min) document.getElementById('minDays').value = condition.min;
+                if (condition.max) document.getElementById('maxDays').value = condition.max;
+                break;
+        }
+        
+        // 更新添加按钮文字
+        document.getElementById('addConditionBtn').textContent = '更新条件';
+    }, 10);
+    
     renderConditions();
 };
 
@@ -1115,12 +1784,23 @@ function renderConditions() {
     }
     
     container.innerHTML = appState.currentConditions.map((cond, index) => `
-        <div class="condition-item">
+        <div class="condition-item ${appState.editingConditionIndex === index ? 'editing' : ''}">
             <div class="condition-content">
                 <span class="condition-type">${getConditionTypeLabel(cond.type)}</span>
                 <span class="condition-value">${cond.displayText}</span>
             </div>
-            <button class="condition-remove" onclick="removeCondition(${index})">删除</button>
+            <div class="condition-actions">
+                <button class="condition-edit" onclick="editCondition(${index})" title="编辑">
+                    <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
+                        <path d="M10.5 1.5L12.5 3.5L4.5 11.5L1.5 12.5L2.5 9.5L10.5 1.5Z" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+                    </svg>
+                </button>
+                <button class="condition-remove" onclick="removeCondition(${index})" title="删除">
+                    <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
+                        <path d="M2 2L12 12M12 2L2 12" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+                    </svg>
+                </button>
+            </div>
         </div>
     `).join('');
 }
@@ -1142,12 +1822,16 @@ function getConditionTypeLabel(type) {
 async function openRuleModal(ruleId = null) {
     appState.editingRuleId = ruleId;
     appState.currentConditions = [];
+    appState.editingConditionIndex = -1; // 重置编辑状态
     
     const modal = document.getElementById('ruleModal');
     const title = document.getElementById('ruleModalTitle');
     const form = document.getElementById('ruleForm');
     
     form.reset();
+    
+    // 重置添加按钮文字
+    document.getElementById('addConditionBtn').textContent = '添加条件';
     
     if (ruleId) {
         // 编辑模式
@@ -1157,6 +1841,10 @@ async function openRuleModal(ruleId = null) {
         title.textContent = '✏️ 编辑规则';
         document.getElementById('ruleName').value = rule.name;
         document.getElementById('targetFolder').value = rule.action.destination;
+        
+        // 加载逻辑运算符
+        const logicOperator = rule.logic || 'or'; // 默认OR
+        document.querySelector(`input[name="conditionLogic"][value="${logicOperator}"]`).checked = true;
         
         // 加载现有条件
         appState.currentConditions = rule.conditions.map(cond => {
@@ -1172,9 +1860,17 @@ async function openRuleModal(ruleId = null) {
                 const maxMB = cond.max ? Math.round(cond.max / 1024 / 1024) : null;
                 displayText = `文件大小: ${minMB ? minMB + 'MB' : '无限制'} ~ ${maxMB ? maxMB + 'MB' : '无限制'}`;
             } else if (cond.type === 'CreatedDaysAgo') {
-                displayText = `创建于: ${cond.min || '无限制'} ~ ${cond.max || '无限制'}天前`;
+                displayText = cond.min && cond.max 
+                    ? `创建时间: ${cond.min}-${cond.max}天前` 
+                    : cond.min 
+                        ? `创建时间: ${cond.min}天前或更早` 
+                        : `创建时间: ${cond.max}天内`;
             } else if (cond.type === 'ModifiedDaysAgo') {
-                displayText = `修改于: ${cond.min || '无限制'} ~ ${cond.max || '无限制'}天前`;
+                displayText = cond.min && cond.max 
+                    ? `修改时间: ${cond.min}-${cond.max}天前` 
+                    : cond.min 
+                        ? `修改时间: ${cond.min}天前或更早` 
+                        : `修改时间: ${cond.max}天内`;
             }
             return { ...cond, displayText };
         });
@@ -1193,6 +1889,8 @@ async function openRuleModal(ruleId = null) {
 function closeRuleModal() {
     document.getElementById('ruleModal').style.display = 'none';
     appState.editingRuleId = null;
+    appState.editingConditionIndex = -1;
+    document.getElementById('addConditionBtn').textContent = '添加条件';
 }
 
 async function saveRule() {
@@ -1209,6 +1907,9 @@ async function saveRule() {
         return;
     }
     
+    // 获取逻辑运算符
+    const logicOperator = document.querySelector('input[name="conditionLogic"]:checked').value;
+    
     // 将条件转换为后端格式（移除displayText）
     const conditions = appState.currentConditions.map(cond => {
         const { displayText, ...rest } = cond;
@@ -1219,6 +1920,7 @@ async function saveRule() {
         id: appState.editingRuleId || `rule_${Date.now()}`,
         name,
         enabled: true,
+        logic: logicOperator, // 添加逻辑运算符
         conditions: conditions,
         action: { type: 'MoveTo', destination: target },
         priority: 0,
@@ -1252,7 +1954,42 @@ async function deleteRule(ruleId) {
     const rule = appState.rules.find(r => r.id === ruleId);
     if (!rule) return;
     
-    if (!confirm(`确定要删除规则 "${rule.name}" 吗？`)) return;
+    // 显示删除确认模态框
+    showDeleteConfirm(rule);
+}
+
+// 显示删除确认模态框
+function showDeleteConfirm(rule) {
+    const modal = document.getElementById('deleteConfirmModal');
+    const message = document.getElementById('deleteConfirmMessage');
+    
+    // 设置消息内容
+    message.innerHTML = `
+        确定要删除规则 <strong style="color: #667eea;">"${rule.name}"</strong> 吗？
+        <br><br>
+        ${rule.action ? `<span style="color: #666;">目标文件夹: ${rule.action.destination}</span>` : ''}
+    `;
+    
+    // 显示模态框
+    modal.style.display = 'flex';
+    
+    // 保存规则ID到临时变量
+    appState.pendingDeleteRuleId = rule.id;
+}
+
+// 关闭删除确认模态框
+function closeDeleteConfirm() {
+    document.getElementById('deleteConfirmModal').style.display = 'none';
+    appState.pendingDeleteRuleId = null;
+}
+
+// 执行删除规则
+async function executeDeleteRule() {
+    const ruleId = appState.pendingDeleteRuleId;
+    if (!ruleId) return;
+    
+    const rule = appState.rules.find(r => r.id === ruleId);
+    if (!rule) return;
     
     try {
         await invoke('remove_rule', { ruleId });
@@ -1261,6 +1998,7 @@ async function deleteRule(ruleId) {
         await loadRules();
         await loadFolders(); // 重新加载文件夹以更新关联
         updateStats();
+        closeDeleteConfirm();
     } catch (error) {
         console.error('删除规则失败:', error);
         showNotification('删除失败', 'error');
@@ -1353,15 +2091,26 @@ async function clearActivity() {
             <span class="activity-message">活动日志已清空</span>
         </div>
     `;
+}
+
+// 清除已处理文件记录
+async function clearProcessedFiles() {
+    if (!confirm('确定要清除所有已处理文件记录吗？\n\n清除后，之前处理过的文件将可以重新整理。')) {
+        return;
+    }
+    
     appState.filesProcessed = 0;
     appState.processedFiles.clear(); // 清空前端记录
     
-    // 清空后端记录
+    // 调用后端清空已处理文件记录
     try {
         await invoke('clear_processed_files');
         console.log('✓ 已处理文件记录已清空');
+        showNotification('已处理文件记录已清除', 'success');
+        addActivity(`🔄 清除已处理文件记录`);
     } catch (error) {
         console.error('清空已处理文件记录失败:', error);
+        showNotification('清除失败', 'error');
     }
     
     updateStats();
@@ -1391,10 +2140,28 @@ function showNotification(message, type = 'info') {
 // ========== 批量确认功能 ==========
 async function showBatchConfirm() {
     const modal = document.getElementById('batchConfirmModal');
-    const count = document.getElementById('batchCount');
     const list = document.getElementById('batchFileList');
     
-    count.textContent = appState.pendingBatch.length;
+    // 重置模态框状态
+    document.getElementById('batchProgress').style.display = 'none';
+    list.style.display = 'block';
+    document.getElementById('batchModalTitle').textContent = '批量整理确认';
+    
+    // 重置 subtitle 为原始 HTML（恢复 batchCount 元素）
+    document.getElementById('batchModalSubtitle').innerHTML = `
+        检测到 <span id="batchCount" style="color: #667eea; font-weight: bold;">${appState.pendingBatch.length}</span> 个文件待整理
+    `;
+    
+    document.getElementById('confirmBatch').style.display = 'inline-block';
+    document.getElementById('confirmBatch').disabled = false;
+    document.getElementById('cancelBatch').disabled = false;
+    document.getElementById('cancelBatch').textContent = '取消';
+    
+    // 重置进度
+    document.getElementById('progressBar').style.width = '0%';
+    document.getElementById('successCount').textContent = '0';
+    document.getElementById('skipCount').textContent = '0';
+    document.getElementById('failCount').textContent = '0';
     
     // 显示加载状态
     list.innerHTML = `
@@ -1428,49 +2195,216 @@ async function showBatchConfirm() {
         })
     );
     
+    // 分离匹配和未匹配的文件
+    const matchedFiles = filesPreviews.filter(f => f.matched);
+    const unmatchedFiles = filesPreviews.filter(f => !f.matched);
+    
     // 渲染文件列表（带目标路径）
-    list.innerHTML = filesPreviews.map(file => {
-        const icon = file.matched ? '📄' : '⚠️';
-        const toColor = file.matched ? '#27ae60' : '#e74c3c';
-        const toPrefix = file.matched ? '📥 到: ' : '⚠️ ';
-        
-        return `
-            <div class="batch-file-item">
-                <div class="file-icon">${icon}</div>
-                <div class="file-info">
-                    <div class="file-name">${file.name}${file.ruleName ? ` <span style="color: #667eea; font-size: 11px;">(${file.ruleName})</span>` : ''}</div>
-                    <div class="file-path from">${file.path}</div>
-                    <div class="file-path to" style="color: ${toColor};">${toPrefix}${file.targetPath}</div>
+    let html = '';
+    
+    // 匹配的文件（始终显示，不折叠）
+    if (matchedFiles.length > 0) {
+        html += `
+            <div class="batch-section">
+                <div class="batch-section-header matched">
+                    <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+                        <circle cx="8" cy="8" r="7" stroke="#27ae60" stroke-width="2" fill="none"/>
+                        <path d="M5 8L7 10L11 6" stroke="#27ae60" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                    </svg>
+                    <span class="section-title">将被整理的文件</span>
+                    <span class="section-count">${matchedFiles.length}</span>
+                </div>
+                <div class="batch-section-content">
+                    ${matchedFiles.map(file => `
+                        <div class="batch-file-item">
+                            <div class="file-icon">📄</div>
+                            <div class="file-info">
+                                <div class="file-name">${file.name}${file.ruleName ? ` <span style="color: #667eea; font-size: 11px; font-weight: 500;">[${file.ruleName}]</span>` : ''}</div>
+                                <div class="file-path from">从: ${file.path}</div>
+                                <div class="file-path to matched">到: ${file.targetPath}</div>
+                            </div>
+                        </div>
+                    `).join('')}
                 </div>
             </div>
         `;
-    }).join('');
+    }
     
-    addActivity(`🔔 批量整理确认 (${appState.pendingBatch.length} 个文件)`);
+    // 未匹配的文件（可折叠）
+    if (unmatchedFiles.length > 0) {
+        html += `
+            <div class="batch-section">
+                <div class="batch-section-header unmatched" onclick="toggleBatchSection(this)">
+                    <svg width="16" height="16" viewBox="0 0 16 16" fill="none" class="collapse-icon">
+                        <path d="M4 6L8 10L12 6" stroke="#e74c3c" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                    </svg>
+                    <svg width="16" height="16" viewBox="0 0 16 16" fill="none" class="warning-icon">
+                        <path d="M8 2L14 13H2L8 2Z" stroke="#e74c3c" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                        <line x1="8" y1="6" x2="8" y2="9" stroke="#e74c3c" stroke-width="2" stroke-linecap="round"/>
+                        <circle cx="8" cy="11" r="0.5" fill="#e74c3c"/>
+                    </svg>
+                    <span class="section-title">未匹配规则的文件</span>
+                    <span class="section-count">${unmatchedFiles.length}</span>
+                    <span class="collapse-hint">点击折叠</span>
+                </div>
+                <div class="batch-section-content">
+                    ${unmatchedFiles.map(file => `
+                        <div class="batch-file-item">
+                            <div class="file-icon">⚠️</div>
+                            <div class="file-info">
+                                <div class="file-name">${file.name}</div>
+                                <div class="file-path from">从: ${file.path}</div>
+                                <div class="file-path to unmatched">${file.targetPath}</div>
+                            </div>
+                        </div>
+                    `).join('')}
+                </div>
+            </div>
+        `;
+    }
+    
+    list.innerHTML = html;
+    
+    addActivity(`🔔 批量整理确认 (匹配: ${matchedFiles.length}, 未匹配: ${unmatchedFiles.length})`);
 }
 
 function closeBatchModal() {
     document.getElementById('batchConfirmModal').style.display = 'none';
-    // 取消整理，清空队列
+    // 取消整理，清空队列和选中的规则
     appState.pendingBatch = [];
+    appState.selectedRuleId = null;
+    appState.selectedRuleIds = null;
     addActivity(`[取消] 已取消批量整理`);
 }
 
+// 切换批量确认部分的折叠状态
+window.toggleBatchSection = function(header) {
+    const content = header.nextElementSibling;
+    const collapseIcon = header.querySelector('.collapse-icon');
+    const hint = header.querySelector('.collapse-hint');
+    
+    const isCollapsed = content.classList.contains('collapsed');
+    
+    if (isCollapsed) {
+        // 展开
+        content.classList.remove('collapsed');
+        collapseIcon.style.transform = 'rotate(0deg)';
+        hint.textContent = '点击折叠';
+    } else {
+        // 折叠
+        content.classList.add('collapsed');
+        collapseIcon.style.transform = 'rotate(-90deg)';
+        hint.textContent = '点击展开';
+    }
+};
+
 async function confirmBatch() {
     const files = [...appState.pendingBatch];
-    document.getElementById('batchConfirmModal').style.display = 'none';
+    
+    // 隐藏文件列表，显示进度条
+    document.getElementById('batchFileList').style.display = 'none';
+    document.getElementById('batchProgress').style.display = 'block';
+    
+    // 禁用按钮
+    const confirmBtn = document.getElementById('confirmBatch');
+    const cancelBtn = document.getElementById('cancelBatch');
+    confirmBtn.disabled = true;
+    cancelBtn.disabled = true;
+    
+    // 更新标题
+    document.getElementById('batchModalTitle').textContent = '正在整理文件';
+    document.getElementById('batchModalSubtitle').textContent = '请稍候，不要关闭窗口...';
     
     addActivity(`[批量] 开始批量整理 (${files.length} 个文件)`);
     
+    let successCount = 0;
+    let skipCount = 0;
+    let failCount = 0;
+    
     // 逐个处理文件
-    for (const file of files) {
+    for (let i = 0; i < files.length; i++) {
+        const file = files[i];
+        const progress = ((i + 1) / files.length) * 100;
+        
+        // 更新进度显示
+        document.getElementById('progressBar').style.width = `${progress}%`;
+        document.getElementById('progressCount').textContent = `${i + 1} / ${files.length}`;
+        document.getElementById('progressText').textContent = `正在整理: ${file.name}`;
+        
         try {
-            await invoke('process_file', { path: file.path });
+            let result;
+            // 如果有选中的规则ID(s)，使用特定规则处理；否则使用所有规则
+            if (appState.selectedRuleIds && appState.selectedRuleIds.length > 0) {
+                // 多个规则：按顺序尝试每个规则
+                for (const ruleId of appState.selectedRuleIds) {
+                    result = await invoke('process_file_with_rule', { 
+                        path: file.path,
+                        ruleId: ruleId
+                    });
+                    if (result && result !== '文件未匹配任何规则') {
+                        break; // 找到匹配的规则，停止尝试
+                    }
+                }
+                // 如果没有赋值，说明没有匹配任何规则
+                if (!result) {
+                    result = '文件未匹配任何规则';
+                }
+            } else if (appState.selectedRuleId) {
+                // 单个规则
+                result = await invoke('process_file_with_rule', { 
+                    path: file.path,
+                    ruleId: appState.selectedRuleId
+                });
+            } else {
+                // 使用所有规则
+                result = await invoke('process_file', { path: file.path });
+            }
+            
+            if (result === '') {
+                // 文件被跳过（已处理过）
+                skipCount++;
+                document.getElementById('skipCount').textContent = skipCount;
+            } else if (result === '文件未匹配任何规则') {
+                // 文件未匹配任何规则，也算跳过
+                skipCount++;
+                document.getElementById('skipCount').textContent = skipCount;
+            } else {
+                // 成功处理（返回了新路径）
+                successCount++;
+                document.getElementById('successCount').textContent = successCount;
+            }
         } catch (error) {
             console.error(`处理文件失败: ${file.name}`, error);
             addActivity(`❌ ${file.name} 处理失败: ${error}`, 'error');
+            failCount++;
+            document.getElementById('failCount').textContent = failCount;
         }
     }
+    
+    // 完成
+    document.getElementById('progressText').textContent = '整理完成！';
+    document.getElementById('batchModalTitle').textContent = '批量整理完成';
+    document.getElementById('batchModalSubtitle').innerHTML = `
+        成功: <span style="color: #2e7d32; font-weight: 600;">${successCount}</span> | 
+        跳过: <span style="color: #f57c00; font-weight: 600;">${skipCount}</span> | 
+        失败: <span style="color: #c62828; font-weight: 600;">${failCount}</span>
+    `;
+    
+    // 更新按钮
+    confirmBtn.style.display = 'none';
+    cancelBtn.disabled = false;
+    cancelBtn.textContent = '关闭';
+    
+    addActivity(`[批量] 批量整理完成 - 成功:${successCount} 跳过:${skipCount} 失败:${failCount}`);
+    
+    // 清除选中的规则ID(s)
+    appState.selectedRuleId = null;
+    appState.selectedRuleIds = null;
+    
+    // 刷新界面
+    await loadFolders();
+    await loadRules();
+    updateStats();
 }
 
 // ========== 窗口控制 ==========
@@ -1487,6 +2421,54 @@ async function closeWindow() {
 
 // ========== 窗口边缘折叠功能 ==========
 
+// 鼠标位置监听（用于边缘展开检测）
+let mousePositionCheckInterval = null;
+
+function startMousePositionMonitoring() {
+    if (mousePositionCheckInterval) return;
+    
+    // 监听全局鼠标移动
+    document.addEventListener('mousemove', handleGlobalMouseMove);
+    
+    console.log('[鼠标监听] 已启动鼠标位置监听');
+}
+
+function stopMousePositionMonitoring() {
+    document.removeEventListener('mousemove', handleGlobalMouseMove);
+    console.log('[鼠标监听] 已停止鼠标位置监听');
+}
+
+async function handleGlobalMouseMove(e) {
+    // 只在折叠状态下检测
+    if (!appState.isCollapsed) return;
+    
+    // 使用 screenX/screenY 获取鼠标在屏幕上的绝对位置
+    const mouseX = e.screenX;
+    const mouseY = e.screenY;
+    
+    const screenWidth = window.screen.width;
+    const screenHeight = window.screen.height;
+    
+    const edgeDetectZone = 50; // 鼠标接近边缘50px时触发展开
+    
+    let nearEdge = null;
+    if (mouseX <= edgeDetectZone) {
+        nearEdge = 'left';
+    } else if (mouseX >= screenWidth - edgeDetectZone) {
+        nearEdge = 'right';
+    } else if (mouseY <= edgeDetectZone) {
+        nearEdge = 'top';
+    } else if (mouseY >= screenHeight - edgeDetectZone) {
+        nearEdge = 'bottom';
+    }
+    
+    // 如果鼠标接近窗口折叠的边缘，展开窗口
+    if (nearEdge && nearEdge === appState.collapseEdge) {
+        console.log(`[鼠标监听] 检测到鼠标在屏幕${nearEdge}边缘 (x:${mouseX}, y:${mouseY})，展开窗口`);
+        await expandWindow();
+    }
+}
+
 // 启动窗口位置监听
 function startPositionMonitoring() {
     if (appState.positionCheckInterval) return;
@@ -1498,6 +2480,12 @@ function startPositionMonitoring() {
         // 鼠标在窗口上时不自动折叠
         if (appState.isMouseOver) return;
         
+        // 全屏状态下不检查折叠
+        if (appState.isFullscreen) return;
+        
+        // Mini 模式下不检查（Mini 窗口有自己的折叠逻辑）
+        if (appState.isMiniMode) return;
+        
         try {
             const { appWindow } = window.__TAURI__.window;
             const position = await appWindow.outerPosition();
@@ -1507,9 +2495,11 @@ function startPositionMonitoring() {
             const screenWidth = window.screen.width;
             const screenHeight = window.screen.height;
             
-            const edgeThreshold = 10; // 边缘阈值（像素）
+            // 边缘阈值：只有真正贴在边缘时才折叠（≤5px）
+            const edgeThreshold = 5;
             
             let nearEdge = null;
+            // 检查窗口是否真正贴在屏幕边缘
             if (position.x <= edgeThreshold) {
                 nearEdge = 'left';
             } else if (position.x + size.width >= screenWidth - edgeThreshold) {
@@ -1520,9 +2510,10 @@ function startPositionMonitoring() {
                 nearEdge = 'bottom';
             }
             
-            // 只在靠近边缘且未折叠时才折叠
+            // 只在真正贴在边缘且未折叠时才折叠
             // 不自动展开，展开由 mouseenter 触发
             if (nearEdge && !appState.isCollapsed) {
+                console.log(`[位置检测] 窗口贴在${nearEdge}边缘，准备折叠`, { position, size });
                 collapseWindow(nearEdge);
             }
         } catch (error) {
@@ -1589,6 +2580,12 @@ async function applyExpandAnimation(element) {
 async function collapseWindow(edge) {
     if (appState.isCollapsed && appState.collapseEdge === edge) return;
     
+    // 如果处于全屏状态，不执行折叠
+    if (appState.isFullscreen) {
+        console.log('[折叠] 全屏状态下不折叠窗口');
+        return;
+    }
+    
     try {
         const { appWindow, LogicalSize } = window.__TAURI__.window;
         const currentSize = await appWindow.outerSize();
@@ -1621,7 +2618,7 @@ async function collapseWindow(edge) {
         
         // 使用原始尺寸计算折叠后的尺寸（确保每次折叠都基于相同的基准）
         const baseSize = appState.originalSize;
-        const collapsedSize = 2; // 折叠后固定为2px的极细线条
+        const collapsedSize = 4; // 折叠后固定为4px，方便鼠标触发展开
         
         // 获取屏幕尺寸和当前位置
         const position = await appWindow.outerPosition();
@@ -1636,15 +2633,16 @@ async function collapseWindow(edge) {
             newSize = new LogicalSize(collapsedSize, baseSize.height);
             
             if (edge === 'right') {
-                // 右边缘：窗口完全贴在屏幕右侧，使用+1偏移以消除间隙
+                // 右边缘：窗口右边缘贴在屏幕右侧
+                // 窗口左边缘 x = screenWidth - collapsedSize
                 newPosition = new window.__TAURI__.window.LogicalPosition(
-                    screenWidth - collapsedSize + 1,
+                    screenWidth - collapsedSize,
                     position.y
                 );
             } else if (edge === 'left') {
-                // 左边缘：窗口完全贴在屏幕左侧，使用-1偏移以消除间隙
+                // 左边缘：窗口左边缘贴在屏幕左侧
                 newPosition = new window.__TAURI__.window.LogicalPosition(
-                    -1,
+                    0,
                     position.y
                 );
             }
@@ -1653,16 +2651,17 @@ async function collapseWindow(edge) {
             newSize = new LogicalSize(baseSize.width, collapsedSize);
             
             if (edge === 'bottom') {
-                // 底部边缘：窗口完全贴在屏幕底部，使用+1偏移以消除间隙
+                // 底部边缘：窗口底边贴在屏幕底部
+                // 窗口顶边 y = screenHeight - collapsedSize
                 newPosition = new window.__TAURI__.window.LogicalPosition(
                     position.x,
-                    screenHeight - collapsedSize + 1
+                    screenHeight - collapsedSize
                 );
             } else if (edge === 'top') {
-                // 顶部边缘：窗口完全贴在屏幕顶部，使用-1偏移以消除间隙
+                // 顶部边缘：窗口顶边贴在屏幕顶部
                 newPosition = new window.__TAURI__.window.LogicalPosition(
                     position.x,
-                    -1
+                    0
                 );
             }
         }
@@ -1686,6 +2685,9 @@ async function collapseWindow(edge) {
             newSize: { width: newSize.width, height: newSize.height },
             newPosition: newPosition ? { x: newPosition.x, y: newPosition.y } : null
         });
+        
+        // 启动鼠标位置监听，用于检测鼠标接近边缘时展开
+        startMousePositionMonitoring();
     } catch (error) {
         console.error('[折叠] 折叠窗口失败:', error);
     }
@@ -1725,20 +2727,14 @@ async function expandWindow() {
         // 等待一帧，让DOM更新
         await new Promise(resolve => requestAnimationFrame(resolve));
         
-        // 恢复原始尺寸和位置
-        if (appState.originalSize && appState.originalPosition) {
+        // 只恢复原始尺寸，不恢复位置（让用户自由移动窗口）
+        if (appState.originalSize) {
             const newSize = new LogicalSize(appState.originalSize.width, appState.originalSize.height);
-            const newPosition = new window.__TAURI__.window.LogicalPosition(
-                appState.originalPosition.x,
-                appState.originalPosition.y
-            );
             
             await appWindow.setSize(newSize);
-            await appWindow.setPosition(newPosition);
             
-            console.log('[展开] 恢复窗口尺寸和位置:', {
-                size: appState.originalSize,
-                position: appState.originalPosition
+            console.log('[展开] 恢复窗口尺寸（保持当前位置）:', {
+                size: appState.originalSize
             });
             
             // 立即保存正确的尺寸到配置
@@ -1771,6 +2767,9 @@ async function expandWindow() {
         
         // 强制触发窗口resize事件，确保布局更新
         window.dispatchEvent(new Event('resize'));
+        
+        // 停止鼠标位置监听（窗口已展开）
+        stopMousePositionMonitoring();
         
         console.log('[展开] 窗口已完全展开');
     } catch (error) {
@@ -1809,11 +2808,11 @@ function setupCollapseExpand() {
         }
         
         // 鼠标离开后延迟800ms再检查是否需要折叠，给用户拖拽的机会
-        if (!appState.isCollapsed && !appState.isMiniMode) {
+        if (!appState.isCollapsed && !appState.isMiniMode && !appState.isFullscreen) {
             appState.collapseTimer = setTimeout(async () => {
-                // 如果正在拖拽，不执行折叠
-                if (appState.isDragging) {
-                    console.log('[鼠标] 正在拖拽中，取消折叠');
+                // 如果正在拖拽、处于全屏或冷却期，不执行折叠
+                if (appState.isDragging || appState.isFullscreen || appState.expandCooldown) {
+                    console.log('[鼠标] 正在拖拽/全屏/冷却期中，取消折叠');
                     appState.collapseTimer = null;
                     return;
                 }
@@ -1825,7 +2824,8 @@ function setupCollapseExpand() {
                     
                     const screenWidth = window.screen.width;
                     const screenHeight = window.screen.height;
-                    const edgeThreshold = 10;
+                    // 边缘阈值：只有真正贴在边缘时才折叠（≤5px）
+                    const edgeThreshold = 5;
                     
                     let nearEdge = null;
                     if (position.x <= edgeThreshold) {
@@ -1838,9 +2838,9 @@ function setupCollapseExpand() {
                         nearEdge = 'bottom';
                     }
                     
-                    // 如果窗口在边缘，执行折叠
+                    // 如果窗口真正贴在边缘，执行折叠
                     if (nearEdge) {
-                        console.log('[鼠标] 延迟检测到靠近边缘，执行折叠');
+                        console.log('[鼠标] 延迟检测到窗口贴边，执行折叠');
                         collapseWindow(nearEdge);
                     }
                     
@@ -1860,6 +2860,25 @@ function setupCollapseExpand() {
 
 // 进入Mini模式
 async function enterMiniMode() {
+    // 如果处于全屏状态，先退出全屏
+    if (appState.isFullscreen) {
+        try {
+            const { appWindow } = window.__TAURI__.window;
+            await appWindow.setFullscreen(false);
+            
+            // 等待全屏状态完全退出
+            await new Promise(resolve => setTimeout(resolve, 100));
+            
+            // 确保窗口可调整大小
+            await appWindow.setResizable(true);
+            
+            appState.isFullscreen = false;
+            console.log('[全屏] 退出全屏以进入Mini模式');
+        } catch (error) {
+            console.error('[全屏] 退出全屏失败:', error);
+        }
+    }
+    
     // 进入Mini模式前，保存当前窗口尺寸
     try {
         const { appWindow } = window.__TAURI__.window;

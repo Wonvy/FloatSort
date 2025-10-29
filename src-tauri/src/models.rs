@@ -58,9 +58,16 @@ pub struct Rule {
     pub id: String,
     pub name: String,
     pub enabled: bool,
+    /// 条件逻辑运算符: "or" 或 "and"
+    #[serde(default = "default_logic")]
+    pub logic: String,
     pub conditions: Vec<RuleCondition>,
     pub action: RuleAction,
     pub priority: i32,
+}
+
+fn default_logic() -> String {
+    "or".to_string()
 }
 
 /// 文件事件

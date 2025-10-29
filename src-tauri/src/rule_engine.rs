@@ -27,7 +27,7 @@ impl RuleEngine {
 
         // 找到第一个匹配的规则
         for rule in enabled_rules {
-            if self.check_conditions(&rule.conditions, file_info) {
+            if self.check_conditions(&rule.conditions, &rule.logic, file_info) {
                 debug!("文件 {} 匹配规则: {}", file_info.name, rule.name);
                 return Some(rule);
             }
@@ -37,15 +37,25 @@ impl RuleEngine {
     }
 
     /// 检查所有条件是否满足
-    fn check_conditions(&self, conditions: &[RuleCondition], file_info: &FileInfo) -> bool {
+    fn check_conditions(&self, conditions: &[RuleCondition], logic: &str, file_info: &FileInfo) -> bool {
         if conditions.is_empty() {
             return false;
         }
 
-        // 所有条件都必须满足（AND 逻辑）
-        conditions.iter().all(|condition| {
-            self.check_single_condition(condition, file_info)
-        })
+        match logic {
+            "and" => {
+                // AND 逻辑：所有条件都必须满足
+                conditions.iter().all(|condition| {
+                    self.check_single_condition(condition, file_info)
+                })
+            }
+            "or" | _ => {
+                // OR 逻辑：满足任一条件即可（默认）
+                conditions.iter().any(|condition| {
+                    self.check_single_condition(condition, file_info)
+                })
+            }
+        }
     }
 
     /// 检查单个条件

@@ -317,8 +317,11 @@ async fn process_file(path: String, state: State<'_, AppState>) -> Result<String
     let result = file_ops::organize_single_file(&path, &config.rules)
         .map_err(|e| e.to_string())?;
     
-    // 如果文件被成功处理，记录到已处理集合中
-    if !result.is_empty() {
+    // 判断文件是否被成功移动（返回值不是错误提示信息）
+    let is_organized = !result.is_empty() && result != "文件未匹配任何规则";
+    
+    // 只有文件被成功移动才记录为已处理
+    if is_organized {
         let mut processed = state.processed_files.lock().map_err(|e| e.to_string())?;
         processed.insert(path.clone());
         info!("文件已记录为已处理: {}", path);
@@ -327,7 +330,7 @@ async fn process_file(path: String, state: State<'_, AppState>) -> Result<String
     // 更新统计
     let mut stats = state.stats.lock().map_err(|e| e.to_string())?;
     stats.files_processed += 1;
-    if !result.is_empty() {
+    if is_organized {
         stats.files_organized += 1;
     }
     stats.last_activity = Some(chrono::Local::now().to_rfc3339());
@@ -390,6 +393,48 @@ async fn preview_file_organization(path: String, state: State<'_, AppState>) -> 
     }
     
     // 未匹配任何规则
+    Ok(serde_json::json!({
+        "matched": false,
+        "original_path": path,
+        "target_path": null,
+    }))
+}
+
+// Tauri 命令：预览使用指定规则的文件整理
+#[tauri::command]
+async fn preview_file_organization_with_rule(path: String, rule_id: String, state: State<'_, AppState>) -> Result<serde_json::Value, String> {
+    use std::path::Path;
+    
+    let config = state.config.lock().map_err(|e| e.to_string())?.clone();
+    
+    // 查找指定的规则
+    let rule = config.rules.iter()
+        .find(|r| r.id == rule_id)
+        .ok_or_else(|| "规则不存在".to_string())?;
+    
+    // 获取文件信息
+    let file_info = file_ops::get_file_info(Path::new(&path))
+        .map_err(|e| e.to_string())?;
+    
+    // 检查文件是否匹配该规则
+    let engine = crate::rule_engine::RuleEngine::new(vec![rule.clone()]);
+    
+    if let Some(_matched_rule) = engine.find_matching_rule(&file_info) {
+        // 计算目标路径
+        let base_path = Path::new(&path).parent()
+            .ok_or_else(|| "无法获取父目录".to_string())?;
+        
+        if let Some(dest_path) = engine.get_destination_path(&rule.action, &file_info, base_path) {
+            return Ok(serde_json::json!({
+                "matched": true,
+                "rule_name": rule.name,
+                "original_path": path,
+                "target_path": dest_path,
+            }));
+        }
+    }
+    
+    // 文件不匹配该规则
     Ok(serde_json::json!({
         "matched": false,
         "original_path": path,
@@ -524,6 +569,7 @@ fn main() {
             process_file,
             process_file_with_rule,
             preview_file_organization,
+            preview_file_organization_with_rule,
             get_statistics,
             hide_to_tray,
             show_from_tray

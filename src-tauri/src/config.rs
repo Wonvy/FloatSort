@@ -107,6 +107,7 @@ impl Default for AppConfig {
                     id: "rule_images".to_string(),
                     name: "图片文件归类".to_string(),
                     enabled: true,
+                    logic: "or".to_string(),
                     conditions: vec![
                         crate::models::RuleCondition::Extension {
                             values: vec![
@@ -128,6 +129,7 @@ impl Default for AppConfig {
                     id: "rule_documents".to_string(),
                     name: "文档文件归类".to_string(),
                     enabled: true,
+                    logic: "or".to_string(),
                     conditions: vec![
                         crate::models::RuleCondition::Extension {
                             values: vec![
