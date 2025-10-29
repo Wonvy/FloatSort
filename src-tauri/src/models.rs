@@ -58,7 +58,7 @@ pub struct Rule {
     pub id: String,
     pub name: String,
     pub enabled: bool,
-    /// 条件逻辑运算符: "or" 或 "and"
+    /// 条件逻辑运算符: 固定为 "and"（所有条件必须同时满足）
     #[serde(default = "default_logic")]
     pub logic: String,
     pub conditions: Vec<RuleCondition>,
@@ -67,7 +67,7 @@ pub struct Rule {
 }
 
 fn default_logic() -> String {
-    "or".to_string()
+    "and".to_string()
 }
 
 /// 文件事件

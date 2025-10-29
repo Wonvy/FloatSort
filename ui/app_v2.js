@@ -1688,16 +1688,10 @@ function addCondition() {
     }
 }
 
-// 删除条件（全局暴露）
-window.removeCondition = function(index) {
-    appState.currentConditions.splice(index, 1);
-    appState.editingConditionIndex = -1;
-    document.getElementById('addConditionBtn').textContent = '添加条件';
-    renderConditions();
-};
+// 删除条件的逻辑已移至 renderConditions() 中的事件监听器
 
-// 编辑条件（全局暴露）
-window.editCondition = function(index) {
+// 编辑条件
+function editCondition(index) {
     const condition = appState.currentConditions[index];
     appState.editingConditionIndex = index;
     
@@ -1756,7 +1750,7 @@ window.editCondition = function(index) {
     }, 10);
     
     renderConditions();
-};
+}
 
 // 渲染条件列表
 function renderConditions() {
@@ -1764,22 +1758,23 @@ function renderConditions() {
     
     if (appState.currentConditions.length === 0) {
         container.innerHTML = '<div class="conditions-empty">暂无条件，请添加至少一个条件</div>';
+        updateConditionTypeOptions();
         return;
     }
     
     container.innerHTML = appState.currentConditions.map((cond, index) => `
-        <div class="condition-item ${appState.editingConditionIndex === index ? 'editing' : ''}">
+        <div class="condition-item ${appState.editingConditionIndex === index ? 'editing' : ''}" data-index="${index}">
             <div class="condition-content">
                 <span class="condition-type">${getConditionTypeLabel(cond.type)}</span>
                 <span class="condition-value">${cond.displayText}</span>
             </div>
             <div class="condition-actions">
-                <button class="condition-edit" onclick="editCondition(${index})" title="编辑">
+                <button class="condition-edit" data-index="${index}" title="编辑">
                     <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
                         <path d="M10.5 1.5L12.5 3.5L4.5 11.5L1.5 12.5L2.5 9.5L10.5 1.5Z" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
                     </svg>
                 </button>
-                <button class="condition-remove" onclick="removeCondition(${index})" title="删除">
+                <button class="condition-remove" data-index="${index}" title="删除">
                     <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
                         <path d="M2 2L12 12M12 2L2 12" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
                     </svg>
@@ -1787,6 +1782,94 @@ function renderConditions() {
             </div>
         </div>
     `).join('');
+    
+    // 绑定编辑和删除按钮的事件监听器
+    container.querySelectorAll('.condition-edit').forEach(btn => {
+        btn.addEventListener('click', () => {
+            const index = parseInt(btn.dataset.index);
+            editCondition(index);
+        });
+    });
+    
+    container.querySelectorAll('.condition-remove').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            
+            const index = parseInt(btn.dataset.index);
+            console.log('Delete button clicked, index:', index);
+            
+            const condition = appState.currentConditions[index];
+            if (!condition) {
+                console.error('Condition not found at index:', index);
+                return;
+            }
+            
+            console.log('Condition to delete:', condition);
+            
+            try {
+                // 显示删除确认模态框
+                showDeleteConfirm({
+                    type: 'condition',
+                    index: index,
+                    displayText: condition.displayText,
+                    conditionType: getConditionTypeLabel(condition.type)
+                });
+                console.log('showDeleteConfirm called successfully');
+            } catch (error) {
+                console.error('Error calling showDeleteConfirm:', error);
+                alert('删除确认窗口打开失败：' + error.message);
+            }
+        });
+    });
+    
+    // 更新条件类型下拉列表，禁用已添加的条件类型
+    updateConditionTypeOptions();
+}
+
+// 更新条件类型下拉列表，禁用已添加的条件类型
+function updateConditionTypeOptions() {
+    const typeSelect = document.getElementById('conditionType');
+    if (!typeSelect) return;
+    
+    // 获取已添加的条件类型
+    const addedTypes = new Set(appState.currentConditions.map(cond => {
+        // 将后端类型映射到前端下拉框的value
+        const typeMap = {
+            'Extension': 'extension',
+            'NameContains': 'name',
+            'NameRegex': 'regex',
+            'SizeRange': 'size',
+            'CreatedDaysAgo': 'created',
+            'ModifiedDaysAgo': 'modified'
+        };
+        return typeMap[cond.type];
+    }));
+    
+    // 如果正在编辑某个条件，则允许选择该条件的类型
+    if (appState.editingConditionIndex >= 0) {
+        const editingType = appState.currentConditions[appState.editingConditionIndex].type;
+        const typeMap = {
+            'Extension': 'extension',
+            'NameContains': 'name',
+            'NameRegex': 'regex',
+            'SizeRange': 'size',
+            'CreatedDaysAgo': 'created',
+            'ModifiedDaysAgo': 'modified'
+        };
+        addedTypes.delete(typeMap[editingType]);
+    }
+    
+    // 遍历所有选项，禁用已添加的类型
+    Array.from(typeSelect.options).forEach(option => {
+        if (addedTypes.has(option.value)) {
+            option.disabled = true;
+            option.style.color = '#999';
+        } else {
+            option.disabled = false;
+            option.style.color = '';
+        }
+    });
 }
 
 // 获取条件类型标签
@@ -1825,10 +1908,6 @@ async function openRuleModal(ruleId = null) {
         title.textContent = '✏️ 编辑规则';
         document.getElementById('ruleName').value = rule.name;
         document.getElementById('targetFolder').value = rule.action.destination;
-        
-        // 加载逻辑运算符
-        const logicOperator = rule.logic || 'or'; // 默认OR
-        document.querySelector(`input[name="conditionLogic"][value="${logicOperator}"]`).checked = true;
         
         // 加载现有条件
         appState.currentConditions = rule.conditions.map(cond => {
@@ -1891,9 +1970,6 @@ async function saveRule() {
         return;
     }
     
-    // 获取逻辑运算符
-    const logicOperator = document.querySelector('input[name="conditionLogic"]:checked').value;
-    
     // 将条件转换为后端格式（移除displayText）
     const conditions = appState.currentConditions.map(cond => {
         const { displayText, ...rest } = cond;
@@ -1904,7 +1980,7 @@ async function saveRule() {
         id: appState.editingRuleId || `rule_${Date.now()}`,
         name,
         enabled: true,
-        logic: logicOperator, // 添加逻辑运算符
+        logic: "and", // 所有条件必须同时满足
         conditions: conditions,
         action: { type: 'MoveTo', destination: target },
         priority: 0,
@@ -1949,8 +2025,14 @@ async function deleteRule(ruleId) {
 
 // 显示删除确认模态框
 function showDeleteConfirm(item) {
+    console.log('showDeleteConfirm called with item:', item);
     const modal = document.getElementById('deleteConfirmModal');
     const message = document.getElementById('deleteConfirmMessage');
+    
+    if (!modal || !message) {
+        console.error('Delete confirm modal elements not found!');
+        return;
+    }
     
     // 根据类型设置消息内容
     if (item.type === 'rule') {
@@ -1966,6 +2048,12 @@ function showDeleteConfirm(item) {
             <span style="color: #666;">路径: ${item.path}</span>
             <br><br>
             <span style="color: #e74c3c; font-size: 13px;">⚠️ 删除后将停止监控此文件夹</span>
+        `;
+    } else if (item.type === 'condition') {
+        message.innerHTML = `
+            确定要删除此条件吗？
+            <br><br>
+            <span style="color: #666;">${item.conditionType} ${item.displayText}</span>
         `;
     }
     
@@ -2001,6 +2089,15 @@ async function executeDelete() {
             showNotification(`文件夹 "${item.name}" 已删除`, 'success');
             addActivity(`🗑️ 删除文件夹: ${item.name}`);
             await loadFolders();
+        } else if (item.type === 'condition') {
+            // 删除条件（仅前端操作）
+            appState.currentConditions.splice(item.index, 1);
+            appState.editingConditionIndex = -1;
+            document.getElementById('addConditionBtn').textContent = '添加条件';
+            renderConditions();
+            showNotification('条件已删除', 'success');
+            closeDeleteConfirm();
+            return; // 条件删除不需要更新后端统计
         }
         
         updateStats();

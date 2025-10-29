@@ -255,30 +255,21 @@
                     </div>
                     
                     <div class="form-group">
-                        <label>条件设置</label>
-                        <div class="logic-operator-group">
-                            <label style="font-size: 13px; color: #666;">条件逻辑：</label>
-                            <label class="radio-inline">
-                                <input type="radio" name="conditionLogic" value="or" checked>
-                                <span>或（OR）- 满足任一条件即可</span>
-                            </label>
-                            <label class="radio-inline">
-                                <input type="radio" name="conditionLogic" value="and">
-                                <span>与（AND）- 必须满足所有条件</span>
-                            </label>
-                        </div>
+                        <label>条件设置（同时满足所有条件）</label>
                         <div class="conditions-builder">
                             <div class="condition-selector">
-                                <select id="conditionType">
-                                    <option value="extension">文件扩展名</option>
-                                    <option value="name">文件名包含</option>
-                                    <option value="regex">正则表达式</option>
-                                    <option value="size">文件大小</option>
-                                    <option value="created">创建时间</option>
-                                    <option value="modified">修改时间</option>
-                                </select>
-                                <div id="conditionInputs" class="condition-inputs">
-                                    <!-- 动态生成输入框 -->
+                                <div class="condition-inputs-group">
+                                    <select id="conditionType">
+                                        <option value="extension">文件扩展名</option>
+                                        <option value="name">文件名包含</option>
+                                        <option value="regex">正则表达式</option>
+                                        <option value="size">文件大小</option>
+                                        <option value="created">创建时间</option>
+                                        <option value="modified">修改时间</option>
+                                    </select>
+                                    <div id="conditionInputs" class="condition-inputs">
+                                        <!-- 动态生成输入框 -->
+                                    </div>
                                 </div>
                                 <button type="button" class="btn-secondary btn-sm" id="addConditionBtn">➕ 添加条件</button>
                             </div>

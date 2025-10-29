@@ -36,26 +36,16 @@ impl RuleEngine {
         None
     }
 
-    /// 检查所有条件是否满足
-    fn check_conditions(&self, conditions: &[RuleCondition], logic: &str, file_info: &FileInfo) -> bool {
+    /// 检查所有条件是否满足（AND逻辑：所有条件都必须满足）
+    fn check_conditions(&self, conditions: &[RuleCondition], _logic: &str, file_info: &FileInfo) -> bool {
         if conditions.is_empty() {
             return false;
         }
 
-        match logic {
-            "and" => {
-                // AND 逻辑：所有条件都必须满足
-                conditions.iter().all(|condition| {
-                    self.check_single_condition(condition, file_info)
-                })
-            }
-            "or" | _ => {
-                // OR 逻辑：满足任一条件即可（默认）
-                conditions.iter().any(|condition| {
-                    self.check_single_condition(condition, file_info)
-                })
-            }
-        }
+        // 固定使用 AND 逻辑：所有条件都必须满足
+        conditions.iter().all(|condition| {
+            self.check_single_condition(condition, file_info)
+        })
     }
 
     /// 检查单个条件
