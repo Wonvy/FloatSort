@@ -13,6 +13,9 @@ const appState = {
     currentConditions: [],  // 当前规则的条件列表
     currentRuleIndex: -1,  // 当前选中的规则索引（-1表示所有规则）
     isMiniMode: false,  // 是否处于Mini模式
+    isCollapsed: false,  // 窗口是否折叠
+    collapseEdge: null,  // 折叠在哪个边缘（'left', 'right', 'top', 'bottom'）
+    positionCheckInterval: null,  // 位置检查定时器
 };
 
 // 为规则生成字母编号
@@ -53,6 +56,8 @@ function initializeApp() {
     setupEventListeners();
     setupBackendListeners();
     setupWindowListeners();
+    setupCollapseExpand();
+    startPositionMonitoring();
     loadAppData();
     
     console.log('✓ FloatSort V2 已就绪');
@@ -1279,14 +1284,104 @@ async function confirmBatch() {
 
 // ========== 窗口控制 ==========
 
-// 关闭窗口
+// 关闭窗口（隐藏到托盘）
 async function closeWindow() {
     try {
-        const { appWindow } = window.__TAURI__.window;
-        await appWindow.close();
+        await invoke('hide_to_tray');
+        addActivity('[托盘] 已最小化到系统托盘');
     } catch (error) {
-        console.error('关闭窗口失败:', error);
+        console.error('隐藏到托盘失败:', error);
     }
+}
+
+// ========== 窗口边缘折叠功能 ==========
+
+// 启动窗口位置监听
+function startPositionMonitoring() {
+    if (appState.positionCheckInterval) return;
+    
+    appState.positionCheckInterval = setInterval(async () => {
+        if (appState.isMiniMode) return; // Mini模式下不检查
+        
+        try {
+            const { appWindow } = window.__TAURI__.window;
+            const position = await appWindow.outerPosition();
+            const size = await appWindow.outerSize();
+            
+            // 获取屏幕尺寸
+            const screenWidth = window.screen.width;
+            const screenHeight = window.screen.height;
+            
+            const edgeThreshold = 10; // 边缘阈值（像素）
+            
+            let nearEdge = null;
+            if (position.x <= edgeThreshold) {
+                nearEdge = 'left';
+            } else if (position.x + size.width >= screenWidth - edgeThreshold) {
+                nearEdge = 'right';
+            } else if (position.y <= edgeThreshold) {
+                nearEdge = 'top';
+            } else if (position.y + size.height >= screenHeight - edgeThreshold) {
+                nearEdge = 'bottom';
+            }
+            
+            if (nearEdge && !appState.isCollapsed) {
+                // 靠近边缘且未折叠，执行折叠
+                collapseWindow(nearEdge);
+            } else if (!nearEdge && appState.isCollapsed) {
+                // 远离边缘且已折叠，执行展开
+                expandWindow();
+            }
+        } catch (error) {
+            console.error('检查窗口位置失败:', error);
+        }
+    }, 500); // 每500ms检查一次
+}
+
+// 停止窗口位置监听
+function stopPositionMonitoring() {
+    if (appState.positionCheckInterval) {
+        clearInterval(appState.positionCheckInterval);
+        appState.positionCheckInterval = null;
+    }
+}
+
+// 折叠窗口
+function collapseWindow(edge) {
+    if (appState.isCollapsed && appState.collapseEdge === edge) return;
+    
+    appState.isCollapsed = true;
+    appState.collapseEdge = edge;
+    
+    const container = document.getElementById('appContainer');
+    container.classList.remove('collapsed-left', 'collapsed-right', 'collapsed-top', 'collapsed-bottom');
+    container.classList.add(`collapsed-${edge}`);
+    
+    console.log(`窗口已折叠到${edge}边缘`);
+}
+
+// 展开窗口
+function expandWindow() {
+    if (!appState.isCollapsed) return;
+    
+    appState.isCollapsed = false;
+    appState.collapseEdge = null;
+    
+    const container = document.getElementById('appContainer');
+    container.classList.remove('collapsed-left', 'collapsed-right', 'collapsed-top', 'collapsed-bottom');
+    
+    console.log('窗口已展开');
+}
+
+// 鼠标进入窗口时展开
+function setupCollapseExpand() {
+    const container = document.getElementById('appContainer');
+    
+    container.addEventListener('mouseenter', () => {
+        if (appState.isCollapsed) {
+            expandWindow();
+        }
+    });
 }
 
 // ========== Mini窗口模式 ==========
@@ -1294,6 +1389,14 @@ async function closeWindow() {
 // 进入Mini模式
 async function enterMiniMode() {
     appState.isMiniMode = true;
+    
+    // 停止位置监听
+    stopPositionMonitoring();
+    
+    // 清除折叠状态
+    if (appState.isCollapsed) {
+        expandWindow();
+    }
     
     // 隐藏完整界面，显示Mini窗口
     document.getElementById('appContainer').style.display = 'none';
@@ -1334,6 +1437,9 @@ async function exitMiniMode() {
     } catch (error) {
         console.error('恢复窗口大小失败:', error);
     }
+    
+    // 重新启动位置监听
+    startPositionMonitoring();
     
     addActivity('[Mini] 退出Mini模式');
 }

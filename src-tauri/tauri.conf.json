@@ -32,6 +32,10 @@
         "create": true
       }
     },
+    "systemTray": {
+      "iconPath": "icons/icon.png",
+      "iconAsTemplate": true
+    },
     "bundle": {
       "active": false,
       "identifier": "com.floatsort.app",

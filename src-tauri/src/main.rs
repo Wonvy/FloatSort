@@ -11,7 +11,7 @@ use config::{AppConfig, WatchFolder};
 use file_monitor::FileMonitor;
 use models::Rule;
 use std::sync::{Arc, Mutex};
-use tauri::State;
+use tauri::{State, SystemTray, SystemTrayMenu, SystemTrayMenuItem, CustomMenuItem, SystemTrayEvent, Manager};
 use tracing::info;
 use tracing_subscriber;
 use chrono;
@@ -351,6 +351,23 @@ fn get_statistics(state: State<AppState>) -> Result<serde_json::Value, String> {
     }))
 }
 
+// Tauri 命令：隐藏窗口到托盘
+#[tauri::command]
+fn hide_to_tray(window: tauri::Window) -> Result<(), String> {
+    window.hide().map_err(|e| e.to_string())?;
+    info!("窗口已隐藏到托盘");
+    Ok(())
+}
+
+// Tauri 命令：从托盘显示窗口
+#[tauri::command]
+fn show_from_tray(window: tauri::Window) -> Result<(), String> {
+    window.show().map_err(|e| e.to_string())?;
+    window.set_focus().map_err(|e| e.to_string())?;
+    info!("窗口已从托盘显示");
+    Ok(())
+}
+
 fn main() {
     // 初始化日志系统
     tracing_subscriber::fmt()
@@ -373,8 +390,54 @@ fn main() {
         stats: Arc::new(Mutex::new(Statistics::default())),
     };
 
+    // 创建系统托盘菜单
+    let show = CustomMenuItem::new("show".to_string(), "显示窗口");
+    let quit = CustomMenuItem::new("quit".to_string(), "退出程序");
+    let tray_menu = SystemTrayMenu::new()
+        .add_item(show)
+        .add_native_item(SystemTrayMenuItem::Separator)
+        .add_item(quit);
+    
+    // 使用 image crate 加载PNG图标
+    let icon_bytes = include_bytes!("../icons/icon.png");
+    let icon_img = image::load_from_memory(icon_bytes)
+        .expect("无法加载托盘图标")
+        .to_rgba8();
+    let (width, height) = icon_img.dimensions();
+    let icon = tauri::Icon::Rgba {
+        rgba: icon_img.into_raw(),
+        width,
+        height,
+    };
+    let system_tray = SystemTray::new()
+        .with_menu(tray_menu)
+        .with_icon(icon);
+
     tauri::Builder::default()
         .manage(app_state)
+        .system_tray(system_tray)
+        .on_system_tray_event(|app, event| match event {
+            SystemTrayEvent::LeftClick { .. } => {
+                // 左键点击显示窗口
+                let window = app.get_window("main").unwrap();
+                window.show().unwrap();
+                window.set_focus().unwrap();
+            }
+            SystemTrayEvent::MenuItemClick { id, .. } => {
+                match id.as_str() {
+                    "show" => {
+                        let window = app.get_window("main").unwrap();
+                        window.show().unwrap();
+                        window.set_focus().unwrap();
+                    }
+                    "quit" => {
+                        std::process::exit(0);
+                    }
+                    _ => {}
+                }
+            }
+            _ => {}
+        })
         .invoke_handler(tauri::generate_handler![
             get_config,
             save_config,
@@ -395,7 +458,9 @@ fn main() {
             process_file,
             process_file_with_rule,
             preview_file_organization,
-            get_statistics
+            get_statistics,
+            hide_to_tray,
+            show_from_tray
         ])
         .setup(|_app| {
             info!("FloatSort 初始化完成");
