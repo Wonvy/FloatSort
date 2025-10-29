@@ -76,13 +76,19 @@ fn execute_action(action: &RuleAction, file_info: &FileInfo, engine: &RuleEngine
     let base_path = source_path.parent().unwrap_or(Path::new("."));
 
     match action {
-        RuleAction::MoveTo { destination: _ } => {
-            let dest_path = engine
-                .get_destination_path(action, file_info, base_path)
-                .context("无法获取目标路径")?;
-            
-            move_file(source_path, &dest_path)?;
-            Ok(Some(dest_path))
+        RuleAction::MoveTo { destination } => {
+            // 检查是否为回收站特殊路径
+            if destination == "{recycle}" {
+                move_to_recycle_bin(source_path)?;
+                Ok(Some("已移动到回收站".to_string()))
+            } else {
+                let dest_path = engine
+                    .get_destination_path(action, file_info, base_path)
+                    .context("无法获取目标路径")?;
+                
+                move_file(source_path, &dest_path)?;
+                Ok(Some(dest_path))
+            }
         }
 
         RuleAction::CopyTo { destination: _ } => {
@@ -114,6 +120,15 @@ fn execute_action(action: &RuleAction, file_info: &FileInfo, engine: &RuleEngine
             Ok(Some("已删除".to_string()))
         }
     }
+}
+
+/// 移动文件到回收站
+fn move_to_recycle_bin(source: &Path) -> Result<()> {
+    trash::delete(source)
+        .with_context(|| format!("移动文件到回收站失败: {:?}", source))?;
+    
+    info!("文件已移动到回收站: {:?}", source);
+    Ok(())
 }
 
 /// 移动文件

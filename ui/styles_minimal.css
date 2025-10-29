@@ -1786,6 +1786,19 @@ input[readonly] {
     transform: translateY(0);
 }
 
+.tag-btn-recycle {
+    background: linear-gradient(135deg, #fee2e2 0%, #fef3c7 100%);
+    border-color: #f59e0b;
+    color: #dc2626;
+    font-weight: 600;
+}
+
+.tag-btn-recycle:hover {
+    background: linear-gradient(135deg, #dc2626 0%, #f59e0b 100%);
+    border-color: #dc2626;
+    color: #fff;
+}
+
 /* ========== 响应式布局优化 ========== */
 /* 小窗口优化 - 只显示关键信息 */
 @media (max-width: 600px) {

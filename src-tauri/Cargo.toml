@@ -22,6 +22,7 @@ tokio = { version = "1", features = ["full"] }
 anyhow = "1.0"
 regex = "1.10"
 image = "0.24"
+trash = "3.0"
 
 [features]
 default = ["custom-protocol"]
