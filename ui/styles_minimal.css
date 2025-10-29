@@ -1102,6 +1102,111 @@ input[readonly] {
     margin-top: 8px;
 }
 
+/* ========== 设置界面 ========== */
+.settings-section {
+    margin-bottom: 20px;
+    padding: 20px;
+    background: #fff;
+    border-radius: 8px;
+    border: 1px solid #e8e8e8;
+}
+
+.settings-section h3 {
+    margin: 0 0 8px 0;
+    font-size: 16px;
+    font-weight: 600;
+    color: #333;
+}
+
+.section-desc {
+    margin: 0 0 20px 0;
+    font-size: 13px;
+    color: #666;
+}
+
+.setting-item {
+    margin-bottom: 20px;
+}
+
+.setting-item:last-child {
+    margin-bottom: 0;
+}
+
+.setting-label {
+    display: block;
+    margin-bottom: 10px;
+    font-size: 14px;
+    font-weight: 500;
+    color: #333;
+}
+
+.setting-select {
+    width: 100%;
+    padding: 10px 12px;
+    font-size: 14px;
+    border: 2px solid #e8e8e8;
+    border-radius: 6px;
+    background: #fff;
+    color: #333;
+    cursor: pointer;
+    transition: all 0.2s;
+    outline: none;
+}
+
+.setting-select:hover {
+    border-color: #d0d0d0;
+    background: #f8f9fa;
+}
+
+.setting-select:focus {
+    border-color: #667eea;
+    background: #f0f4ff;
+}
+
+.radio-group {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.radio-option {
+    display: flex;
+    align-items: center;
+    padding: 12px 16px;
+    background: #f8f9fa;
+    border: 2px solid #e8e8e8;
+    border-radius: 6px;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.radio-option:hover {
+    background: #f0f1f5;
+    border-color: #d0d0d0;
+}
+
+.radio-option input[type="radio"] {
+    margin: 0 12px 0 0;
+    cursor: pointer;
+    width: 18px;
+    height: 18px;
+}
+
+.radio-option input[type="radio"]:checked + span {
+    color: #667eea;
+    font-weight: 500;
+}
+
+.radio-option:has(input[type="radio"]:checked) {
+    background: #f0f4ff;
+    border-color: #667eea;
+}
+
+.radio-option span {
+    font-size: 14px;
+    color: #333;
+}
+
 /* 右键菜单 */
 .context-menu {
     position: fixed;

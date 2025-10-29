@@ -21,7 +21,9 @@ const appState = {
     expandCooldown: false,  // 展开冷却期，防止立即再折叠
     isMouseOver: false,  // 鼠标是否在窗口上
     collapseTimer: null,  // 折叠延迟定时器
-    isDragging: false  // 窗口是否正在拖拽中
+    isDragging: false,  // 窗口是否正在拖拽中
+    animation: 'none',  // 动画效果: none, fade, slide
+    animationSpeed: 'normal'  // 动画速度: fast(150ms), normal(300ms), slow(500ms)
 };
 
 // 为规则生成字母编号
@@ -73,6 +75,7 @@ function initializeApp() {
 function setupTabs() {
     const tabBtns = document.querySelectorAll('.tab-btn');
     const tabPanes = document.querySelectorAll('.tab-pane');
+    
     
     tabBtns.forEach(btn => {
         btn.addEventListener('click', () => {
@@ -227,7 +230,20 @@ function setupEventListeners() {
     document.getElementById('conditionType').addEventListener('change', updateConditionInputs);
     document.getElementById('addConditionBtn').addEventListener('click', addCondition);
     
-    // 活动日志
+    // 设置
+    document.getElementById('animationSelect').addEventListener('change', (e) => {
+        appState.animation = e.target.value;
+        saveAnimationSettings();
+        console.log(`[设置] 动画效果已更改为: ${e.target.value}`);
+    });
+    
+    document.getElementById('animationSpeedSelect').addEventListener('change', (e) => {
+        appState.animationSpeed = e.target.value;
+        saveAnimationSettings();
+        console.log(`[设置] 动画速度已更改为: ${e.target.value}`);
+    });
+    
+    // 清空活动日志
     document.getElementById('clearActivityBtn').addEventListener('click', clearActivity);
     
     // 批量确认窗口
@@ -528,6 +544,19 @@ async function loadConfig() {
         appState.batchThreshold = config.batch_threshold || 1;
         console.log(`✓ 批量确认阈值: ${appState.batchThreshold}`);
         
+        // 加载动画设置
+        appState.animation = config.animation || 'none';
+        appState.animationSpeed = config.animation_speed || 'normal';
+        
+        // 更新UI中的下拉列表选项
+        const animationSelect = document.getElementById('animationSelect');
+        const speedSelect = document.getElementById('animationSpeedSelect');
+        
+        if (animationSelect) animationSelect.value = appState.animation;
+        if (speedSelect) speedSelect.value = appState.animationSpeed;
+        
+        console.log(`✓ 动画设置: ${appState.animation} (${appState.animationSpeed})`);
+        
         // 恢复窗口大小（仅在完整模式下）
         if (!appState.isMiniMode) {
             const { appWindow } = window.__TAURI__.window;
@@ -552,6 +581,8 @@ async function loadConfig() {
         console.error('加载配置失败:', error);
         // 使用默认值
         appState.batchThreshold = 1;
+        appState.animation = 'none';
+        appState.animationSpeed = 'normal';
     }
 }
 
@@ -1294,6 +1325,20 @@ function addActivity(message, type = 'info', details = null) {
     }
 }
 
+// 保存动画设置
+async function saveAnimationSettings() {
+    try {
+        await invoke('save_animation_settings', {
+            animation: appState.animation,
+            animationSpeed: appState.animationSpeed
+        });
+        console.log(`✓ 动画设置已保存: ${appState.animation} (${appState.animationSpeed})`);
+    } catch (error) {
+        console.error('保存动画设置失败:', error);
+    }
+}
+
+// 清空活动日志
 function clearActivity() {
     const activityLog = document.getElementById('activityLog');
     activityLog.innerHTML = `
@@ -1302,6 +1347,8 @@ function clearActivity() {
             <span class="activity-message">活动日志已清空</span>
         </div>
     `;
+    appState.filesProcessed = 0;
+    updateStats();
 }
 
 // ========== 通知系统 ==========
@@ -1476,6 +1523,52 @@ function stopPositionMonitoring() {
     }
 }
 
+// 获取动画时长（毫秒）
+function getAnimationDuration() {
+    const speeds = {
+        fast: 150,
+        normal: 300,
+        slow: 500
+    };
+    return speeds[appState.animationSpeed] || 300;
+}
+
+// 应用展开动画
+async function applyExpandAnimation(element) {
+    if (appState.animation === 'none') return;
+    
+    const duration = getAnimationDuration();
+    
+    if (appState.animation === 'fade') {
+        // 淡入效果
+        element.style.opacity = '0';
+        element.style.transition = `opacity ${duration}ms ease`;
+        await new Promise(resolve => requestAnimationFrame(resolve));
+        element.style.opacity = '1';
+        await new Promise(resolve => setTimeout(resolve, duration));
+        element.style.transition = '';
+    } else if (appState.animation === 'slide') {
+        // 滑动效果（根据折叠边缘决定滑动方向）
+        const edge = appState.collapseEdge;
+        element.style.transition = `transform ${duration}ms ease`;
+        
+        if (edge === 'left') {
+            element.style.transform = 'translateX(-100%)';
+        } else if (edge === 'right') {
+            element.style.transform = 'translateX(100%)';
+        } else if (edge === 'top') {
+            element.style.transform = 'translateY(-100%)';
+        } else if (edge === 'bottom') {
+            element.style.transform = 'translateY(100%)';
+        }
+        
+        await new Promise(resolve => requestAnimationFrame(resolve));
+        element.style.transform = 'none';
+        await new Promise(resolve => setTimeout(resolve, duration));
+        element.style.transition = '';
+    }
+}
+
 // 折叠窗口
 async function collapseWindow(edge) {
     if (appState.isCollapsed && appState.collapseEdge === edge) return;
@@ -1645,8 +1738,20 @@ async function expandWindow() {
         }
         
         // 清除保存的原始尺寸和位置，下次折叠时会重新保存
+        const savedEdge = appState.collapseEdge;
         appState.originalSize = null;
         appState.originalPosition = null;
+        
+        // 应用展开动画
+        const element = appState.isMiniMode ? 
+            document.getElementById('miniWindow') : 
+            document.getElementById('appContainer');
+        
+        // 临时保存边缘用于动画
+        const tempEdge = savedEdge;
+        appState.collapseEdge = tempEdge;
+        await applyExpandAnimation(element);
+        appState.collapseEdge = null;
         
         // 强制触发窗口resize事件，确保布局更新
         window.dispatchEvent(new Event('resize'));

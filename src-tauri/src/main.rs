@@ -60,6 +60,16 @@ fn save_window_size(width: u32, height: u32, state: State<AppState>) -> Result<(
     Ok(())
 }
 
+// Tauri 命令：保存动画设置
+#[tauri::command]
+fn save_animation_settings(animation: String, animation_speed: String, state: State<AppState>) -> Result<(), String> {
+    let mut config = state.config.lock().map_err(|e| e.to_string())?;
+    config.animation = animation;
+    config.animation_speed = animation_speed;
+    config.save_to_file("data/config.json").map_err(|e| e.to_string())?;
+    Ok(())
+}
+
 // Tauri 命令：添加规则
 #[tauri::command]
 fn add_rule(rule: Rule, state: State<AppState>) -> Result<(), String> {
@@ -442,6 +452,7 @@ fn main() {
             get_config,
             save_config,
             save_window_size,
+            save_animation_settings,
             add_rule,
             get_rules,
             remove_rule,

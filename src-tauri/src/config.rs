@@ -56,6 +56,14 @@ pub struct AppConfig {
     #[serde(default = "default_window_height")]
     pub window_height: u32,
     
+    /// 动画效果: none, fade, slide
+    #[serde(default = "default_animation")]
+    pub animation: String,
+    
+    /// 动画速度: fast, normal, slow
+    #[serde(default = "default_animation_speed")]
+    pub animation_speed: String,
+    
     // 保留旧字段以支持迁移
     #[serde(skip_serializing, default)]
     pub watch_paths: Option<Vec<String>>,
@@ -74,6 +82,14 @@ fn default_batch_threshold() -> u32 {
 
 fn default_window_width() -> u32 {
     360
+}
+
+fn default_animation() -> String {
+    "none".to_string()
+}
+
+fn default_animation_speed() -> String {
+    "normal".to_string()
 }
 
 fn default_window_height() -> u32 {
@@ -134,6 +150,8 @@ impl Default for AppConfig {
             batch_threshold: 1,
             window_width: 360,
             window_height: 520,
+            animation: "none".to_string(),
+            animation_speed: "normal".to_string(),
             watch_paths: None,
             auto_start: None,
         }
@@ -194,6 +212,8 @@ impl AppConfig {
             batch_threshold: 1,
             window_width: 360,
             window_height: 520,
+            animation: "none".to_string(),
+            animation_speed: "normal".to_string(),
             watch_paths: None,
             auto_start: None,
         })
