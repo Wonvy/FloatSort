@@ -1033,10 +1033,12 @@ input[readonly] {
     display: flex;
     align-items: center;
     justify-content: center;
-    background: rgba(0, 0, 0, 0.95);
-    cursor: move;
+    background: #fff;
     z-index: 9999;
     user-select: none;
+    border-radius: 12px;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.12);
+    border: 1px solid #e8e8e8;
 }
 
 /* Mini窗口折叠状态 */
@@ -1049,12 +1051,13 @@ input[readonly] {
     display: block;
     width: 100%;
     height: 100%;
-    background: linear-gradient(135deg, rgba(102, 126, 234, 0.3) 0%, rgba(118, 75, 162, 0.3) 100%);
+    background: linear-gradient(135deg, rgba(102, 126, 234, 0.15) 0%, rgba(118, 75, 162, 0.15) 100%);
 }
 
 .mini-window.drag-over {
-    background: rgba(0, 0, 0, 1);
-    box-shadow: inset 0 0 0 2px #fff;
+    background: #f8f9ff;
+    box-shadow: 0 8px 32px rgba(102, 126, 234, 0.3), inset 0 0 0 2px #667eea;
+    border-color: #667eea;
 }
 
 .mini-content {
@@ -1065,10 +1068,11 @@ input[readonly] {
     padding: 20px;
     text-align: center;
     pointer-events: auto;
+    cursor: move;
 }
 
 .mini-icon {
-    color: #fff;
+    color: #667eea;
     opacity: 0.9;
     flex-shrink: 0;
 }
@@ -1082,14 +1086,14 @@ input[readonly] {
 .mini-label {
     font-size: 14px;
     font-weight: 600;
-    color: #fff;
+    color: #667eea;
     font-family: 'Courier New', monospace;
 }
 
 .mini-name {
     font-size: 16px;
     font-weight: 500;
-    color: #fff;
+    color: #333;
 }
 
 .mini-status {

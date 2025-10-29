@@ -13,8 +13,6 @@ use tracing::{debug, error, info, warn};
 
 /// 文件监控器
 pub struct FileMonitor {
-    config: AppConfig,
-    window: Window,
     _watcher: Arc<Mutex<RecommendedWatcher>>, // 保持 watcher 存活
 }
 
@@ -65,16 +63,8 @@ impl FileMonitor {
         });
 
         Ok(Self {
-            config,
-            window,
             _watcher: Arc::new(Mutex::new(watcher)),
         })
-    }
-
-    /// 启动监控（已在 new 中完成）
-    pub fn start(&self) -> Result<()> {
-        // 监控已在构造函数中启动
-        Ok(())
     }
 
     /// 处理文件系统事件
