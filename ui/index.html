@@ -416,8 +416,14 @@
         <!-- 菜单项将动态生成 -->
     </div>
 
-    <!-- 通知容器 -->
-    <div id="notificationContainer"></div>
+    <!-- 通知容器（已弃用，保留以防兼容性） -->
+    <div id="notificationContainer" style="display: none;"></div>
+
+    <!-- 状态栏 -->
+    <div class="status-bar" id="statusBar">
+        <div class="status-icon" id="statusIcon">ℹ️</div>
+        <div class="status-message" id="statusMessage">就绪</div>
+    </div>
 
     <script src="app_v2.js"></script>
 </body>

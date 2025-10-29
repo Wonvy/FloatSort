@@ -160,6 +160,7 @@ body {
     flex: 1;
     overflow-y: auto;
     background: #fff;
+    padding-bottom: 32px; /* 为状态栏留出空间 */
 }
 
 .tab-pane {
@@ -320,7 +321,7 @@ body {
 .rule-card.compact {
     position: relative;
     display: grid;
-    grid-template-columns: auto minmax(60px, 1fr) minmax(100px, 2fr) minmax(80px, 1.2fr) minmax(40px, 60px) 60px 70px;
+    grid-template-columns: 28px minmax(60px, 1fr) minmax(100px, 2fr) minmax(80px, 1.2fr) minmax(40px, 60px) 60px 70px 38px;
     align-items: start;
     gap: 12px;
     padding: 12px 16px;
@@ -341,7 +342,7 @@ body {
     font-size: 14px;
     font-weight: 700;
     color: #667eea;
-    min-width: 28px;
+    width: 28px;
     height: 28px;
     line-height: 28px;
     text-align: center;
@@ -349,7 +350,7 @@ body {
     -webkit-background-clip: text;
     -webkit-text-fill-color: transparent;
     background-clip: text;
-    flex-shrink: 0;
+    padding-top: 2px;
 }
 
 /* 规则排序控件 */
@@ -359,55 +360,49 @@ body {
     align-items: center;
     gap: 4px;
     flex-shrink: 0;
-    padding: 2px 6px 0 0;
-    margin-right: 6px;
-    border-right: 1.5px solid #e5e7eb;
+    padding-top: 2px;
 }
 
 .order-btn {
     display: flex;
     align-items: center;
     justify-content: center;
-    width: 24px;
-    height: 24px;
+    width: 28px;
+    height: 28px;
     padding: 0;
-    border: none;
-    background: linear-gradient(135deg, #f0f4ff 0%, #e8ecff 100%);
-    color: #667eea;
+    border: 1px solid #d1d5db;
+    background: #fff;
+    color: #6b7280;
     border-radius: 6px;
     cursor: pointer;
     transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
-    box-shadow: 0 1px 3px rgba(102, 126, 234, 0.1);
 }
 
 .order-btn:hover:not(:disabled) {
-    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-    color: #fff;
-    transform: scale(1.08);
-    box-shadow: 0 2px 6px rgba(102, 126, 234, 0.25);
+    border-color: #667eea;
+    color: #667eea;
+    background: #f3f4f6;
+    transform: translateY(-1px);
 }
 
 .order-btn:active:not(:disabled) {
-    transform: scale(0.98);
+    transform: translateY(0) scale(0.95);
 }
 
 .order-btn:disabled {
     opacity: 0.3;
     cursor: not-allowed;
-    background: #f5f5f5;
-    color: #9ca3af;
 }
 
-/* 规则基础信息（序号+开关+名称） */
-.rule-basic {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    padding-top: 2px;
+.order-btn svg {
+    width: 14px;
+    height: 14px;
 }
 
+/* 规则名称列 */
 .rule-name-col {
     min-width: 0;
+    padding-top: 2px;
 }
 
 .rule-name {
@@ -426,6 +421,7 @@ body {
     flex-direction: column;
     gap: 4px;
     min-width: 0;
+    padding-top: 2px;
 }
 
 .rule-condition-label {
@@ -451,6 +447,7 @@ body {
     flex-direction: column;
     gap: 4px;
     min-width: 0;
+    padding-top: 2px;
 }
 
 .rule-destination-label {
@@ -1408,33 +1405,82 @@ input[readonly] {
     background: #bfbfbf;
 }
 
-/* ========== 通知 ========== */
+/* ========== 通知（已弃用） ========== */
 .notification {
+    display: none;
+}
+
+/* ========== 状态栏 ========== */
+.status-bar {
     position: fixed;
-    top: 20px;
-    right: 20px;
-    background: white;
-    padding: 12px 16px;
-    border-radius: 4px;
-    border: 1px solid #e8e8e8;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    height: 32px;
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: white;
+    display: flex;
+    align-items: center;
+    padding: 0 16px;
+    gap: 10px;
     font-size: 13px;
-    animation: slideIn 0.3s ease;
-    z-index: 2000;
+    z-index: 1000;
+    border-top: 1px solid rgba(255, 255, 255, 0.2);
+    box-shadow: 0 -2px 8px rgba(0, 0, 0, 0.1);
+    transition: all 0.3s ease;
 }
 
-.notification-success {
-    border-color: #52c41a;
-    color: #52c41a;
+.status-icon {
+    font-size: 16px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    animation: fadeIn 0.3s ease;
 }
 
-.notification-error {
-    border-color: #ff4d4f;
-    color: #ff4d4f;
+.status-message {
+    flex: 1;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-weight: 500;
+    animation: slideInBottom 0.3s ease;
 }
 
-.notification-info {
-    border-color: #1890ff;
-    color: #1890ff;
+.status-bar.status-success {
+    background: linear-gradient(135deg, #52c41a 0%, #389e0d 100%);
+}
+
+.status-bar.status-error {
+    background: linear-gradient(135deg, #ff4d4f 0%, #cf1322 100%);
+}
+
+.status-bar.status-info {
+    background: linear-gradient(135deg, #1890ff 0%, #096dd9 100%);
+}
+
+.status-bar.status-default {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+}
+
+@keyframes slideInBottom {
+    from {
+        transform: translateY(10px);
+        opacity: 0;
+    }
+    to {
+        transform: translateY(0);
+        opacity: 1;
+    }
+}
+
+@keyframes fadeIn {
+    from {
+        opacity: 0;
+    }
+    to {
+        opacity: 1;
+    }
 }
 
 @keyframes slideIn {
@@ -1493,6 +1539,10 @@ input[readonly] {
     cursor: pointer;
     transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
     flex-shrink: 0;
+}
+
+.rule-toggle {
+    margin-top: 2px;
 }
 
 .rule-toggle:hover {
@@ -1829,41 +1879,33 @@ input[readonly] {
 }
 
 /* ========== 响应式布局优化 ========== */
-/* 小窗口优化 - 隐藏引用文件夹列 */
-@media (max-width: 480px) {
+/* 小窗口优化 - 只显示关键信息 */
+@media (max-width: 600px) {
     .rule-card.compact {
-        grid-template-columns: auto minmax(0, 1fr) minmax(120px, 2fr) minmax(80px, 1fr) auto auto;
+        grid-template-columns: 28px minmax(60px, 1fr) minmax(80px, 1.5fr) 28px 38px;
         gap: 8px;
     }
     
-    .rule-usage {
+    /* 隐藏条件、引用文件夹、上下移动、删除按钮 */
+    .rule-condition-col,
+    .rule-usage,
+    .rule-order-controls,
+    .rule-actions .btn-icon:last-child {
         display: none;
     }
     
-    .rule-condition-col,
+    /* 调整编辑按钮容器 */
+    .rule-actions {
+        display: flex;
+        justify-content: center;
+    }
+    
     .rule-destination-col {
         font-size: 12px;
     }
     
-    .rule-condition-label,
     .rule-destination-label {
         font-size: 10px;
-    }
-}
-
-/* 中等窗口优化 - 调整列宽比例 */
-@media (min-width: 481px) and (max-width: 600px) {
-    .rule-card.compact {
-        grid-template-columns: auto minmax(0, 1fr) minmax(140px, 2fr) minmax(90px, 1fr) minmax(40px, 50px) auto auto;
-        gap: 10px;
-    }
-    
-    .rule-usage {
-        font-size: 10px;
-    }
-    
-    .usage-text {
-        display: none;
     }
 }
 

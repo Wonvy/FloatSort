@@ -1252,44 +1252,57 @@ function renderRules() {
         let conditionText = '';
         const ruleLabel = getRuleLabel(index);
         
-        if (condition) {
-            if (condition.type === 'Extension') {
-                conditionText = `扩展名: ${condition.values.join(', ')}`;
-            } else if (condition.type === 'NameContains') {
-                conditionText = `包含: ${condition.pattern}`;
-            } else if (condition.type === 'NameRegex') {
-                conditionText = `正则: ${condition.pattern}`;
-            } else if (condition.type === 'SizeRange') {
-                const minMB = condition.min ? Math.round(condition.min / 1024 / 1024) : null;
-                const maxMB = condition.max ? Math.round(condition.max / 1024 / 1024) : null;
+        // 格式化单个条件的函数
+        const formatCondition = (cond) => {
+            if (cond.type === 'Extension') {
+                return `扩展名: ${cond.values.join(', ')}`;
+            } else if (cond.type === 'NameContains') {
+                return `包含: ${cond.pattern}`;
+            } else if (cond.type === 'NameRegex') {
+                return `正则: ${cond.pattern}`;
+            } else if (cond.type === 'SizeRange') {
+                const minMB = cond.min ? Math.round(cond.min / 1024 / 1024) : null;
+                const maxMB = cond.max ? Math.round(cond.max / 1024 / 1024) : null;
                 if (minMB && maxMB) {
-                    conditionText = `大小: ${minMB}-${maxMB}MB`;
+                    return `大小: ${minMB}-${maxMB}MB`;
                 } else if (minMB) {
-                    conditionText = `大小: ≥${minMB}MB`;
+                    return `大小: ≥${minMB}MB`;
                 } else if (maxMB) {
-                    conditionText = `大小: ≤${maxMB}MB`;
+                    return `大小: ≤${maxMB}MB`;
                 } else {
-                    conditionText = `大小: 不限`;
+                    return `大小: 不限`;
                 }
-            } else if (condition.type === 'CreatedDaysAgo') {
-                if (condition.min && condition.max) {
-                    conditionText = `创建: ${condition.min}-${condition.max}天前`;
-                } else if (condition.min) {
-                    conditionText = `创建: ${condition.min}天前或更早`;
-                } else if (condition.max) {
-                    conditionText = `创建: ${condition.max}天内`;
+            } else if (cond.type === 'CreatedDaysAgo') {
+                if (cond.min && cond.max) {
+                    return `创建: ${cond.min}-${cond.max}天前`;
+                } else if (cond.min) {
+                    return `创建: ${cond.min}天前或更早`;
+                } else if (cond.max) {
+                    return `创建: ${cond.max}天内`;
                 }
-            } else if (condition.type === 'ModifiedDaysAgo') {
-                if (condition.min && condition.max) {
-                    conditionText = `修改: ${condition.min}-${condition.max}天前`;
-                } else if (condition.min) {
-                    conditionText = `修改: ${condition.min}天前或更早`;
-                } else if (condition.max) {
-                    conditionText = `修改: ${condition.max}天内`;
+            } else if (cond.type === 'ModifiedDaysAgo') {
+                if (cond.min && cond.max) {
+                    return `修改: ${cond.min}-${cond.max}天前`;
+                } else if (cond.min) {
+                    return `修改: ${cond.min}天前或更早`;
+                } else if (cond.max) {
+                    return `修改: ${cond.max}天内`;
                 }
             } else {
-                conditionText = `条件: ${condition.type}`;
+                return `条件: ${cond.type}`;
             }
+        };
+        
+        // 生成完整条件提示文本
+        let fullConditionTooltip = '';
+        if (rule.conditions && rule.conditions.length > 0) {
+            fullConditionTooltip = rule.conditions.map((c, i) => `${i + 1}. ${formatCondition(c)}`).join('\n');
+        } else {
+            fullConditionTooltip = '无条件';
+        }
+        
+        if (condition) {
+            conditionText = formatCondition(condition);
         } else {
             conditionText = '无条件';
         }
@@ -1320,17 +1333,12 @@ function renderRules() {
         }
         
         return `
-            <div class="rule-card compact ${!rule.enabled ? 'disabled' : ''}" data-rule-id="${rule.id}" data-index="${index}">
-                <div class="rule-basic">
-                    <span class="rule-order-number">${index + 1}</span>
-                    <button class="rule-toggle ${rule.enabled ? 'active' : ''}" 
-                            onclick="toggleRule('${rule.id}')">
-                    </button>
-                    <div class="rule-name-col">
-                        <div class="rule-name">${rule.name}</div>
-                    </div>
+            <div class="rule-card compact ${!rule.enabled ? 'disabled' : ''}" data-rule-id="${rule.id}" data-index="${index}" title="${fullConditionTooltip}">
+                <span class="rule-order-number">${index + 1}</span>
+                <div class="rule-name-col">
+                    <div class="rule-name">${rule.name}</div>
                 </div>
-                <div class="rule-condition-col">
+                <div class="rule-condition-col" title="${fullConditionTooltip}">
                     <div class="rule-condition-label">条件</div>
                     <div class="rule-condition-value">${conditionText}</div>
                 </div>
@@ -1375,6 +1383,9 @@ function renderRules() {
                         </svg>
                     </button>
                 </div>
+                <button class="rule-toggle ${rule.enabled ? 'active' : ''}" 
+                        onclick="toggleRule('${rule.id}')" title="${rule.enabled ? '禁用' : '启用'}">
+                </button>
             </div>
         `;
     }).join('');
@@ -2236,24 +2247,52 @@ async function openFolder(path) {
     }
 }
 
-// ========== 通知系统 ==========
+// ========== 通知系统（状态栏） ==========
+let statusTimeout = null;
+
 function showNotification(message, type = 'info') {
-    const container = document.getElementById('notificationContainer');
-    const notification = document.createElement('div');
-    notification.className = `notification notification-${type}`;
+    const statusBar = document.getElementById('statusBar');
+    const statusIcon = document.getElementById('statusIcon');
+    const statusMessage = document.getElementById('statusMessage');
     
-    const icon = type === 'success' ? '[成功]' : type === 'error' ? '[错误]' : '[信息]';
+    // 清除之前的定时器
+    if (statusTimeout) {
+        clearTimeout(statusTimeout);
+        statusTimeout = null;
+    }
     
-    notification.innerHTML = `
-        <span>${icon}</span>
-        <div class="notification-message">${message}</div>
-    `;
+    // 设置图标
+    const iconMap = {
+        'success': '✓',
+        'error': '✗',
+        'info': 'ℹ️',
+        'default': 'ℹ️'
+    };
+    statusIcon.textContent = iconMap[type] || iconMap['default'];
     
-    container.appendChild(notification);
+    // 设置消息
+    statusMessage.textContent = message;
     
+    // 移除所有状态类
+    statusBar.classList.remove('status-success', 'status-error', 'status-info', 'status-default');
+    
+    // 添加新状态类
+    statusBar.classList.add(`status-${type}`);
+    
+    // 触发动画（重新添加动画类）
+    statusMessage.style.animation = 'none';
+    statusIcon.style.animation = 'none';
     setTimeout(() => {
-        notification.style.animation = 'slideOutRight 0.3s ease';
-        setTimeout(() => notification.remove(), 300);
+        statusMessage.style.animation = 'slideInBottom 0.3s ease';
+        statusIcon.style.animation = 'fadeIn 0.3s ease';
+    }, 10);
+    
+    // 3秒后恢复默认状态
+    statusTimeout = setTimeout(() => {
+        statusMessage.textContent = '就绪';
+        statusIcon.textContent = 'ℹ️';
+        statusBar.classList.remove('status-success', 'status-error', 'status-info');
+        statusBar.classList.add('status-default');
     }, 3000);
 }
 
@@ -3287,4 +3326,5 @@ window.editRule = editRule;
 window.deleteRule = deleteRule;
 window.toggleRule = toggleRule;
 window.selectRule = selectRule;
+
 
