@@ -1572,6 +1572,27 @@ function updateConditionInputs() {
 // 添加条件
 function addCondition() {
     const type = document.getElementById('conditionType').value;
+    
+    // 检查是否已经添加了相同类型的条件（编辑模式除外）
+    if (appState.editingConditionIndex < 0) {
+        const typeMap = {
+            'extension': 'Extension',
+            'name': 'NameContains',
+            'regex': 'NameRegex',
+            'size': 'SizeRange',
+            'created': 'CreatedDaysAgo',
+            'modified': 'ModifiedDaysAgo'
+        };
+        
+        const backendType = typeMap[type];
+        const exists = appState.currentConditions.some(cond => cond.type === backendType);
+        
+        if (exists) {
+            showNotification('该类型的条件已存在，请编辑现有条件或删除后重新添加', 'error');
+            return;
+        }
+    }
+    
     let condition = null;
     
     switch (type) {
@@ -1861,15 +1882,29 @@ function updateConditionTypeOptions() {
     }
     
     // 遍历所有选项，禁用已添加的类型
+    let currentValueDisabled = false;
     Array.from(typeSelect.options).forEach(option => {
         if (addedTypes.has(option.value)) {
             option.disabled = true;
             option.style.color = '#999';
+            // 检查当前选中的选项是否被禁用
+            if (typeSelect.value === option.value) {
+                currentValueDisabled = true;
+            }
         } else {
             option.disabled = false;
             option.style.color = '';
         }
     });
+    
+    // 如果当前选中的选项被禁用，自动切换到第一个可用的选项
+    if (currentValueDisabled) {
+        const firstAvailable = Array.from(typeSelect.options).find(opt => !opt.disabled);
+        if (firstAvailable) {
+            typeSelect.value = firstAvailable.value;
+            updateConditionInputs(); // 更新输入框以匹配新选择的类型
+        }
+    }
 }
 
 // 获取条件类型标签
