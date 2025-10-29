@@ -647,6 +647,65 @@ async function processFilesWithRule(files, ruleId) {
     await showBatchConfirmWithRule(ruleId);
 }
 
+// 渲染按扩展名分组的未匹配文件
+function renderUnmatchedFilesGrouped(unmatchedFiles) {
+    if (unmatchedFiles.length === 0) return '';
+    
+    // 按扩展名分组
+    const groupedByExt = {};
+    unmatchedFiles.forEach(file => {
+        const ext = file.name.includes('.') 
+            ? file.name.split('.').pop().toLowerCase() 
+            : '无扩展名';
+        if (!groupedByExt[ext]) {
+            groupedByExt[ext] = [];
+        }
+        groupedByExt[ext].push(file);
+    });
+    
+    return `
+        <div class="batch-section">
+            <div class="batch-section-header unmatched" onclick="toggleBatchSection(this)">
+                <svg class="collapse-icon" width="12" height="12" viewBox="0 0 12 12" fill="none" style="transform: rotate(0deg);">
+                    <path d="M3 4.5L6 7.5L9 4.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+                </svg>
+                <svg class="warning-icon" width="16" height="16" viewBox="0 0 16 16" fill="none">
+                    <circle cx="8" cy="8" r="7" stroke="#e74c3c" stroke-width="2" fill="none"/>
+                    <path d="M8 4V8" stroke="#e74c3c" stroke-width="2" stroke-linecap="round"/>
+                    <circle cx="8" cy="11" r="0.5" fill="#e74c3c" stroke="#e74c3c" stroke-width="1"/>
+                </svg>
+                <span class="section-title">不符合规则的文件</span>
+                <span class="section-count">${unmatchedFiles.length}</span>
+                <span class="collapse-hint">点击收起</span>
+            </div>
+            <div class="batch-section-content">
+                ${Object.entries(groupedByExt).map(([ext, files]) => `
+                    <div class="ext-group">
+                        <div class="ext-group-header">
+                            <span class="ext-badge">.${ext}</span>
+                            <span class="ext-count">${files.length} 个文件</span>
+                        </div>
+                        ${files.map(file => {
+                            // 分离路径和文件名
+                            const pathParts = file.path.replace(/\\/g, '/').split('/');
+                            const fileName = pathParts.pop();
+                            const dirPath = pathParts.join('/');
+                            
+                            return `
+                                <div class="batch-file-item-compact unmatched">
+                                    <div class="file-path-full">
+                                        <span class="dir-path">${dirPath}/</span><span class="file-name-red">${fileName}</span>
+                                    </div>
+                                </div>
+                            `;
+                        }).join('')}
+                    </div>
+                `).join('')}
+            </div>
+        </div>
+    `;
+}
+
 // 使用特定规则的批量确认
 async function showBatchConfirmWithRule(ruleId) {
     const rule = appState.rules.find(r => r.id === ruleId);
@@ -749,38 +808,8 @@ async function showBatchConfirmWithRule(ruleId) {
         `;
     }
     
-    // 未匹配的文件
-    if (unmatchedFiles.length > 0) {
-        html += `
-            <div class="batch-section">
-                <div class="batch-section-header unmatched" onclick="toggleBatchSection(this)">
-                    <svg class="collapse-icon" width="12" height="12" viewBox="0 0 12 12" fill="none" style="transform: rotate(0deg);">
-                        <path d="M3 4.5L6 7.5L9 4.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
-                    </svg>
-                    <svg class="warning-icon" width="16" height="16" viewBox="0 0 16 16" fill="none">
-                        <circle cx="8" cy="8" r="7" stroke="#e74c3c" stroke-width="2" fill="none"/>
-                        <path d="M8 4V8" stroke="#e74c3c" stroke-width="2" stroke-linecap="round"/>
-                        <circle cx="8" cy="11" r="0.5" fill="#e74c3c" stroke="#e74c3c" stroke-width="1"/>
-                    </svg>
-                    <span class="section-title">不符合规则的文件</span>
-                    <span class="section-count">${unmatchedFiles.length}</span>
-                    <span class="collapse-hint">点击收起</span>
-                </div>
-                <div class="batch-section-content">
-                    ${unmatchedFiles.map(file => `
-                        <div class="batch-file-item unmatched">
-                            <div class="file-icon">📄</div>
-                            <div class="file-info">
-                                <div class="file-name">${file.name}</div>
-                                <div class="file-path from">位置: ${file.path}</div>
-                                <div class="file-path error">原因: ${file.targetPath}</div>
-                            </div>
-                        </div>
-                    `).join('')}
-                </div>
-            </div>
-        `;
-    }
+    // 未匹配的文件（按扩展名分组）
+    html += renderUnmatchedFilesGrouped(unmatchedFiles);
     
     if (matchedFiles.length === 0 && unmatchedFiles.length === 0) {
         html = `<div style="text-align: center; padding: 40px; color: #999;">没有可整理的文件</div>`;
@@ -907,38 +936,8 @@ async function showBatchConfirmWithMultipleRules(ruleIds) {
         `;
     }
     
-    // 未匹配的文件
-    if (unmatchedFiles.length > 0) {
-        html += `
-            <div class="batch-section">
-                <div class="batch-section-header unmatched" onclick="toggleBatchSection(this)">
-                    <svg class="collapse-icon" width="12" height="12" viewBox="0 0 12 12" fill="none" style="transform: rotate(0deg);">
-                        <path d="M3 4.5L6 7.5L9 4.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
-                    </svg>
-                    <svg class="warning-icon" width="16" height="16" viewBox="0 0 16 16" fill="none">
-                        <circle cx="8" cy="8" r="7" stroke="#e74c3c" stroke-width="2" fill="none"/>
-                        <path d="M8 4V8" stroke="#e74c3c" stroke-width="2" stroke-linecap="round"/>
-                        <circle cx="8" cy="11" r="0.5" fill="#e74c3c" stroke="#e74c3c" stroke-width="1"/>
-                    </svg>
-                    <span class="section-title">不符合规则的文件</span>
-                    <span class="section-count">${unmatchedFiles.length}</span>
-                    <span class="collapse-hint">点击收起</span>
-                </div>
-                <div class="batch-section-content">
-                    ${unmatchedFiles.map(file => `
-                        <div class="batch-file-item unmatched">
-                            <div class="file-icon">📄</div>
-                            <div class="file-info">
-                                <div class="file-name">${file.name}</div>
-                                <div class="file-path from">位置: ${file.path}</div>
-                                <div class="file-path error">原因: ${file.targetPath}</div>
-                            </div>
-                        </div>
-                    `).join('')}
-                </div>
-            </div>
-        `;
-    }
+    // 未匹配的文件（按扩展名分组）
+    html += renderUnmatchedFilesGrouped(unmatchedFiles);
     
     if (matchedFiles.length === 0 && unmatchedFiles.length === 0) {
         html = `<div style="text-align: center; padding: 40px; color: #999;">没有可整理的文件</div>`;
@@ -2428,38 +2427,8 @@ async function showBatchConfirm() {
         `;
     }
     
-    // 未匹配的文件（可折叠）
-    if (unmatchedFiles.length > 0) {
-        html += `
-            <div class="batch-section">
-                <div class="batch-section-header unmatched" onclick="toggleBatchSection(this)">
-                    <svg width="16" height="16" viewBox="0 0 16 16" fill="none" class="collapse-icon">
-                        <path d="M4 6L8 10L12 6" stroke="#e74c3c" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-                    </svg>
-                    <svg width="16" height="16" viewBox="0 0 16 16" fill="none" class="warning-icon">
-                        <path d="M8 2L14 13H2L8 2Z" stroke="#e74c3c" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-                        <line x1="8" y1="6" x2="8" y2="9" stroke="#e74c3c" stroke-width="2" stroke-linecap="round"/>
-                        <circle cx="8" cy="11" r="0.5" fill="#e74c3c"/>
-                    </svg>
-                    <span class="section-title">未匹配规则的文件</span>
-                    <span class="section-count">${unmatchedFiles.length}</span>
-                    <span class="collapse-hint">点击折叠</span>
-                </div>
-                <div class="batch-section-content">
-                    ${unmatchedFiles.map(file => `
-                        <div class="batch-file-item">
-                            <div class="file-icon">⚠️</div>
-                            <div class="file-info">
-                                <div class="file-name">${file.name}</div>
-                                <div class="file-path from">从: ${file.path}</div>
-                                <div class="file-path to unmatched">${file.targetPath}</div>
-                            </div>
-                        </div>
-                    `).join('')}
-                </div>
-            </div>
-        `;
-    }
+    // 未匹配的文件（按扩展名分组，紧凑显示）
+    html += renderUnmatchedFilesGrouped(unmatchedFiles);
     
     list.innerHTML = html;
     

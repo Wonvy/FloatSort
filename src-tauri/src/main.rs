@@ -446,11 +446,31 @@ async fn preview_file_organization(path: String, state: State<'_, AppState>) -> 
             .ok_or_else(|| "无法获取父目录".to_string())?;
         
         if let Some(dest_path) = engine.get_destination_path(&rule.action, &file_info, base_path) {
+            // 如果目标路径是回收站，直接返回
+            if dest_path == "已移动到回收站" || dest_path == "{recycle}" {
+                return Ok(serde_json::json!({
+                    "matched": true,
+                    "rule_name": rule.name,
+                    "original_path": path,
+                    "target_path": "🗑️ 回收站",
+                }));
+            }
+            
+            // 构建完整的目标文件路径（目标文件夹 + 文件名）
+            let file_name = Path::new(&path)
+                .file_name()
+                .and_then(|n| n.to_str())
+                .unwrap_or("");
+            let full_target_path = Path::new(&dest_path)
+                .join(file_name)
+                .to_string_lossy()
+                .to_string();
+            
             return Ok(serde_json::json!({
                 "matched": true,
                 "rule_name": rule.name,
                 "original_path": path,
-                "target_path": dest_path,
+                "target_path": full_target_path,
             }));
         }
     }
@@ -488,11 +508,31 @@ async fn preview_file_organization_with_rule(path: String, rule_id: String, stat
             .ok_or_else(|| "无法获取父目录".to_string())?;
         
         if let Some(dest_path) = engine.get_destination_path(&rule.action, &file_info, base_path) {
+            // 如果目标路径是回收站，直接返回
+            if dest_path == "已移动到回收站" || dest_path == "{recycle}" {
+                return Ok(serde_json::json!({
+                    "matched": true,
+                    "rule_name": rule.name,
+                    "original_path": path,
+                    "target_path": "🗑️ 回收站",
+                }));
+            }
+            
+            // 构建完整的目标文件路径（目标文件夹 + 文件名）
+            let file_name = Path::new(&path)
+                .file_name()
+                .and_then(|n| n.to_str())
+                .unwrap_or("");
+            let full_target_path = Path::new(&dest_path)
+                .join(file_name)
+                .to_string_lossy()
+                .to_string();
+            
             return Ok(serde_json::json!({
                 "matched": true,
                 "rule_name": rule.name,
                 "original_path": path,
-                "target_path": dest_path,
+                "target_path": full_target_path,
             }));
         }
     }

@@ -136,6 +136,11 @@ impl RuleEngine {
     pub fn get_destination_path(&self, action: &RuleAction, file_info: &FileInfo, base_path: &Path) -> Option<String> {
         match action {
             RuleAction::MoveTo { destination } | RuleAction::CopyTo { destination } => {
+                // 检查是否为回收站特殊路径
+                if destination == "{recycle}" {
+                    return Some("{recycle}".to_string());
+                }
+                
                 // 解析占位符
                 let resolved_destination = self.resolve_placeholders(destination, file_info);
                 
