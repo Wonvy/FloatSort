@@ -40,6 +40,7 @@ pub fn get_file_info(path: &Path) -> Result<FileInfo> {
         size: metadata.len(),
         created_at,
         modified_at,
+        is_directory: metadata.is_dir(),
     })
 }
 

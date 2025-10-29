@@ -651,9 +651,20 @@ async function processFilesWithRule(files, ruleId) {
 function renderUnmatchedFilesGrouped(unmatchedFiles) {
     if (unmatchedFiles.length === 0) return '';
     
-    // 按扩展名分组
-    const groupedByExt = {};
+    // 分离文件夹和文件
+    const folders = [];
+    const files = [];
     unmatchedFiles.forEach(file => {
+        if (file.is_directory) {
+            folders.push(file);
+        } else {
+            files.push(file);
+        }
+    });
+    
+    // 按扩展名分组（仅对文件）
+    const groupedByExt = {};
+    files.forEach(file => {
         const ext = file.name.includes('.') 
             ? file.name.split('.').pop().toLowerCase() 
             : '无扩展名';
@@ -663,7 +674,9 @@ function renderUnmatchedFilesGrouped(unmatchedFiles) {
         groupedByExt[ext].push(file);
     });
     
-    return `
+    let html = '';
+    
+    html += `
         <div class="batch-section">
             <div class="batch-section-header unmatched" onclick="toggleBatchSection(this)">
                 <svg class="collapse-icon" width="12" height="12" viewBox="0 0 12 12" fill="none" style="transform: rotate(0deg);">
@@ -674,36 +687,66 @@ function renderUnmatchedFilesGrouped(unmatchedFiles) {
                     <path d="M8 4V8" stroke="#e74c3c" stroke-width="2" stroke-linecap="round"/>
                     <circle cx="8" cy="11" r="0.5" fill="#e74c3c" stroke="#e74c3c" stroke-width="1"/>
                 </svg>
-                <span class="section-title">不符合规则的文件</span>
+                <span class="section-title">不符合规则的项目</span>
                 <span class="section-count">${unmatchedFiles.length}</span>
                 <span class="collapse-hint">点击收起</span>
             </div>
-            <div class="batch-section-content">
-                ${Object.entries(groupedByExt).map(([ext, files]) => `
-                    <div class="ext-group">
-                        <div class="ext-group-header">
-                            <span class="ext-badge">.${ext}</span>
-                            <span class="ext-count">${files.length} 个文件</span>
+            <div class="batch-section-content">`;
+    
+    // 先显示文件夹
+    if (folders.length > 0) {
+        html += `
+            <div class="ext-group">
+                <div class="ext-group-header">
+                    <span class="ext-badge">📁 文件夹</span>
+                    <span class="ext-count">${folders.length} 个</span>
+                </div>
+                ${folders.map(folder => {
+                    const pathParts = folder.path.replace(/\\/g, '/').split('/');
+                    const folderName = pathParts.pop();
+                    const dirPath = pathParts.join('/');
+                    
+                    return `
+                        <div class="batch-file-item-compact unmatched">
+                            <div class="file-path-full">
+                                <span class="dir-path">${dirPath}/</span><span class="file-name-red">${folderName}</span>
+                            </div>
                         </div>
-                        ${files.map(file => {
-                            // 分离路径和文件名
-                            const pathParts = file.path.replace(/\\/g, '/').split('/');
-                            const fileName = pathParts.pop();
-                            const dirPath = pathParts.join('/');
-                            
-                            return `
-                                <div class="batch-file-item-compact unmatched">
-                                    <div class="file-path-full">
-                                        <span class="dir-path">${dirPath}/</span><span class="file-name-red">${fileName}</span>
-                                    </div>
-                                </div>
-                            `;
-                        }).join('')}
+                    `;
+                }).join('')}
+            </div>
+        `;
+    }
+    
+    // 然后显示按扩展名分组的文件
+    html += Object.entries(groupedByExt).map(([ext, files]) => `
+        <div class="ext-group">
+            <div class="ext-group-header">
+                <span class="ext-badge">.${ext}</span>
+                <span class="ext-count">${files.length} 个文件</span>
+            </div>
+            ${files.map(file => {
+                const pathParts = file.path.replace(/\\/g, '/').split('/');
+                const fileName = pathParts.pop();
+                const dirPath = pathParts.join('/');
+                
+                return `
+                    <div class="batch-file-item-compact unmatched">
+                        <div class="file-path-full">
+                            <span class="dir-path">${dirPath}/</span><span class="file-name-red">${fileName}</span>
+                        </div>
                     </div>
-                `).join('')}
+                `;
+            }).join('')}
+        </div>
+    `).join('');
+    
+    html += `
             </div>
         </div>
     `;
+    
+    return html;
 }
 
 // 使用特定规则的批量确认
@@ -1934,6 +1977,10 @@ async function openRuleModal(ruleId = null) {
     // 重置添加按钮文字
     document.getElementById('addConditionBtn').textContent = '添加条件';
     
+    // 重置复选框为默认状态（仅文件）
+    document.getElementById('applyToFiles').checked = true;
+    document.getElementById('applyToFolders').checked = false;
+    
     if (ruleId) {
         // 编辑模式
         const rule = appState.rules.find(r => r.id === ruleId);
@@ -1943,8 +1990,25 @@ async function openRuleModal(ruleId = null) {
         document.getElementById('ruleName').value = rule.name;
         document.getElementById('targetFolder').value = rule.action.destination;
         
-        // 加载现有条件
-        appState.currentConditions = rule.conditions.map(cond => {
+        // 检查是否有 FileType 条件，并设置复选框
+        const fileTypeCondition = rule.conditions.find(c => c.type === 'FileType');
+        if (fileTypeCondition) {
+            if (fileTypeCondition.file_type === 'file') {
+                document.getElementById('applyToFiles').checked = true;
+                document.getElementById('applyToFolders').checked = false;
+            } else if (fileTypeCondition.file_type === 'folder') {
+                document.getElementById('applyToFiles').checked = false;
+                document.getElementById('applyToFolders').checked = true;
+            } else if (fileTypeCondition.file_type === 'both') {
+                document.getElementById('applyToFiles').checked = true;
+                document.getElementById('applyToFolders').checked = true;
+            }
+        }
+        
+        // 加载现有条件（过滤掉 FileType 条件，因为现在由复选框处理）
+        appState.currentConditions = rule.conditions
+            .filter(cond => cond.type !== 'FileType')
+            .map(cond => {
             let displayText = '';
             if (cond.type === 'Extension') {
                 displayText = `扩展名: ${cond.values.join(', ')}`;
@@ -1999,6 +2063,15 @@ async function saveRule() {
         return;
     }
     
+    // 检查文件类型复选框
+    const applyToFiles = document.getElementById('applyToFiles').checked;
+    const applyToFolders = document.getElementById('applyToFolders').checked;
+    
+    if (!applyToFiles && !applyToFolders) {
+        showNotification('请至少选择应用到文件或文件夹', 'error');
+        return;
+    }
+    
     if (appState.currentConditions.length === 0) {
         showNotification('请至少添加一个条件', 'error');
         return;
@@ -2008,6 +2081,21 @@ async function saveRule() {
     const conditions = appState.currentConditions.map(cond => {
         const { displayText, ...rest } = cond;
         return rest;
+    });
+    
+    // 根据复选框状态添加 FileType 条件
+    let fileType;
+    if (applyToFiles && applyToFolders) {
+        fileType = 'both';
+    } else if (applyToFiles) {
+        fileType = 'file';
+    } else {
+        fileType = 'folder';
+    }
+    
+    conditions.unshift({
+        type: 'FileType',
+        file_type: fileType
     });
     
     const rule = {

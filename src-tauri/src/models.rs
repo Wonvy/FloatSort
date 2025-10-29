@@ -10,12 +10,16 @@ pub struct FileInfo {
     pub size: u64,
     pub created_at: Option<DateTime<Utc>>,
     pub modified_at: Option<DateTime<Utc>>,
+    pub is_directory: bool,
 }
 
 /// 规则条件类型
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(tag = "type")]
 pub enum RuleCondition {
+    /// 文件类型（文件或文件夹）
+    FileType { file_type: String },
+    
     /// 文件扩展名匹配
     Extension { values: Vec<String> },
     

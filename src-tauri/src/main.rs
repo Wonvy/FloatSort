@@ -453,6 +453,7 @@ async fn preview_file_organization(path: String, state: State<'_, AppState>) -> 
                     "rule_name": rule.name,
                     "original_path": path,
                     "target_path": "🗑️ 回收站",
+                    "is_directory": file_info.is_directory,
                 }));
             }
             
@@ -471,6 +472,7 @@ async fn preview_file_organization(path: String, state: State<'_, AppState>) -> 
                 "rule_name": rule.name,
                 "original_path": path,
                 "target_path": full_target_path,
+                "is_directory": file_info.is_directory,
             }));
         }
     }
@@ -480,6 +482,7 @@ async fn preview_file_organization(path: String, state: State<'_, AppState>) -> 
         "matched": false,
         "original_path": path,
         "target_path": null,
+        "is_directory": file_info.is_directory,
     }))
 }
 
@@ -515,6 +518,7 @@ async fn preview_file_organization_with_rule(path: String, rule_id: String, stat
                     "rule_name": rule.name,
                     "original_path": path,
                     "target_path": "🗑️ 回收站",
+                    "is_directory": file_info.is_directory,
                 }));
             }
             
@@ -533,6 +537,7 @@ async fn preview_file_organization_with_rule(path: String, rule_id: String, stat
                 "rule_name": rule.name,
                 "original_path": path,
                 "target_path": full_target_path,
+                "is_directory": file_info.is_directory,
             }));
         }
     }

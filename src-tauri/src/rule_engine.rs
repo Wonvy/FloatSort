@@ -51,6 +51,15 @@ impl RuleEngine {
     /// 检查单个条件
     fn check_single_condition(&self, condition: &RuleCondition, file_info: &FileInfo) -> bool {
         match condition {
+            RuleCondition::FileType { file_type } => {
+                match file_type.as_str() {
+                    "file" => !file_info.is_directory,
+                    "folder" => file_info.is_directory,
+                    "both" => true,  // 同时应用于文件和文件夹
+                    _ => false,
+                }
+            }
+
             RuleCondition::Extension { values } => {
                 let ext = file_info.extension.to_lowercase();
                 values.iter().any(|v| v.to_lowercase() == ext)
@@ -192,6 +201,7 @@ mod tests {
             size: 1024,
             created_at: None,
             modified_at: None,
+            is_directory: false,
         };
 
         assert!(engine.find_matching_rule(&file_info).is_some());
