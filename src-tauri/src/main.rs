@@ -154,6 +154,69 @@ fn clear_processed_files(state: State<AppState>) -> Result<(), String> {
     Ok(())
 }
 
+// Tauri 命令：选择文件夹
+#[tauri::command]
+async fn select_folder(window: tauri::Window) -> Result<Option<String>, String> {
+    use tauri::api::dialog::FileDialogBuilder;
+    use std::sync::mpsc;
+    
+    info!("打开文件夹选择对话框...");
+    
+    let (tx, rx) = mpsc::channel();
+    
+    FileDialogBuilder::new()
+        .set_parent(&window)
+        .set_title("选择目标文件夹")
+        .pick_folder(move |folder_path| {
+            info!("用户选择结果: {:?}", folder_path);
+            let _ = tx.send(folder_path);
+        });
+    
+    let folder = rx.recv().map_err(|e| {
+        let err_msg = format!("接收文件夹路径失败: {}", e);
+        info!("{}", err_msg);
+        err_msg
+    })?;
+    
+    let result = folder.map(|path| path.to_string_lossy().to_string());
+    info!("返回文件夹路径: {:?}", result);
+    Ok(result)
+}
+
+// Tauri 命令：打开文件夹
+#[tauri::command]
+fn open_folder(path: String) -> Result<(), String> {
+    use std::process::Command;
+    
+    info!("打开文件夹: {}", path);
+    
+    #[cfg(target_os = "windows")]
+    {
+        Command::new("explorer")
+            .arg(&path)
+            .spawn()
+            .map_err(|e| format!("无法打开文件夹: {}", e))?;
+    }
+    
+    #[cfg(target_os = "macos")]
+    {
+        Command::new("open")
+            .arg(&path)
+            .spawn()
+            .map_err(|e| format!("无法打开文件夹: {}", e))?;
+    }
+    
+    #[cfg(target_os = "linux")]
+    {
+        Command::new("xdg-open")
+            .arg(&path)
+            .spawn()
+            .map_err(|e| format!("无法打开文件夹: {}", e))?;
+    }
+    
+    Ok(())
+}
+
 // ============ 文件夹管理命令 ============
 
 // Tauri 命令：获取所有文件夹
@@ -557,6 +620,8 @@ fn main() {
             update_rule,
             reorder_rules,
             clear_processed_files,
+            select_folder,
+            open_folder,
             get_folders,
             add_folder,
             update_folder,

@@ -291,9 +291,16 @@
                     </div>
                     
                     <div class="form-group">
-                        <label for="targetFolder">目标文件夹 <span class="required">*</span></label>
-                        <input type="text" id="targetFolder" placeholder="例如：Pictures/{year}/{month}" required>
-                        <p class="hint">相对于监控文件夹的子目录名，点击下方占位符可快速插入：</p>
+                        <label for="targetFolder">目标文件夹 <span class="required">*</span> <span class="hint-inline">（支持相对路径和绝对路径）</span></label>
+                        <div class="input-with-button">
+                            <input type="text" id="targetFolder" placeholder="例如：Pictures/{year}/{month} 或 C:\Documents\Photos" required>
+                            <button type="button" class="btn-browse" id="browseTargetFolderBtn" title="选择文件夹">
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                    <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path>
+                                </svg>
+                            </button>
+                        </div>
+                        <p class="hint">相对路径：相对于监控文件夹的子目录名 | 绝对路径：完整的系统路径 | 点击下方占位符可快速插入：</p>
                         <div class="placeholder-tags">
                             <div class="tag-group">
                                 <span class="tag-group-label">文件属性:</span>

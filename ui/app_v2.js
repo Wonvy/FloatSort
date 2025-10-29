@@ -29,7 +29,7 @@ const appState = {
     isFullscreen: false,  // 窗口是否处于全屏状态
     selectedRuleId: null,  // 选中的单个规则ID（用于拖拽文件到特定规则）
     selectedRuleIds: null,  // 选中的多个规则IDs（用于拖拽文件到多个规则）
-    pendingDeleteRuleId: null  // 待删除的规则ID
+    pendingDeleteItem: null  // 待删除的项目 { type: 'rule'|'folder', id: string, name: string }
 };
 
 // 为规则生成字母编号
@@ -372,6 +372,9 @@ function setupEventListeners() {
     document.getElementById('clearActivityBtn').addEventListener('click', clearActivity);
     document.getElementById('clearProcessedBtn').addEventListener('click', clearProcessedFiles);
     
+    // 规则目标文件夹选择按钮
+    document.getElementById('browseTargetFolderBtn').addEventListener('click', selectTargetFolder);
+    
     // 批量确认窗口
     document.getElementById('closeBatchModal').addEventListener('click', closeBatchModal);
     document.getElementById('cancelBatch').addEventListener('click', closeBatchModal);
@@ -380,7 +383,7 @@ function setupEventListeners() {
     // 删除确认窗口
     document.getElementById('closeDeleteConfirm').addEventListener('click', closeDeleteConfirm);
     document.getElementById('cancelDelete').addEventListener('click', closeDeleteConfirm);
-    document.getElementById('confirmDelete').addEventListener('click', executeDeleteRule);
+    document.getElementById('confirmDelete').addEventListener('click', executeDelete);
     
     // 模态框点击背景关闭
     document.getElementById('folderModal').addEventListener('click', (e) => {
@@ -1245,32 +1248,100 @@ function renderRules() {
     
     rulesList.innerHTML = appState.rules.map((rule, index) => {
         const usedByFolders = appState.folders.filter(f => f.rule_ids.includes(rule.id));
-        const condition = rule.conditions[0];
+        const condition = rule.conditions && rule.conditions.length > 0 ? rule.conditions[0] : null;
         let conditionText = '';
         const ruleLabel = getRuleLabel(index);
         
-        if (condition.type === 'Extension') {
-            conditionText = `扩展名: ${condition.values.join(', ')}`;
-        } else if (condition.type === 'NameContains') {
-            conditionText = `包含: ${condition.pattern}`;
-        } else if (condition.type === 'SizeRange') {
-            conditionText = `大小: ${condition.max ? Math.round(condition.max / 1024 / 1024) + 'MB' : '不限'}`;
+        if (condition) {
+            if (condition.type === 'Extension') {
+                conditionText = `扩展名: ${condition.values.join(', ')}`;
+            } else if (condition.type === 'NameContains') {
+                conditionText = `包含: ${condition.pattern}`;
+            } else if (condition.type === 'NameRegex') {
+                conditionText = `正则: ${condition.pattern}`;
+            } else if (condition.type === 'SizeRange') {
+                const minMB = condition.min ? Math.round(condition.min / 1024 / 1024) : null;
+                const maxMB = condition.max ? Math.round(condition.max / 1024 / 1024) : null;
+                if (minMB && maxMB) {
+                    conditionText = `大小: ${minMB}-${maxMB}MB`;
+                } else if (minMB) {
+                    conditionText = `大小: ≥${minMB}MB`;
+                } else if (maxMB) {
+                    conditionText = `大小: ≤${maxMB}MB`;
+                } else {
+                    conditionText = `大小: 不限`;
+                }
+            } else if (condition.type === 'CreatedDaysAgo') {
+                if (condition.min && condition.max) {
+                    conditionText = `创建: ${condition.min}-${condition.max}天前`;
+                } else if (condition.min) {
+                    conditionText = `创建: ${condition.min}天前或更早`;
+                } else if (condition.max) {
+                    conditionText = `创建: ${condition.max}天内`;
+                }
+            } else if (condition.type === 'ModifiedDaysAgo') {
+                if (condition.min && condition.max) {
+                    conditionText = `修改: ${condition.min}-${condition.max}天前`;
+                } else if (condition.min) {
+                    conditionText = `修改: ${condition.min}天前或更早`;
+                } else if (condition.max) {
+                    conditionText = `修改: ${condition.max}天内`;
+                }
+            } else {
+                conditionText = `条件: ${condition.type}`;
+            }
+        } else {
+            conditionText = '无条件';
+        }
+        
+        // 如果有多个条件，添加提示
+        if (rule.conditions && rule.conditions.length > 1) {
+            conditionText += ` (+${rule.conditions.length - 1})`;
         }
         
         // 生成文件夹列表的 tooltip
         const folderNames = usedByFolders.map(f => f.name).join('、') || '暂未被任何文件夹使用';
         
+        // 处理目标路径显示
+        const destination = rule.action.destination;
+        const isAbsolutePath = /^[A-Z]:\\/i.test(destination); // 检测绝对路径（Windows）
+        let displayPath = destination;
+        let iconColor = '#667eea'; // 默认紫色
+        
+        if (isAbsolutePath) {
+            iconColor = '#f97316'; // 橙色
+            // 提取驱动器和最后的文件夹名
+            const parts = destination.split(/[\\/]/);
+            const drive = parts[0]; // C:
+            const lastName = parts[parts.length - 1]; // 最后的文件夹名
+            if (parts.length > 2) {
+                displayPath = `${drive}\\...\\${lastName}`;
+            }
+        }
+        
         return `
             <div class="rule-card compact ${!rule.enabled ? 'disabled' : ''}" data-rule-id="${rule.id}" data-index="${index}">
-                <span class="rule-order-number">${index + 1}</span>
-                <button class="rule-toggle ${rule.enabled ? 'active' : ''}" 
-                        onclick="toggleRule('${rule.id}')">
-                </button>
-                <div class="rule-info">
-                    <div class="rule-name">
-                        ${rule.name}
+                <div class="rule-basic">
+                    <span class="rule-order-number">${index + 1}</span>
+                    <button class="rule-toggle ${rule.enabled ? 'active' : ''}" 
+                            onclick="toggleRule('${rule.id}')">
+                    </button>
+                    <div class="rule-name-col">
+                        <div class="rule-name">${rule.name}</div>
                     </div>
-                    <div class="rule-details">${conditionText} → ${rule.action.destination}</div>
+                </div>
+                <div class="rule-condition-col">
+                    <div class="rule-condition-label">条件</div>
+                    <div class="rule-condition-value">${conditionText}</div>
+                </div>
+                <div class="rule-destination-col">
+                    <div class="rule-destination-label">移动到</div>
+                    <div class="rule-destination-value" title="${destination}">
+                        <svg width="14" height="14" viewBox="0 0 16 16" fill="none" style="flex-shrink: 0; color: ${iconColor};">
+                            <path d="M3 2H9L11 4H13C13.5 4 14 4.5 14 5V12C14 12.5 13.5 13 13 13H3C2.5 13 2 12.5 2 12V3C2 2.5 2.5 2 3 2Z" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+                        </svg>
+                        ${isAbsolutePath ? `<span class="path-link" data-path="${destination}" onclick="openFolder('${destination.replace(/\\/g, '\\\\')}')">${displayPath}</span>` : displayPath}
+                    </div>
                 </div>
                 <div class="rule-usage" title="${folderNames}">
                     <span class="usage-badge">${usedByFolders.length}</span>
@@ -1522,18 +1593,13 @@ async function deleteFolder(folderId) {
     const folder = appState.folders.find(f => f.id === folderId);
     if (!folder) return;
     
-    if (!confirm(`确定要删除文件夹 "${folder.name}" 吗？`)) return;
-    
-    try {
-        await invoke('remove_folder', { folderId });
-        showNotification(`文件夹 "${folder.name}" 已删除`, 'success');
-        addActivity(`🗑️ 删除文件夹: ${folder.name}`);
-        await loadFolders();
-        updateStats();
-    } catch (error) {
-        console.error('删除文件夹失败:', error);
-        showNotification('删除失败', 'error');
-    }
+    // 显示删除确认模态框
+    showDeleteConfirm({
+        type: 'folder',
+        id: folderId,
+        name: folder.name,
+        path: folder.path
+    });
 }
 
 // ========== 条件构建器函数 ==========
@@ -1955,52 +2021,74 @@ async function deleteRule(ruleId) {
     if (!rule) return;
     
     // 显示删除确认模态框
-    showDeleteConfirm(rule);
+    showDeleteConfirm({
+        type: 'rule',
+        id: ruleId,
+        name: rule.name,
+        destination: rule.action ? rule.action.destination : null
+    });
 }
 
 // 显示删除确认模态框
-function showDeleteConfirm(rule) {
+function showDeleteConfirm(item) {
     const modal = document.getElementById('deleteConfirmModal');
     const message = document.getElementById('deleteConfirmMessage');
     
-    // 设置消息内容
-    message.innerHTML = `
-        确定要删除规则 <strong style="color: #667eea;">"${rule.name}"</strong> 吗？
-        <br><br>
-        ${rule.action ? `<span style="color: #666;">目标文件夹: ${rule.action.destination}</span>` : ''}
-    `;
+    // 根据类型设置消息内容
+    if (item.type === 'rule') {
+        message.innerHTML = `
+            确定要删除规则 <strong style="color: #667eea;">"${item.name}"</strong> 吗？
+            <br><br>
+            ${item.destination ? `<span style="color: #666;">目标文件夹: ${item.destination}</span>` : ''}
+        `;
+    } else if (item.type === 'folder') {
+        message.innerHTML = `
+            确定要删除监控文件夹 <strong style="color: #667eea;">"${item.name}"</strong> 吗？
+            <br><br>
+            <span style="color: #666;">路径: ${item.path}</span>
+            <br><br>
+            <span style="color: #e74c3c; font-size: 13px;">⚠️ 删除后将停止监控此文件夹</span>
+        `;
+    }
     
     // 显示模态框
     modal.style.display = 'flex';
     
-    // 保存规则ID到临时变量
-    appState.pendingDeleteRuleId = rule.id;
+    // 保存待删除项目
+    appState.pendingDeleteItem = item;
 }
 
 // 关闭删除确认模态框
 function closeDeleteConfirm() {
     document.getElementById('deleteConfirmModal').style.display = 'none';
-    appState.pendingDeleteRuleId = null;
+    appState.pendingDeleteItem = null;
 }
 
-// 执行删除规则
-async function executeDeleteRule() {
-    const ruleId = appState.pendingDeleteRuleId;
-    if (!ruleId) return;
-    
-    const rule = appState.rules.find(r => r.id === ruleId);
-    if (!rule) return;
+// 执行删除操作
+async function executeDelete() {
+    const item = appState.pendingDeleteItem;
+    if (!item) return;
     
     try {
-        await invoke('remove_rule', { ruleId });
-        showNotification(`规则 "${rule.name}" 已删除`, 'success');
-        addActivity(`🗑️ 删除规则: ${rule.name}`);
-        await loadRules();
-        await loadFolders(); // 重新加载文件夹以更新关联
+        if (item.type === 'rule') {
+            // 删除规则
+            await invoke('remove_rule', { ruleId: item.id });
+            showNotification(`规则 "${item.name}" 已删除`, 'success');
+            addActivity(`🗑️ 删除规则: ${item.name}`);
+            await loadRules();
+            await loadFolders(); // 重新加载文件夹以更新关联
+        } else if (item.type === 'folder') {
+            // 删除文件夹
+            await invoke('remove_folder', { folderId: item.id });
+            showNotification(`文件夹 "${item.name}" 已删除`, 'success');
+            addActivity(`🗑️ 删除文件夹: ${item.name}`);
+            await loadFolders();
+        }
+        
         updateStats();
         closeDeleteConfirm();
     } catch (error) {
-        console.error('删除规则失败:', error);
+        console.error('删除失败:', error);
         showNotification('删除失败', 'error');
     }
 }
@@ -2114,6 +2202,38 @@ async function clearProcessedFiles() {
     }
     
     updateStats();
+}
+
+// 选择目标文件夹
+async function selectTargetFolder() {
+    console.log('[文件夹选择] 点击浏览按钮');
+    try {
+        console.log('[文件夹选择] 调用后端命令...');
+        const selectedPath = await invoke('select_folder');
+        console.log('[文件夹选择] 后端返回:', selectedPath);
+        if (selectedPath) {
+            document.getElementById('targetFolder').value = selectedPath;
+            console.log('✓ 已选择文件夹:', selectedPath);
+            showNotification('已选择文件夹', 'success');
+        } else {
+            console.log('[文件夹选择] 用户取消选择');
+        }
+    } catch (error) {
+        console.error('[文件夹选择] 失败:', error);
+        showNotification('选择文件夹失败: ' + error, 'error');
+    }
+}
+
+// 打开文件夹
+async function openFolder(path) {
+    console.log('[打开文件夹] 路径:', path);
+    try {
+        await invoke('open_folder', { path });
+        console.log('✓ 已打开文件夹');
+    } catch (error) {
+        console.error('[打开文件夹] 失败:', error);
+        showNotification('无法打开文件夹: ' + error, 'error');
+    }
 }
 
 // ========== 通知系统 ==========
