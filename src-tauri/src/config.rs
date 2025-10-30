@@ -5,6 +5,22 @@ use std::fs;
 use std::path::Path;
 use tracing::{info, warn};
 
+/// 文件处理模式
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "lowercase")]
+pub enum ProcessingMode {
+    /// 自动处理
+    Auto,
+    /// 手动处理（需要确认）
+    Manual,
+}
+
+impl Default for ProcessingMode {
+    fn default() -> Self {
+        ProcessingMode::Manual
+    }
+}
+
 /// 监控文件夹配置
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct WatchFolder {
@@ -22,6 +38,10 @@ pub struct WatchFolder {
     
     /// 关联的规则 ID 列表
     pub rule_ids: Vec<String>,
+    
+    /// 文件处理模式（默认为手动）
+    #[serde(default)]
+    pub processing_mode: ProcessingMode,
 }
 
 /// 应用配置
@@ -203,6 +223,7 @@ impl AppConfig {
                     name: folder_name,
                     enabled: old_config.auto_start.unwrap_or(false),
                     rule_ids: old_config.rules.iter().map(|r| r.id.clone()).collect(),
+                    processing_mode: ProcessingMode::Manual,
                 });
             }
         }

@@ -29,7 +29,8 @@ const appState = {
     isFullscreen: false,  // 窗口是否处于全屏状态
     selectedRuleId: null,  // 选中的单个规则ID（用于拖拽文件到特定规则）
     selectedRuleIds: null,  // 选中的多个规则IDs（用于拖拽文件到多个规则）
-    pendingDeleteItem: null  // 待删除的项目 { type: 'rule'|'folder', id: string, name: string }
+    pendingDeleteItem: null,  // 待删除的项目 { type: 'rule'|'folder', id: string, name: string }
+    pendingFilesByFolder: {}  // 按文件夹分组的待处理文件队列 { folderId: [{ path, name }, ...] }
 };
 
 // 为规则生成字母编号
@@ -448,22 +449,21 @@ function setupBackendListeners() {
         const filePath = event.payload.file_path;
         const fileName = filePath.split('\\').pop() || filePath.split('/').pop();
         
-        console.log('[文件检测] 检测到文件:', fileName, '批量阈值:', appState.batchThreshold);
+        console.log('[文件检测] 检测到文件:', fileName);
         addActivity(`📥 检测到文件: ${fileName}`);
         
-        // 添加到批量队列
-        appState.pendingBatch.push({
-            path: filePath,
-            name: fileName
-        });
+        // 找到文件所属的文件夹
+        const folder = appState.folders.find(f => filePath.startsWith(f.path));
         
-        // 如果达到批量阈值，显示确认窗口
-        if (appState.pendingBatch.length >= appState.batchThreshold) {
-            console.log('[文件检测] 达到批量阈值，显示确认窗口');
-            showBatchConfirm();
-        } else {
-            // 未达到阈值，自动整理这个文件
-            console.log('[文件检测] 未达到阈值，自动整理文件');
+        if (!folder) {
+            console.warn('[文件检测] 未找到对应的监控文件夹');
+            return;
+        }
+        
+        // 根据文件夹的处理模式决定处理方式
+        if (folder.processing_mode === 'auto') {
+            // 自动处理模式：立即整理文件
+            console.log('[文件检测] 自动处理模式，立即整理');
             try {
                 const result = await invoke('process_file', { filePath });
                 if (result) {
@@ -479,13 +479,22 @@ function setupBackendListeners() {
                     console.log('[文件检测] 文件未匹配任何规则');
                     addActivity(`⚠️ 未匹配规则: ${fileName}`);
                 }
-                // 从批量队列中移除
-                appState.pendingBatch = appState.pendingBatch.filter(f => f.path !== filePath);
             } catch (error) {
                 console.error('[文件检测] 处理文件失败:', error);
                 addActivity(`❌ ${fileName} 处理失败: ${error}`, 'error');
-                appState.pendingBatch = appState.pendingBatch.filter(f => f.path !== filePath);
             }
+        } else {
+            // 手动处理模式：添加到待处理队列
+            console.log('[文件检测] 手动处理模式，加入待处理队列');
+            if (!appState.pendingFilesByFolder[folder.id]) {
+                appState.pendingFilesByFolder[folder.id] = [];
+            }
+            appState.pendingFilesByFolder[folder.id].push({
+                path: filePath,
+                name: fileName
+            });
+            // 更新文件夹列表显示
+            renderFolders();
         }
     });
     
@@ -1215,6 +1224,19 @@ function renderFolders() {
     
     folderList.innerHTML = appState.folders.map(folder => {
         const associatedRules = appState.rules.filter(r => folder.rule_ids.includes(r.id));
+        const pendingCount = (appState.pendingFilesByFolder[folder.id] || []).length;
+        
+        // 根据数量决定徽章颜色
+        let badgeClass = 'pending-badge';
+        if (pendingCount > 0) {
+            if (pendingCount <= 5) {
+                badgeClass += ' badge-low';
+            } else if (pendingCount <= 20) {
+                badgeClass += ' badge-medium';
+            } else {
+                badgeClass += ' badge-high';
+            }
+        }
         
         return `
             <div class="folder-card compact ${!folder.enabled ? 'disabled' : ''}" data-folder-id="${folder.id}">
@@ -1244,6 +1266,14 @@ function renderFolders() {
                         `).join('')
                         : '<span class="hint-text">未关联规则</span>'}
                 </div>
+                
+                ${pendingCount > 0 ? `
+                <div class="folder-pending">
+                    <button class="${badgeClass}" onclick="showFolderPendingFiles('${folder.id}')" title="点击查看待处理文件">
+                        ⏳ ${pendingCount}
+                    </button>
+                </div>
+                ` : '<div class="folder-pending"></div>'}
                 
                 <div class="folder-actions">
                     <button class="btn-icon" onclick="organizeNow('${folder.id}')" title="立即整理">
@@ -1277,6 +1307,27 @@ function renderFolders() {
             </div>
         `;
     }).join('');
+}
+
+// 显示文件夹的待处理文件
+async function showFolderPendingFiles(folderId) {
+    const folder = appState.folders.find(f => f.id === folderId);
+    if (!folder) {
+        showNotification('文件夹不存在', 'error');
+        return;
+    }
+    
+    const pendingFiles = appState.pendingFilesByFolder[folderId] || [];
+    if (pendingFiles.length === 0) {
+        showNotification('没有待处理文件', 'info');
+        return;
+    }
+    
+    console.log('[待处理文件] 显示文件夹待处理文件:', folder.name, pendingFiles.length);
+    
+    // 使用批量确认窗口显示待处理文件
+    appState.pendingBatch = [...pendingFiles];
+    showBatchConfirm();
 }
 
 // 立即整理文件夹
@@ -1580,9 +1631,11 @@ async function openFolderModal(folderId = null) {
         document.getElementById('folderPath').value = folder.path;
         document.getElementById('folderName').value = folder.name;
         document.getElementById('folderEnabled').checked = folder.enabled;
+        document.getElementById('processingMode').value = folder.processing_mode || 'manual';
     } else {
         // 新增模式
         title.textContent = '📁 添加文件夹';
+        document.getElementById('processingMode').value = 'manual'; // 默认手动处理
     }
     
     modal.style.display = 'flex';
@@ -1618,6 +1671,7 @@ async function saveFolder() {
     const path = document.getElementById('folderPath').value.trim();
     const name = document.getElementById('folderName').value.trim();
     const enabled = document.getElementById('folderEnabled').checked;
+    const processingMode = document.getElementById('processingMode').value;
     
     if (!path || !name) {
         showNotification('请填写完整信息', 'error');
@@ -1636,6 +1690,7 @@ async function saveFolder() {
         name,
         enabled,
         rule_ids: ruleIds,
+        processing_mode: processingMode,
     };
     
     try {
@@ -3026,6 +3081,17 @@ async function confirmBatch() {
     // 清除选中的规则ID(s)
     appState.selectedRuleId = null;
     appState.selectedRuleIds = null;
+    
+    // 清除已处理文件对应的待处理队列
+    for (const folderId in appState.pendingFilesByFolder) {
+        const filePaths = files.map(f => f.path);
+        appState.pendingFilesByFolder[folderId] = (appState.pendingFilesByFolder[folderId] || [])
+            .filter(f => !filePaths.includes(f.path));
+        // 如果队列为空，删除该键
+        if (appState.pendingFilesByFolder[folderId].length === 0) {
+            delete appState.pendingFilesByFolder[folderId];
+        }
+    }
     
     // 刷新界面
     await loadRules();    // 先加载规则
