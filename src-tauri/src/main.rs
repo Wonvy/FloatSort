@@ -682,87 +682,6 @@ fn read_file(path: String) -> Result<String, String> {
     Ok(content)
 }
 
-// Tauri 命令：立即整理文件夹
-#[tauri::command]
-fn organize_folder_now(folder_id: String, state: State<AppState>) -> Result<serde_json::Value, String> {
-    use std::fs;
-    use std::path::Path;
-    
-    let config = state.config.lock().map_err(|e| e.to_string())?.clone();
-    
-    // 查找文件夹
-    let folder = config.folders.iter()
-        .find(|f| f.id == folder_id)
-        .ok_or_else(|| "文件夹不存在".to_string())?;
-    
-    info!("开始立即整理文件夹: {} ({})", folder.name, folder.path);
-    
-    let path = Path::new(&folder.path);
-    if !path.exists() || !path.is_dir() {
-        return Err("文件夹不存在或不是目录".to_string());
-    }
-    
-    // 获取该文件夹关联的规则
-    let applicable_rules: Vec<_> = config.rules.iter()
-        .filter(|r| folder.rule_ids.contains(&r.id))
-        .cloned()
-        .collect();
-    
-    if applicable_rules.is_empty() {
-        return Err("该文件夹未关联任何规则".to_string());
-    }
-    
-    let mut organized_count = 0;
-    let mut failed_count = 0;
-    
-    // 读取文件夹中的所有文件
-    match fs::read_dir(path) {
-        Ok(entries) => {
-            for entry in entries {
-                if let Ok(entry) = entry {
-                    let entry_path = entry.path();
-                    
-                    // 只处理文件
-                    if entry_path.is_file() {
-                        match file_ops::get_file_info(&entry_path) {
-                            Ok(file_info) => {
-                                // 使用规则引擎处理文件
-                                match file_ops::organize_file(&file_info, &applicable_rules) {
-                                    Ok(Some(_)) => {
-                                        organized_count += 1;
-                                        info!("✓ 文件已整理: {}", file_info.name);
-                                    }
-                                    Ok(None) => {
-                                        // 文件不匹配任何规则，跳过
-                                    }
-                                    Err(e) => {
-                                        failed_count += 1;
-                                        warn!("✗ 整理文件失败: {} - {}", file_info.name, e);
-                                    }
-                                }
-                            }
-                            Err(e) => {
-                                failed_count += 1;
-                                warn!("✗ 获取文件信息失败: {:?} - {}", entry_path, e);
-                            }
-                        }
-                    }
-                }
-            }
-        }
-        Err(e) => {
-            return Err(format!("读取文件夹失败: {}", e));
-        }
-    }
-    
-    info!("立即整理完成: {} 个文件已整理，{} 个失败", organized_count, failed_count);
-    
-    Ok(serde_json::json!({
-        "organized": organized_count,
-        "failed": failed_count
-    }))
-}
-
 // Tauri 命令：退出应用程序
 #[tauri::command]
 fn exit_app(app_handle: tauri::AppHandle) -> Result<(), String> {
@@ -878,7 +797,6 @@ fn main() {
             import_config,
             save_file,
             read_file,
-            organize_folder_now,
             exit_app
         ])
         .setup(|_app| {

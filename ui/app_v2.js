@@ -1405,20 +1405,6 @@ function renderFolders() {
                 ` : '<div class="folder-pending"></div>'}
                 
                 <div class="folder-actions">
-                    <button class="btn-icon" onclick="organizeNow('${folder.id}')" title="立即整理">
-                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                            <path d="M21 12c0 1.2-4.03 6-9 6s-9-4.8-9-6c0-1.2 4.03-6 9-6s9 4.8 9 6Z"></path>
-                            <circle cx="12" cy="12" r="3"></circle>
-                            <path d="M12 2v4"></path>
-                            <path d="M12 18v4"></path>
-                            <path d="m4.93 4.93 2.83 2.83"></path>
-                            <path d="m16.24 16.24 2.83 2.83"></path>
-                            <path d="M2 12h4"></path>
-                            <path d="M18 12h4"></path>
-                            <path d="m4.93 19.07 2.83-2.83"></path>
-                            <path d="m16.24 7.76 2.83-2.83"></path>
-                        </svg>
-                    </button>
                     <button class="btn-icon" onclick="editFolder('${folder.id}')" title="编辑">
                         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                             <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
@@ -1457,31 +1443,6 @@ async function showFolderPendingFiles(folderId) {
     // 使用批量确认窗口显示待处理文件
     appState.pendingBatch = [...pendingFiles];
     showBatchConfirm();
-}
-
-// 立即整理文件夹
-async function organizeNow(folderId) {
-    try {
-        const folder = appState.folders.find(f => f.id === folderId);
-        if (!folder) {
-            showNotification('文件夹不存在', 'error');
-            return;
-        }
-        
-        showNotification(`正在整理 "${folder.name}"...`, 'info');
-        
-        // 调用后端进行整理
-        const result = await invoke('organize_folder_now', { folderId });
-        
-        showNotification(`整理完成: ${result.organized}个文件已整理`, 'success');
-        addActivity(`🗂️ 立即整理: ${folder.name} - ${result.organized}个文件`);
-        
-        // 刷新统计
-        updateStats();
-    } catch (error) {
-        console.error('立即整理失败:', error);
-        showNotification(`整理失败: ${error}`, 'error');
-    }
 }
 
 // ========== 渲染规则列表 ==========
