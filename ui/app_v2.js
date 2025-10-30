@@ -260,6 +260,38 @@ function setupEventListeners() {
     document.getElementById('saveFolderBtn').addEventListener('click', saveFolder);
     document.getElementById('browseFolderBtn').addEventListener('click', browseFolder);
     
+    // 触发模式切换
+    document.querySelectorAll('input[name="triggerMode"]').forEach(radio => {
+        radio.addEventListener('change', (e) => {
+            const scheduledConfig = document.getElementById('scheduledConfig');
+            if (e.target.value === 'scheduled') {
+                scheduledConfig.style.display = 'block';
+            } else {
+                scheduledConfig.style.display = 'none';
+            }
+        });
+    });
+    
+    // 调度类型切换
+    document.querySelectorAll('input[name="scheduleType"]').forEach(radio => {
+        radio.addEventListener('change', (e) => {
+            // 隐藏所有配置
+            document.getElementById('intervalConfig').style.display = 'none';
+            document.getElementById('dailyConfig').style.display = 'none';
+            document.getElementById('weeklyConfig').style.display = 'none';
+            
+            // 显示选中的配置
+            const selectedType = e.target.value;
+            if (selectedType === 'interval') {
+                document.getElementById('intervalConfig').style.display = 'block';
+            } else if (selectedType === 'daily') {
+                document.getElementById('dailyConfig').style.display = 'block';
+            } else if (selectedType === 'weekly') {
+                document.getElementById('weeklyConfig').style.display = 'block';
+            }
+        });
+    });
+    
     // 规则管理
     document.getElementById('addRuleBtn').addEventListener('click', () => openRuleModal());
     document.getElementById('closeRuleModal').addEventListener('click', closeRuleModal);
@@ -1762,11 +1794,44 @@ async function openFolderModal(folderId = null) {
         document.getElementById('folderPath').value = folder.path;
         document.getElementById('folderName').value = folder.name;
         document.getElementById('folderEnabled').checked = folder.enabled;
-        document.getElementById('processingMode').value = folder.processing_mode || 'manual';
+        
+        // 设置触发模式（兼容旧版本）
+        let triggerMode = folder.trigger_mode || 'manual';
+        if (!folder.trigger_mode && folder.processing_mode) {
+            triggerMode = folder.processing_mode === 'auto' ? 'immediate' : 'manual';
+        }
+        document.querySelector(`input[name="triggerMode"][value="${triggerMode}"]`).checked = true;
+        
+        // 显示/隐藏调度配置
+        const scheduledConfig = document.getElementById('scheduledConfig');
+        if (triggerMode === 'scheduled') {
+            scheduledConfig.style.display = 'block';
+            
+            // 设置调度类型
+            const scheduleType = folder.schedule_type || 'interval';
+            document.querySelector(`input[name="scheduleType"][value="${scheduleType}"]`).checked = true;
+            
+            // 设置调度详细配置
+            document.getElementById('intervalConfig').style.display = scheduleType === 'interval' ? 'block' : 'none';
+            document.getElementById('dailyConfig').style.display = scheduleType === 'daily' ? 'block' : 'none';
+            document.getElementById('weeklyConfig').style.display = scheduleType === 'weekly' ? 'block' : 'none';
+            
+            if (scheduleType === 'interval') {
+                document.getElementById('scheduleInterval').value = folder.schedule_interval_minutes || 30;
+            } else if (scheduleType === 'daily') {
+                document.getElementById('scheduleDailyTime').value = folder.schedule_daily_time || '09:00';
+            } else if (scheduleType === 'weekly') {
+                document.getElementById('scheduleWeeklyDay').value = folder.schedule_weekly_day || 1;
+                document.getElementById('scheduleWeeklyTime').value = folder.schedule_weekly_time || '09:00';
+            }
+        } else {
+            scheduledConfig.style.display = 'none';
+        }
     } else {
         // 新增模式
         title.textContent = '📁 添加文件夹';
-        document.getElementById('processingMode').value = 'manual'; // 默认手动处理
+        document.querySelector('input[name="triggerMode"][value="manual"]').checked = true;
+        document.getElementById('scheduledConfig').style.display = 'none';
     }
     
     modal.style.display = 'flex';
@@ -1802,11 +1867,36 @@ async function saveFolder() {
     const path = document.getElementById('folderPath').value.trim();
     const name = document.getElementById('folderName').value.trim();
     const enabled = document.getElementById('folderEnabled').checked;
-    const processingMode = document.getElementById('processingMode').value;
     
     if (!path || !name) {
         showNotification('请填写完整信息', 'error');
         return;
+    }
+    
+    // 获取触发模式
+    const triggerMode = document.querySelector('input[name="triggerMode"]:checked').value;
+    
+    // 构建文件夹对象
+    const folderData = {
+        path,
+        name,
+        enabled,
+        trigger_mode: triggerMode
+    };
+    
+    // 如果是定时执行，收集调度配置
+    if (triggerMode === 'scheduled') {
+        const scheduleType = document.querySelector('input[name="scheduleType"]:checked').value;
+        folderData.schedule_type = scheduleType;
+        
+        if (scheduleType === 'interval') {
+            folderData.schedule_interval_minutes = parseInt(document.getElementById('scheduleInterval').value);
+        } else if (scheduleType === 'daily') {
+            folderData.schedule_daily_time = document.getElementById('scheduleDailyTime').value;
+        } else if (scheduleType === 'weekly') {
+            folderData.schedule_weekly_day = parseInt(document.getElementById('scheduleWeeklyDay').value);
+            folderData.schedule_weekly_time = document.getElementById('scheduleWeeklyTime').value;
+        }
     }
     
     // 获取选中的规则（按照DOM顺序，体现排序结果）
@@ -1817,11 +1907,8 @@ async function saveFolder() {
     
     const folder = {
         id: appState.editingFolderId || `folder_${Date.now()}`,
-        path,
-        name,
-        enabled,
+        ...folderData,
         rule_ids: ruleIds,
-        processing_mode: processingMode,
     };
     
     try {

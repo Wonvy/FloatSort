@@ -1438,6 +1438,132 @@ input[readonly] {
     cursor: pointer;
 }
 
+/* ========== 触发模式选择器 ========== */
+.trigger-mode-selector {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    padding: 12px;
+    background: #f9fafb;
+    border: 1px solid #e5e7eb;
+    border-radius: 6px;
+}
+
+.trigger-option {
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+    padding: 10px 12px;
+    background: white;
+    border: 2px solid #e5e7eb;
+    border-radius: 6px;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.trigger-option:hover {
+    border-color: #667eea;
+    background: #f8f9ff;
+}
+
+.trigger-option input[type="radio"] {
+    margin-top: 2px;
+    width: 18px;
+    height: 18px;
+    cursor: pointer;
+}
+
+.trigger-option input[type="radio"]:checked ~ .trigger-label {
+    color: #667eea;
+    font-weight: 600;
+}
+
+.trigger-option input[type="radio"]:checked {
+    accent-color: #667eea;
+}
+
+.trigger-option > div {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
+.trigger-label {
+    font-size: 14px;
+    font-weight: 500;
+    color: #1f2937;
+    display: block;
+}
+
+.trigger-desc {
+    font-size: 12px;
+    color: #6b7280;
+    display: block;
+}
+
+/* ========== 调度配置 ========== */
+.schedule-config {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    padding: 12px;
+    background: white;
+    border: 1px solid #e5e7eb;
+    border-radius: 6px;
+}
+
+.schedule-option {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 0;
+    cursor: pointer;
+}
+
+.schedule-option input[type="radio"] {
+    width: 16px;
+    height: 16px;
+    cursor: pointer;
+    accent-color: #667eea;
+}
+
+.schedule-label {
+    font-size: 13px;
+    font-weight: 500;
+    color: #374151;
+}
+
+.schedule-details {
+    padding: 8px 0 8px 24px;
+    margin-bottom: 8px;
+}
+
+.schedule-details label {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 13px;
+    color: #4b5563;
+}
+
+.schedule-details select,
+.schedule-details input[type="time"] {
+    padding: 6px 10px;
+    border: 1px solid #d1d5db;
+    border-radius: 4px;
+    font-size: 13px;
+    background: white;
+}
+
+.schedule-details select {
+    cursor: pointer;
+}
+
+.schedule-details input[type="time"] {
+    font-family: inherit;
+}
+
 /* ========== 规则排序（上下箭头） ========== */
 .rule-sort-item {
     display: flex;
