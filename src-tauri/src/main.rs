@@ -17,7 +17,7 @@ use std::sync::{Arc, Mutex};
 use std::collections::HashSet;
 use std::fs;
 use tauri::{State, SystemTray, SystemTrayMenu, SystemTrayMenuItem, CustomMenuItem, SystemTrayEvent, Manager};
-use tracing::{info, warn};
+use tracing::info;
 use tracing_subscriber;
 use chrono::Local;
 

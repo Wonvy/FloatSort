@@ -261,14 +261,17 @@ window.toggleGroup = async function(destination) {
     // 如果全部启用，则全部禁用；否则全部启用
     const newState = !allEnabled;
     
-    rulesInGroup.forEach(rule => {
+    // 更新规则状态并批量保存
+    for (const rule of rulesInGroup) {
         rule.enabled = newState;
-    });
+        try {
+            await invoke('update_rule', { ruleId: rule.id, rule });
+        } catch (error) {
+            console.error(`更新规则 ${rule.name} 失败:`, error);
+        }
+    }
     
-    // 保存所有规则
-    await saveAllRules();
     renderRulesGrouped();
-    
     addActivity(`${newState ? '✅ 启用' : '❌ 禁用'}组 [${destination || '(未设置)'}] 的所有规则`);
 };
 
@@ -410,18 +413,5 @@ function getGroupedRules() {
         groups.get(dest).rules.push(rule);
     });
     return Array.from(groups.values());
-}
-
-// 保存所有规则
-async function saveAllRules() {
-    try {
-        for (const rule of appState.rules) {
-            await invoke('update_rule', { ruleId: rule.id, rule });
-        }
-        await loadConfig();
-    } catch (error) {
-        console.error('保存规则失败:', error);
-        showNotification(`保存失败: ${error}`, 'error');
-    }
 }
 
