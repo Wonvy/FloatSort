@@ -1210,12 +1210,27 @@ async function loadConfig() {
             
             await appWindow.setSize(new window.__TAURI__.window.LogicalSize(width, height));
             console.log(`✓ 窗口大小已恢复: ${width}x${height}`);
+            
+            // 窗口大小调整完成后显示窗口（避免启动时闪烁）
+            await appWindow.show();
+            console.log('✓ 窗口已显示');
         }
     } catch (error) {
         console.error('加载配置失败:', error);
         // 使用默认值
         appState.batchThreshold = 1;
         appState.animation = 'none';
+        
+        // 即使加载失败也要显示窗口
+        if (!appState.isMiniMode) {
+            try {
+                const { appWindow } = window.__TAURI__.window;
+                await appWindow.show();
+                console.log('✓ 窗口已显示（使用默认值）');
+            } catch (showError) {
+                console.error('显示窗口失败:', showError);
+            }
+        }
         appState.animationSpeed = 'normal';
     }
 }
@@ -3910,8 +3925,18 @@ async function exitMiniMode() {
         await appWindow.setSize(new window.__TAURI__.window.LogicalSize(width, height));
         await appWindow.setResizable(true);
         console.log(`✓ 恢复窗口尺寸: ${width}x${height}`);
+        
+        // 窗口大小调整完成后显示窗口（避免启动时闪烁）
+        await appWindow.show();
+        console.log('✓ 窗口已显示');
     } catch (error) {
         console.error('恢复窗口大小失败:', error);
+        // 即使失败也要显示窗口
+        try {
+            await appWindow.show();
+        } catch (showError) {
+            console.error('显示窗口失败:', showError);
+        }
     }
     
     // 重新启动位置监听
