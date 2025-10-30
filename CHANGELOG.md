@@ -138,6 +138,6 @@
 
 ---
 
-[未发布]: https://github.com/yourusername/FloatSort/compare/v0.1.0...HEAD
-[0.1.0]: https://github.com/yourusername/FloatSort/releases/tag/v0.1.0
+[未发布]: https://github.com/Wonvy/FloatSort/compare/v0.1.0...HEAD
+[0.1.0]: https://github.com/Wonvy/FloatSort/releases/tag/v0.1.0
 

@@ -8,7 +8,7 @@
 
 如果您发现了 bug，请：
 
-1. 在 [Issues](https://github.com/yourusername/FloatSort/issues) 中搜索，确认问题未被报告
+1. 在 [Issues](https://github.com/Wonvy/FloatSort/issues) 中搜索，确认问题未被报告
 2. 创建新 Issue，包含：
    - 清晰的标题
    - 详细的问题描述
@@ -21,7 +21,7 @@
 
 欢迎提出新功能建议：
 
-1. 在 [Discussions](https://github.com/yourusername/FloatSort/discussions) 中讨论
+1. 在 [Discussions](https://github.com/Wonvy/FloatSort/discussions) 中讨论
 2. 说明功能的使用场景和价值
 3. 如果可能，提供设计方案或草图
 
@@ -257,7 +257,7 @@ cargo test -- --nocapture
 4. ✅ 支持规则导入/导出
 5. ✅ 优化性能和内存占用
 
-查看 [Issues](https://github.com/yourusername/FloatSort/issues) 了解更多。
+查看 [Issues](https://github.com/Wonvy/FloatSort/issues) 了解更多。
 
 ## 💡 开发提示
 
@@ -310,8 +310,8 @@ cargo clean
 
 ## 📞 联系方式
 
-- GitHub Issues: [问题追踪](https://github.com/yourusername/FloatSort/issues)
-- Discussions: [讨论区](https://github.com/yourusername/FloatSort/discussions)
+- GitHub Issues: [问题追踪](https://github.com/Wonvy/FloatSort/issues)
+- Discussions: [讨论区](https://github.com/Wonvy/FloatSort/discussions)
 - Email: dev@floatsort.example.com
 
 ## 📄 许可证

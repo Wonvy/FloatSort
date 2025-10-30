@@ -299,9 +299,9 @@ xattr -d com.apple.quarantine /Applications/FloatSort.app
 遇到问题？
 
 1. 查看 [常见问题](docs/USER_GUIDE.md#常见问题)
-2. 搜索 [Issues](https://github.com/yourusername/FloatSort/issues)
-3. 创建新 [Issue](https://github.com/yourusername/FloatSort/issues/new)
-4. 加入 [讨论区](https://github.com/yourusername/FloatSort/discussions)
+2. 搜索 [Issues](https://github.com/Wonvy/FloatSort/issues)
+3. 创建新 [Issue](https://github.com/Wonvy/FloatSort/issues/new)
+4. 加入 [讨论区](https://github.com/Wonvy/FloatSort/discussions)
 
 ---
 

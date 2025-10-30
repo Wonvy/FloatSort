@@ -195,13 +195,13 @@ chmod +x FloatSort_0.1.0_amd64.AppImage
 - 📘 [完整用户指南](docs/USER_GUIDE.md)
 - 🔧 [开发文档](docs/DEVELOPMENT.md)
 - 🏗️ [构建指南](docs/BUILD.md)
-- 🐛 [报告问题](https://github.com/yourusername/FloatSort/issues)
+- 🐛 [报告问题](https://github.com/Wonvy/FloatSort/issues)
 
 ## ❓ 获取帮助
 
 - **文档**: 查看 `docs/` 目录
-- **Issues**: [GitHub Issues](https://github.com/yourusername/FloatSort/issues)
-- **讨论**: [GitHub Discussions](https://github.com/yourusername/FloatSort/discussions)
+- **Issues**: [GitHub Issues](https://github.com/Wonvy/FloatSort/issues)
+- **讨论**: [GitHub Discussions](https://github.com/Wonvy/FloatSort/discussions)
 
 ---
 

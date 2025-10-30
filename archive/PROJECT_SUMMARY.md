@@ -316,10 +316,10 @@ strip = true           # 移除调试符号
 
 ## 📞 支持和反馈
 
-- 🐛 [报告 Bug](https://github.com/yourusername/FloatSort/issues)
-- 💡 [功能建议](https://github.com/yourusername/FloatSort/discussions)
-- 📖 [文档](https://github.com/yourusername/FloatSort/wiki)
-- 💬 [讨论区](https://github.com/yourusername/FloatSort/discussions)
+- 🐛 [报告 Bug](https://github.com/Wonvy/FloatSort/issues)
+- 💡 [功能建议](https://github.com/Wonvy/FloatSort/discussions)
+- 📖 [文档](https://github.com/Wonvy/FloatSort/wiki)
+- 💬 [讨论区](https://github.com/Wonvy/FloatSort/discussions)
 
 ## 📄 许可证
 

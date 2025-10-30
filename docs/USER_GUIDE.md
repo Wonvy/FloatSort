@@ -14,7 +14,7 @@
 ### 安装
 
 1. **下载应用**
-   - 从 [Releases](https://github.com/yourusername/FloatSort/releases) 页面下载对应平台的安装包
+   - 从 [Releases](https://github.com/Wonvy/FloatSort/releases) 页面下载对应平台的安装包
    - Windows: `.msi` 文件
    - macOS: `.dmg` 文件
    - Linux: `.deb` 或 `.AppImage` 文件
@@ -386,8 +386,8 @@
 
 ## 获取帮助
 
-- 📖 [完整文档](https://github.com/yourusername/FloatSort/wiki)
-- 🐛 [报告问题](https://github.com/yourusername/FloatSort/issues)
-- 💬 [讨论区](https://github.com/yourusername/FloatSort/discussions)
+- 📖 [完整文档](https://github.com/Wonvy/FloatSort/wiki)
+- 🐛 [报告问题](https://github.com/Wonvy/FloatSort/issues)
+- 💬 [讨论区](https://github.com/Wonvy/FloatSort/discussions)
 - 📧 Email: support@floatsort.example.com
 
