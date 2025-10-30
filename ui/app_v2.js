@@ -32,7 +32,8 @@ const appState = {
     selectedRuleId: null,  // 选中的单个规则ID（用于拖拽文件到特定规则）
     selectedRuleIds: null,  // 选中的多个规则IDs（用于拖拽文件到多个规则）
     pendingDeleteItem: null,  // 待删除的项目 { type: 'rule'|'folder', id: string, name: string }
-    pendingFilesByFolder: {}  // 按文件夹分组的待处理文件队列 { folderId: [{ path, name }, ...] }
+    pendingFilesByFolder: {},  // 按文件夹分组的待处理文件队列 { folderId: [{ path, name }, ...] }
+    collapsedGroups: new Set(),  // 折叠的规则组（存储目标路径）
 };
 
 // 为规则生成字母编号
@@ -1447,6 +1448,13 @@ async function showFolderPendingFiles(folderId) {
 
 // ========== 渲染规则列表 ==========
 function renderRules() {
+    // 使用分组渲染功能（在rule_groups.js中定义）
+    if (typeof renderRulesGrouped === 'function') {
+        renderRulesGrouped();
+        return;
+    }
+    
+    // 备份：如果分组模块未加载，使用原始渲染
     const rulesList = document.getElementById('rulesList');
     
     if (appState.rules.length === 0) {

@@ -2679,6 +2679,131 @@ input[readonly] {
     color: #fff;
 }
 
+/* ========== 规则分组样式 ========== */
+.rule-group {
+    margin-bottom: 16px;
+    border: 1px solid #e5e7eb;
+    border-radius: 8px;
+    overflow: hidden;
+    background: #fff;
+}
+
+.rule-group-header {
+    display: grid;
+    grid-template-columns: 24px 1fr auto auto 38px;
+    align-items: center;
+    gap: 12px;
+    padding: 12px 16px;
+    background: linear-gradient(135deg, #f9fafb 0%, #f3f4f6 100%);
+    border-bottom: 1px solid #e5e7eb;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.rule-group-header:hover {
+    background: linear-gradient(135deg, #f3f4f6 0%, #e5e7eb 100%);
+}
+
+.rule-group-header.disabled {
+    opacity: 0.5;
+}
+
+.group-collapse-btn {
+    width: 24px;
+    height: 24px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: none;
+    border: none;
+    cursor: pointer;
+    color: #6b7280;
+    transition: transform 0.2s, color 0.2s;
+    padding: 0;
+}
+
+.group-collapse-btn:hover {
+    color: #667eea;
+}
+
+.group-collapse-btn svg {
+    transition: transform 0.2s;
+}
+
+.group-collapse-btn svg.expanded {
+    transform: rotate(90deg);
+}
+
+.group-info {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.group-destination {
+    font-size: 14px;
+    font-weight: 600;
+    letter-spacing: 0.3px;
+}
+
+.group-count {
+    font-size: 12px;
+    color: #9ca3af;
+    padding: 2px 8px;
+    background: #fff;
+    border-radius: 12px;
+    font-weight: 500;
+}
+
+.group-order-controls {
+    display: flex;
+    gap: 4px;
+    align-items: center;
+}
+
+.group-actions {
+    display: flex;
+    gap: 4px;
+}
+
+.rule-group-content {
+    max-height: 2000px;
+    overflow: hidden;
+    transition: max-height 0.3s ease-out, opacity 0.3s ease-out;
+    opacity: 1;
+}
+
+.rule-group-content.collapsed {
+    max-height: 0;
+    opacity: 0;
+}
+
+.rule-card.in-group {
+    border: none;
+    border-radius: 0;
+    border-bottom: 1px solid #f3f4f6;
+    margin: 0;
+}
+
+.rule-card.in-group:last-child {
+    border-bottom: none;
+}
+
+.rule-card.in-group:hover {
+    background: #fafbfc;
+}
+
+/* 部分启用状态的切换按钮 */
+.rule-toggle.partial {
+    background: linear-gradient(135deg, #667eea 50%, #ddd 50%);
+}
+
+.rule-toggle.partial::before {
+    content: '−';
+    color: #fff;
+    font-weight: bold;
+}
+
 /* ========== 响应式布局优化 ========== */
 /* 小窗口优化 - 只显示关键信息 */
 @media (max-width: 600px) {
@@ -2707,6 +2832,16 @@ input[readonly] {
     
     .rule-destination-label {
         font-size: 10px;
+    }
+    
+    /* 分组在小窗口的适配 */
+    .rule-group-header {
+        grid-template-columns: 24px 1fr auto 38px;
+        padding: 10px 12px;
+    }
+    
+    .group-order-controls {
+        display: none;
     }
 }
 
