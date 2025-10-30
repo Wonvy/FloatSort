@@ -74,6 +74,17 @@ fn save_animation_settings(animation: String, animation_speed: String, state: St
     Ok(())
 }
 
+// Tauri 命令：保存文件稳定性设置
+#[tauri::command]
+fn save_stability_settings(file_stability_delay: u32, file_stability_checks: u32, state: State<AppState>) -> Result<(), String> {
+    let mut config = state.config.lock().map_err(|e| e.to_string())?;
+    config.file_stability_delay = file_stability_delay;
+    config.file_stability_checks = file_stability_checks;
+    config.save_to_file("data/config.json").map_err(|e| e.to_string())?;
+    info!("文件稳定性设置已保存: 延迟{}秒, {}次检查", file_stability_delay, file_stability_checks);
+    Ok(())
+}
+
 // Tauri 命令：添加规则
 #[tauri::command]
 fn add_rule(rule: Rule, state: State<AppState>) -> Result<(), String> {
@@ -368,11 +379,13 @@ fn stop_monitoring(state: State<AppState>) -> Result<(), String> {
 // Tauri 命令：手动整理文件
 #[tauri::command]
 async fn process_file(path: String, state: State<'_, AppState>) -> Result<String, String> {
+    info!("📋 [自动处理] 开始处理文件: {}", path);
+    
     // 检查文件是否已处理过
     {
         let processed = state.processed_files.lock().map_err(|e| e.to_string())?;
         if processed.contains(&path) {
-            info!("文件已处理过，跳过: {}", path);
+            info!("⏭️ 文件已处理过，跳过: {}", path);
             return Ok(String::new()); // 返回空字符串表示跳过
         }
     }
@@ -611,6 +624,21 @@ fn get_activity_logs() -> Result<Vec<String>, String> {
     Ok(lines)
 }
 
+// Tauri 命令：清空活动日志
+#[tauri::command]
+fn clear_activity_logs() -> Result<(), String> {
+    let log_file_name = format!("log/floatsort_{}.log", Local::now().format("%Y-%m-%d"));
+    
+    if std::path::Path::new(&log_file_name).exists() {
+        // 清空日志文件内容（保留文件）
+        fs::write(&log_file_name, "")
+            .map_err(|e| format!("清空日志文件失败: {}", e))?;
+        info!("活动日志已清空");
+    }
+    
+    Ok(())
+}
+
 // Tauri 命令：导出配置
 #[tauri::command]
 fn export_config(state: State<AppState>) -> Result<serde_json::Value, String> {
@@ -811,6 +839,7 @@ fn main() {
             save_config,
             save_window_size,
             save_animation_settings,
+            save_stability_settings,
             add_rule,
             get_rules,
             remove_rule,
@@ -836,6 +865,7 @@ fn main() {
             hide_to_tray,
             show_from_tray,
             get_activity_logs,
+            clear_activity_logs,
             export_config,
             import_config,
             save_file,

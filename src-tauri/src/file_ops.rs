@@ -93,9 +93,17 @@ pub fn organize_single_file(file_path: &str, rules: &[Rule]) -> Result<String> {
     let path = Path::new(file_path);
     let file_info = get_file_info(path)?;
 
+    info!("正在检查文件是否匹配规则: {}", file_path);
+    
     match organize_file(&file_info, rules)? {
-        Some(new_path) => Ok(new_path),
-        None => Ok("文件未匹配任何规则".to_string()),
+        Some(new_path) => {
+            info!("✓ 文件已整理: {} -> {}", file_path, new_path);
+            Ok(new_path)
+        },
+        None => {
+            info!("⚠️ 文件未匹配任何规则，跳过: {}", file_path);
+            Ok("文件未匹配任何规则".to_string())
+        },
     }
 }
 

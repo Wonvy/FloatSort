@@ -25,6 +25,8 @@ const appState = {
     isDragging: false,  // 窗口是否正在拖拽中
     animation: 'none',  // 动画效果: none, fade, slide
     animationSpeed: 'normal',  // 动画速度: fast(150ms), normal(300ms), slow(500ms)
+    fileStabilityDelay: 3,  // 文件稳定性检查延迟（秒）
+    fileStabilityChecks: 2,  // 文件稳定性检查次数
     processedFiles: new Set(),  // 记录已处理过的文件路径，避免重复处理
     isFullscreen: false,  // 窗口是否处于全屏状态
     selectedRuleId: null,  // 选中的单个规则ID（用于拖拽文件到特定规则）
@@ -74,10 +76,13 @@ function initializeApp() {
     // setupCollapseExpand(); // 已禁用：不再需要窗口折叠功能
     // startPositionMonitoring(); // 已禁用：不再需要窗口折叠功能
     loadAppData();
-    loadActivityLogs();
+    // loadActivityLogs();  // 已禁用：改为使用前端实时日志
     
-    // 每10秒刷新一次日志
-    setInterval(loadActivityLogs, 10000);
+    // ❌ 移除定时刷新：会覆盖前端添加的实时日志
+    // setInterval(loadActivityLogs, 10000);
+    
+    // 添加启动日志
+    addActivity('🚀 <strong>FloatSort 已启动</strong>', 'info');
     
     console.log('✓ FloatSort V2 已就绪');
 }
@@ -321,6 +326,18 @@ function setupEventListeners() {
         console.log(`[设置] 动画速度已更改为: ${e.target.value}`);
     });
     
+    document.getElementById('stabilityDelaySelect').addEventListener('change', (e) => {
+        appState.fileStabilityDelay = parseInt(e.target.value);
+        saveStabilitySettings();
+        console.log(`[设置] 文件稳定性延迟已更改为: ${e.target.value}秒`);
+    });
+    
+    document.getElementById('stabilityChecksSelect').addEventListener('change', (e) => {
+        appState.fileStabilityChecks = parseInt(e.target.value);
+        saveStabilitySettings();
+        console.log(`[设置] 文件稳定性检查次数已更改为: ${e.target.value}次`);
+    });
+    
     // 清空活动日志
     document.getElementById('clearActivityBtn').addEventListener('click', clearActivity);
     document.getElementById('clearProcessedBtn').addEventListener('click', clearProcessedFiles);
@@ -486,6 +503,8 @@ function setupBackendListeners() {
         } else {
             // 手动处理模式：添加到待处理队列
             console.log('[文件检测] 手动处理模式，加入待处理队列');
+            addActivity(`⏳ <strong>${fileName}</strong> 已加入待处理队列（${folder.name}）`, 'info');
+            
             if (!appState.pendingFilesByFolder[folder.id]) {
                 appState.pendingFilesByFolder[folder.id] = [];
             }
@@ -563,6 +582,8 @@ function setupBackendListeners() {
     // 监听窗口焦点事件（从托盘恢复时）
     listen('tauri://focus', async () => {
         console.log('[窗口] 窗口获得焦点');
+        addActivity('▶️ 窗口从托盘恢复', 'info');
+        
         // 如果窗口是折叠状态，自动展开
         if (appState.isCollapsed) {
             console.log('[窗口] 从托盘恢复，自动展开窗口');
@@ -1154,14 +1175,23 @@ async function loadConfig() {
         appState.animation = config.animation || 'none';
         appState.animationSpeed = config.animation_speed || 'normal';
         
+        // 加载文件稳定性检查设置
+        appState.fileStabilityDelay = config.file_stability_delay || 3;
+        appState.fileStabilityChecks = config.file_stability_checks || 2;
+        
         // 更新UI中的下拉列表选项
         const animationSelect = document.getElementById('animationSelect');
         const speedSelect = document.getElementById('animationSpeedSelect');
+        const stabilityDelaySelect = document.getElementById('stabilityDelaySelect');
+        const stabilityChecksSelect = document.getElementById('stabilityChecksSelect');
         
         if (animationSelect) animationSelect.value = appState.animation;
         if (speedSelect) speedSelect.value = appState.animationSpeed;
+        if (stabilityDelaySelect) stabilityDelaySelect.value = appState.fileStabilityDelay.toString();
+        if (stabilityChecksSelect) stabilityChecksSelect.value = appState.fileStabilityChecks.toString();
         
         console.log(`✓ 动画设置: ${appState.animation} (${appState.animationSpeed})`);
+        console.log(`✓ 文件稳定性检查: 延迟${appState.fileStabilityDelay}秒, ${appState.fileStabilityChecks}次检查`);
         
         // 恢复窗口大小（仅在完整模式下）
         if (!appState.isMiniMode) {
@@ -1566,6 +1596,29 @@ window.moveRuleDown = async function(index) {
     addActivity(`↓ 规则 [${temp.name}] 已下移`);
 };
 
+// 从文件夹移除关联规则
+window.removeFolderRule = async function(ruleId) {
+    if (!appState.editingFolderId) return;
+    
+    const rule = appState.rules.find(r => r.id === ruleId);
+    if (!rule) return;
+    
+    // 显示确认对话框
+    if (!confirm(`确定要将规则"${rule.name}"从此文件夹的关联中移除吗？\n\n移除后，该规则将不再应用于此文件夹中的文件。\n规则本身不会被删除。`)) {
+        return;
+    }
+    
+    // 取消勾选对应的复选框
+    const checkbox = document.querySelector(`#folderRules input[value="${ruleId}"]`);
+    if (checkbox) {
+        checkbox.checked = false;
+    }
+    
+    addActivity(`🔗 已将规则 [${rule.name}] 从文件夹关联中移除`, 'info');
+    
+    console.log(`[规则移除] 已取消关联规则: ${rule.name}`);
+};
+
 // 保存规则顺序到后端
 async function saveRulesOrder() {
     try {
@@ -1614,17 +1667,28 @@ async function openFolderModal(folderId = null) {
                     <input type="checkbox" value="${rule.id}" ${folderId && appState.folders.find(f => f.id === folderId)?.rule_ids.includes(rule.id) ? 'checked' : ''}>
                     <span>${rule.name}</span>
                 </label>
-                <button type="button" class="rule-quick-edit-btn" onclick="event.preventDefault(); editRule('${rule.id}')" title="快速编辑规则">
-                    <svg width="12" height="12" viewBox="0 0 16 16" fill="none">
-                        <path d="M11.5 2L14 4.5L5.5 13H3V10.5L11.5 2Z" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
-                    </svg>
-                </button>
-                <div class="rule-sort-buttons">
-                    <button type="button" class="sort-btn" onclick="moveRuleUp(${index})" ${index === 0 ? 'disabled' : ''}>
-                        ▲
+                <div class="rule-item-actions">
+                    <div class="rule-sort-buttons">
+                        <button type="button" class="sort-btn" onclick="moveRuleUp(${index})" ${index === 0 ? 'disabled' : ''} title="上移">
+                            <svg width="12" height="12" viewBox="0 0 16 16" fill="none">
+                                <path d="M4 10L8 6L12 10" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+                            </svg>
+                        </button>
+                        <button type="button" class="sort-btn" onclick="moveRuleDown(${index})" ${index === orderedRules.length - 1 ? 'disabled' : ''} title="下移">
+                            <svg width="12" height="12" viewBox="0 0 16 16" fill="none">
+                                <path d="M4 6L8 10L12 6" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+                            </svg>
+                        </button>
+                    </div>
+                    <button type="button" class="rule-quick-edit-btn" onclick="event.preventDefault(); editRule('${rule.id}')" title="快速编辑规则">
+                        <svg width="12" height="12" viewBox="0 0 16 16" fill="none">
+                            <path d="M11.5 2L14 4.5L5.5 13H3V10.5L11.5 2Z" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+                        </svg>
                     </button>
-                    <button type="button" class="sort-btn" onclick="moveRuleDown(${index})" ${index === orderedRules.length - 1 ? 'disabled' : ''}>
-                        ▼
+                    <button type="button" class="rule-delete-btn" onclick="event.preventDefault(); removeFolderRule('${rule.id}')" title="从文件夹移除">
+                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none">
+                            <path d="M18 6L6 18M6 6l12 12" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+                        </svg>
                     </button>
                 </div>
             </div>
@@ -2694,11 +2758,20 @@ async function loadActivityLogs() {
 
 function addActivity(message, type = 'info', details = null) {
     const activityLog = document.getElementById('activityLog');
+    
+    // 如果是空状态提示，先清空
+    const emptyState = activityLog.querySelector('.activity-empty');
+    if (emptyState) {
+        activityLog.innerHTML = '';
+    }
+    
     const item = document.createElement('div');
     item.className = 'activity-item';
     
     const now = new Date();
-    const timeStr = `${now.getHours().toString().padStart(2, '0')}:${now.getMinutes().toString().padStart(2, '0')}`;
+    // 使用完整的时间戳格式: YYYY-MM-DD HH:MM:SS
+    const timeStr = `${now.getFullYear()}-${(now.getMonth() + 1).toString().padStart(2, '0')}-${now.getDate().toString().padStart(2, '0')} ` +
+                    `${now.getHours().toString().padStart(2, '0')}:${now.getMinutes().toString().padStart(2, '0')}:${now.getSeconds().toString().padStart(2, '0')}`;
     
     let detailsHtml = '';
     if (details) {
@@ -2715,8 +2788,8 @@ function addActivity(message, type = 'info', details = null) {
     
     activityLog.insertBefore(item, activityLog.firstChild);
     
-    // 限制日志条目数量
-    while (activityLog.children.length > 100) {
+    // 限制日志条目数量（保留最新的200条）
+    while (activityLog.children.length > 200) {
         activityLog.removeChild(activityLog.lastChild);
     }
 }
@@ -2734,15 +2807,42 @@ async function saveAnimationSettings() {
     }
 }
 
+// 保存文件稳定性设置
+async function saveStabilitySettings() {
+    try {
+        await invoke('save_stability_settings', {
+            fileStabilityDelay: appState.fileStabilityDelay,
+            fileStabilityChecks: appState.fileStabilityChecks
+        });
+        console.log(`✓ 文件稳定性设置已保存: 延迟${appState.fileStabilityDelay}秒, ${appState.fileStabilityChecks}次检查`);
+        
+        // 重启文件监控以应用新设置
+        await startFileMonitoring();
+        showNotification(`文件稳定性设置已更新`, 'success');
+    } catch (error) {
+        console.error('保存文件稳定性设置失败:', error);
+        showNotification('保存设置失败: ' + error, 'error');
+    }
+}
+
 // 清空活动日志
 async function clearActivity() {
-    const activityLog = document.getElementById('activityLog');
-    activityLog.innerHTML = `
-        <div class="activity-item">
-            <span class="activity-time">清空</span>
-            <span class="activity-message">活动日志已清空</span>
-        </div>
-    `;
+    try {
+        // 调用后端清空日志（清空日志文件）
+        await invoke('clear_activity_logs');
+        
+        // 清空前端显示
+        const activityLog = document.getElementById('activityLog');
+        activityLog.innerHTML = '<div class="activity-empty">活动日志已清空</div>';
+        
+        console.log('[活动日志] 日志已清空');
+        
+        // 添加一条清空记录
+        addActivity('🗑️ 活动日志已清空', 'info');
+    } catch (error) {
+        console.error('[活动日志] 清空失败:', error);
+        showNotification('清空日志失败: ' + error, 'error');
+    }
 }
 
 // 清除已处理文件记录
@@ -3126,7 +3226,7 @@ async function confirmBatch() {
 async function minimizeToTray() {
     try {
         await invoke('hide_to_tray');
-        addActivity('[托盘] 已最小化到系统托盘');
+        addActivity('⏸️ 窗口已最小化到系统托盘', 'info');
         showNotification('已最小化到托盘', 'info');
     } catch (error) {
         console.error('最小化到托盘失败:', error);

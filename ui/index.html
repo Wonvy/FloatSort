@@ -172,6 +172,33 @@
                         </div>
                     </div>
                 </div>
+
+                <div class="settings-section">
+                    <h3>文件稳定性检查</h3>
+                    <p class="setting-description">防止正在编辑的文件被意外移动，确保文件完全写入完成后再处理</p>
+                    <div class="setting-item-inline">
+                        <div class="setting-group">
+                            <label class="setting-label" for="stabilityDelaySelect">初始延迟</label>
+                            <select id="stabilityDelaySelect" class="setting-select">
+                                <option value="1">1秒</option>
+                                <option value="2">2秒</option>
+                                <option value="3">3秒（推荐）</option>
+                                <option value="5">5秒</option>
+                                <option value="10">10秒</option>
+                            </select>
+                        </div>
+                        <div class="setting-group">
+                            <label class="setting-label" for="stabilityChecksSelect">稳定检查次数</label>
+                            <select id="stabilityChecksSelect" class="setting-select">
+                                <option value="1">1次</option>
+                                <option value="2">2次（推荐）</option>
+                                <option value="3">3次</option>
+                                <option value="5">5次</option>
+                            </select>
+                        </div>
+                    </div>
+                    <p class="hint">检测到文件后，等待初始延迟时间，然后每隔1秒检查文件是否稳定（大小和修改时间不变），连续稳定指定次数后才处理</p>
+                </div>
                 
                 <div class="settings-section">
                     <h3>配置管理</h3>

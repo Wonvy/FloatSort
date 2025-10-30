@@ -1363,68 +1363,123 @@ input[readonly] {
     margin: 0;
 }
 
-.rule-quick-edit-btn {
-    display: inline-flex;
+/* 规则操作按钮组 */
+.rule-item-actions {
+    display: flex;
     align-items: center;
-    justify-content: center;
-    width: 24px;
-    height: 24px;
-    padding: 0;
+    gap: 8px;
     margin-left: 8px;
-    background: transparent;
-    border: 1px solid transparent;
-    color: #667eea;
-    cursor: pointer;
-    border-radius: 4px;
-    transition: all 0.15s;
-    opacity: 0.5;
+}
+
+/* 左右排序按钮容器 */
+.rule-sort-buttons {
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    gap: 4px;
     flex-shrink: 0;
 }
 
-.rule-quick-edit-btn:hover {
-    background: #f0f4ff;
-    border-color: #667eea;
-    opacity: 1;
-    transform: scale(1.1);
-}
-
-.rule-quick-edit-btn:active {
-    transform: scale(0.95);
-}
-
-.rule-quick-edit-btn svg {
-    width: 12px;
-    height: 12px;
-}
-
-.rule-sort-buttons {
-    display: flex;
-    flex-direction: column;
-    gap: 2px;
-    margin-left: 12px;
-}
-
+/* 排序按钮基础样式（参考规则列表样式）*/
 .sort-btn {
-    background: transparent;
-    border: 1px solid #d9d9d9;
-    padding: 2px 8px;
-    border-radius: 3px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 28px;
+    height: 28px;
+    padding: 0;
+    border: 1px solid #d1d5db;
+    background: #fff;
+    color: #6b7280;
+    border-radius: 6px;
     cursor: pointer;
-    font-size: 10px;
-    color: #666;
-    transition: all 0.2s;
-    line-height: 1;
+    transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+    flex-shrink: 0;
 }
 
 .sort-btn:hover:not(:disabled) {
-    border-color: #000;
-    color: #000;
-    background: #f5f5f5;
+    border-color: #667eea;
+    color: #667eea;
+    background: #f3f4f6;
+    transform: translateY(-1px);
+}
+
+.sort-btn:active:not(:disabled) {
+    transform: translateY(0) scale(0.95);
 }
 
 .sort-btn:disabled {
     opacity: 0.3;
     cursor: not-allowed;
+}
+
+.sort-btn svg {
+    width: 14px;
+    height: 14px;
+}
+
+/* 快速编辑按钮 */
+.rule-quick-edit-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 28px;
+    height: 28px;
+    padding: 0;
+    background: #fff;
+    border: 1px solid #d1d5db;
+    color: #667eea;
+    cursor: pointer;
+    border-radius: 6px;
+    transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+    flex-shrink: 0;
+}
+
+.rule-quick-edit-btn:hover {
+    background: #f3f4f6;
+    border-color: #667eea;
+    transform: translateY(-1px);
+}
+
+.rule-quick-edit-btn:active {
+    transform: translateY(0) scale(0.95);
+}
+
+.rule-quick-edit-btn svg {
+    width: 14px;
+    height: 14px;
+}
+
+/* 删除按钮 */
+.rule-delete-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 28px;
+    height: 28px;
+    padding: 0;
+    background: #fff;
+    border: 1px solid #d1d5db;
+    color: #f56565;
+    cursor: pointer;
+    border-radius: 6px;
+    transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+    flex-shrink: 0;
+}
+
+.rule-delete-btn:hover {
+    background: #fef2f2;
+    border-color: #f56565;
+    transform: translateY(-1px);
+}
+
+.rule-delete-btn:active {
+    transform: translateY(0) scale(0.95);
+}
+
+.rule-delete-btn svg {
+    width: 14px;
+    height: 14px;
 }
 
 /* ========== 条件构建器 ========== */
@@ -2193,6 +2248,13 @@ input[readonly] {
 
 .setting-group .setting-select {
     flex: 1;
+}
+
+.setting-description {
+    margin: 0 0 12px 0;
+    font-size: 13px;
+    color: #666;
+    line-height: 1.5;
 }
 
 .setting-label {

@@ -84,6 +84,14 @@ pub struct AppConfig {
     #[serde(default = "default_animation_speed")]
     pub animation_speed: String,
     
+    /// 文件稳定性检查延迟（秒）- 检测到文件后等待多久再检查稳定性
+    #[serde(default = "default_stability_delay")]
+    pub file_stability_delay: u32,
+    
+    /// 文件稳定性检查次数 - 需要连续几次检查文件都稳定才处理
+    #[serde(default = "default_stability_checks")]
+    pub file_stability_checks: u32,
+    
     // 保留旧字段以支持迁移
     #[serde(skip_serializing, default)]
     pub watch_paths: Option<Vec<String>>,
@@ -110,6 +118,14 @@ fn default_animation() -> String {
 
 fn default_animation_speed() -> String {
     "normal".to_string()
+}
+
+fn default_stability_delay() -> u32 {
+    3  // 默认等待3秒
+}
+
+fn default_stability_checks() -> u32 {
+    2  // 默认检查2次
 }
 
 fn default_window_height() -> u32 {
@@ -176,6 +192,8 @@ impl Default for AppConfig {
             window_height: 520,
             animation: "none".to_string(),
             animation_speed: "normal".to_string(),
+            file_stability_delay: default_stability_delay(),
+            file_stability_checks: default_stability_checks(),
             watch_paths: None,
             auto_start: None,
         }
@@ -239,6 +257,8 @@ impl AppConfig {
             window_height: 520,
             animation: "none".to_string(),
             animation_speed: "normal".to_string(),
+            file_stability_delay: default_stability_delay(),
+            file_stability_checks: default_stability_checks(),
             watch_paths: None,
             auto_start: None,
         })

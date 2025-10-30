@@ -5,8 +5,16 @@ use std::path::{Path, PathBuf};
 use std::sync::mpsc::channel;
 use std::sync::{Arc, Mutex};
 use std::thread;
+use std::time::{Duration, SystemTime};
 use tauri::Window;
 use tracing::{debug, error, info, warn};
+
+/// 文件信息（用于稳定性检查）
+#[derive(Debug, Clone)]
+struct FileSnapshot {
+    size: u64,
+    modified: SystemTime,
+}
 
 /// 文件监控器
 pub struct FileMonitor {
@@ -156,20 +164,177 @@ impl FileMonitor {
         }
     }
 
-    /// 处理单个文件 - 只检测并通知前端，由前端决定是否整理
-    fn process_file(path: PathBuf, _config: &AppConfig, window: &Window) {
+    /// 处理单个文件 - 检查文件稳定性后再通知前端
+    fn process_file(path: PathBuf, config: &AppConfig, window: &Window) {
         info!("检测到文件: {:?}", path);
         
-        // 只发送文件检测事件到前端，由前端决定是否整理
-        // 前端会根据批量阈值来决定是自动整理还是显示确认窗口
-        let _ = window.emit(
-            "file-detected",
-            serde_json::json!({
-                "file_path": path.to_string_lossy().to_string(),
-            }),
-        );
+        // 检查是否是临时文件，如果是则跳过
+        if Self::is_temporary_file(&path) {
+            info!("跳过临时文件: {:?}", path);
+            return;
+        }
         
-        info!("✓ 文件检测事件已发送到前端: {:?}", path);
+        // 克隆配置和窗口，用于延迟检查
+        let config_clone = config.clone();
+        let window_clone = window.clone();
+        let path_clone = path.clone();
+        
+        // 在新线程中进行稳定性检查
+        thread::spawn(move || {
+            if Self::wait_for_file_stable(&path_clone, &config_clone) {
+                info!("文件已稳定，发送检测事件: {:?}", path_clone);
+                
+                // 发送文件检测事件到前端
+                let _ = window_clone.emit(
+                    "file-detected",
+                    serde_json::json!({
+                        "file_path": path_clone.to_string_lossy().to_string(),
+                    }),
+                );
+                
+                info!("✓ 文件检测事件已发送到前端: {:?}", path_clone);
+            } else {
+                warn!("文件稳定性检查失败，跳过: {:?}", path_clone);
+            }
+        });
+    }
+    
+    /// 检查文件是否为临时文件
+    fn is_temporary_file(path: &Path) -> bool {
+        if let Some(file_name) = path.file_name().and_then(|n| n.to_str()) {
+            // 常见的临时文件模式
+            let temp_patterns = vec![
+                "~$",           // Microsoft Office 临时文件
+                ".tmp", ".temp", // 临时文件
+                ".TMP", ".TEMP",
+                ".crdownload",  // Chrome 下载中
+                ".download",    // Firefox 下载中
+                ".part",        // 部分下载
+                "~",            // Vim/Emacs 备份文件
+            ];
+            
+            for pattern in temp_patterns {
+                if file_name.starts_with(pattern) || file_name.ends_with(pattern) {
+                    return true;
+                }
+            }
+            
+            // 检查是否包含临时文件标记
+            if file_name.contains(".tmp") || 
+               file_name.contains(".TMP") ||
+               file_name.contains("~RF") {  // Office 临时锁文件
+                return true;
+            }
+        }
+        
+        false
+    }
+    
+    /// 等待文件稳定（大小和修改时间不再变化）
+    fn wait_for_file_stable(path: &Path, config: &AppConfig) -> bool {
+        let delay = Duration::from_secs(config.file_stability_delay as u64);
+        let required_checks = config.file_stability_checks;
+        
+        info!("等待文件稳定: {:?} (延迟{}秒, 需要{}次稳定检查)", 
+              path, config.file_stability_delay, required_checks);
+        
+        // 初始延迟
+        thread::sleep(delay);
+        
+        let mut last_snapshot: Option<FileSnapshot> = None;
+        let mut stable_count = 0u32;
+        
+        for i in 0..required_checks * 2 {  // 最多检查 required_checks * 2 次
+            // 检查文件是否被锁定
+            if Self::is_file_locked(path) {
+                info!("文件被锁定，等待: {:?} (检查 {}/{})", path, i + 1, required_checks * 2);
+                thread::sleep(Duration::from_secs(1));
+                stable_count = 0;  // 重置稳定计数
+                continue;
+            }
+            
+            // 获取文件信息
+            match Self::get_file_snapshot(path) {
+                Some(current) => {
+                    if let Some(last) = &last_snapshot {
+                        // 比较文件大小和修改时间
+                        if current.size == last.size && current.modified == last.modified {
+                            stable_count += 1;
+                            info!("文件稳定检查 {}/{}: {:?}", stable_count, required_checks, path);
+                            
+                            if stable_count >= required_checks {
+                                info!("✓ 文件已稳定: {:?}", path);
+                                return true;
+                            }
+                        } else {
+                            info!("文件仍在变化: {:?} (大小: {} -> {}, 修改时间变化)", 
+                                  path, last.size, current.size);
+                            stable_count = 0;  // 重置稳定计数
+                        }
+                    }
+                    
+                    last_snapshot = Some(current);
+                    thread::sleep(Duration::from_secs(1));
+                }
+                None => {
+                    warn!("无法获取文件信息: {:?}", path);
+                    return false;
+                }
+            }
+        }
+        
+        // 如果经过多次检查仍未稳定，返回 false
+        warn!("文件稳定性检查超时: {:?}", path);
+        false
+    }
+    
+    /// 获取文件快照（大小和修改时间）
+    fn get_file_snapshot(path: &Path) -> Option<FileSnapshot> {
+        use std::fs;
+        
+        match fs::metadata(path) {
+            Ok(metadata) => {
+                Some(FileSnapshot {
+                    size: metadata.len(),
+                    modified: metadata.modified().ok()?,
+                })
+            }
+            Err(e) => {
+                debug!("无法读取文件元数据: {:?}, 错误: {}", path, e);
+                None
+            }
+        }
+    }
+    
+    /// 检查文件是否被锁定（被其他程序占用）
+    fn is_file_locked(path: &Path) -> bool {
+        use std::fs::OpenOptions;
+        
+        // 尝试以独占模式打开文件
+        match OpenOptions::new()
+            .read(true)
+            .write(true)
+            .open(path)
+        {
+            Ok(_) => false,  // 文件未被锁定
+            Err(e) => {
+                // 检查是否是权限错误（文件被占用）
+                match e.kind() {
+                    std::io::ErrorKind::PermissionDenied => {
+                        debug!("文件被锁定（权限拒绝）: {:?}", path);
+                        true
+                    }
+                    std::io::ErrorKind::NotFound => {
+                        debug!("文件不存在: {:?}", path);
+                        true  // 文件不存在，视为"锁定"
+                    }
+                    _ => {
+                        debug!("无法打开文件: {:?}, 错误: {}", path, e);
+                        true  // 其他错误也视为锁定
+                    }
+                }
+            }
+        }
     }
 }
 
