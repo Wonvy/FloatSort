@@ -113,6 +113,7 @@ impl WatchFolder {
     }
     
     /// 获取触发模式的显示文本
+    #[allow(dead_code)]
     pub fn get_trigger_display(&self) -> String {
         match &self.trigger_mode {
             TriggerMode::Immediate => "🚀 立即执行".to_string(),
