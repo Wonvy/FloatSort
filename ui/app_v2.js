@@ -355,18 +355,16 @@ function setupEventListeners() {
     document.getElementById('cancelDelete').addEventListener('click', closeDeleteConfirm);
     document.getElementById('confirmDelete').addEventListener('click', executeDelete);
     
-    // 模态框点击背景关闭
-    document.getElementById('folderModal').addEventListener('click', (e) => {
-        if (e.target.id === 'folderModal') closeFolderModal();
-    });
-    // 规则模态框不允许点击外部关闭，只能通过按钮关闭
+    // 所有模态框不允许点击背景关闭，只能通过按钮关闭（防止误操作）
+    // document.getElementById('folderModal').addEventListener('click', (e) => {
+    //     if (e.target.id === 'folderModal') closeFolderModal();
+    // });
     // document.getElementById('ruleModal').addEventListener('click', (e) => {
     //     if (e.target.id === 'ruleModal') closeRuleModal();
     // });
-    document.getElementById('batchConfirmModal').addEventListener('click', (e) => {
-        if (e.target.id === 'batchConfirmModal') closeBatchModal();
-    });
-    // 删除确认模态框不允许点击外部关闭，防止误操作
+    // document.getElementById('batchConfirmModal').addEventListener('click', (e) => {
+    //     if (e.target.id === 'batchConfirmModal') closeBatchModal();
+    // });
     // document.getElementById('deleteConfirmModal').addEventListener('click', (e) => {
     //     if (e.target.id === 'deleteConfirmModal') closeDeleteConfirm();
     // });
