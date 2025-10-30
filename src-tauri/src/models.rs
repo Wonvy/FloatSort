@@ -32,11 +32,35 @@ pub enum RuleCondition {
     /// 文件名匹配正则表达式
     NameRegex { pattern: String },
     
-    /// 创建时间范围（天数）
+    /// 创建时间范围（天数）- 已弃用，保留用于兼容
     CreatedDaysAgo { min: Option<u64>, max: Option<u64> },
     
-    /// 修改时间范围（天数）
+    /// 修改时间范围（天数）- 已弃用，保留用于兼容
     ModifiedDaysAgo { min: Option<u64>, max: Option<u64> },
+    
+    /// 创建时间条件（新版）
+    CreatedTime { 
+        /// 时间类型：relative(相对时间) 或 absolute(绝对时间)
+        time_type: String,
+        /// 比较方式：before(之前) 或 after(之后)
+        comparison: String,
+        /// 相对时间：天数
+        days: Option<u64>,
+        /// 绝对时间：ISO 8601格式的日期时间字符串
+        datetime: Option<String>,
+    },
+    
+    /// 修改时间条件（新版）
+    ModifiedTime {
+        /// 时间类型：relative(相对时间) 或 absolute(绝对时间)
+        time_type: String,
+        /// 比较方式：before(之前) 或 after(之后)
+        comparison: String,
+        /// 相对时间：天数
+        days: Option<u64>,
+        /// 绝对时间：ISO 8601格式的日期时间字符串
+        datetime: Option<String>,
+    },
 }
 
 /// 文件冲突处理策略

@@ -4,6 +4,13 @@ use std::path::Path;
 use tracing::debug;
 use chrono::Utc;
 
+/// 规则匹配结果
+#[derive(Debug)]
+pub struct RuleMatch<'a> {
+    pub rule: &'a Rule,
+    pub regex_captures: Vec<String>,  // 正则表达式捕获组
+}
+
 /// 规则引擎
 pub struct RuleEngine {
     rules: Vec<Rule>,
@@ -15,8 +22,8 @@ impl RuleEngine {
         Self { rules }
     }
 
-    /// 为文件查找匹配的规则
-    pub fn find_matching_rule(&self, file_info: &FileInfo) -> Option<&Rule> {
+    /// 为文件查找匹配的规则（返回匹配结果，包含捕获组）
+    pub fn find_matching_rule<'a>(&'a self, file_info: &FileInfo) -> Option<RuleMatch<'a>> {
         // 按优先级排序（已启用的规则）
         let mut enabled_rules: Vec<&Rule> = self.rules
             .iter()
@@ -27,25 +34,56 @@ impl RuleEngine {
 
         // 找到第一个匹配的规则
         for rule in enabled_rules {
-            if self.check_conditions(&rule.conditions, &rule.logic, file_info) {
+            if let Some(captures) = self.check_conditions_with_captures(&rule.conditions, &rule.logic, file_info) {
                 debug!("文件 {} 匹配规则: {}", file_info.name, rule.name);
-                return Some(rule);
+                return Some(RuleMatch {
+                    rule,
+                    regex_captures: captures,
+                });
             }
         }
 
         None
     }
 
-    /// 检查所有条件是否满足（AND逻辑：所有条件都必须满足）
-    fn check_conditions(&self, conditions: &[RuleCondition], _logic: &str, file_info: &FileInfo) -> bool {
+    /// 检查所有条件是否满足，并返回正则表达式捕获组
+    fn check_conditions_with_captures(&self, conditions: &[RuleCondition], _logic: &str, file_info: &FileInfo) -> Option<Vec<String>> {
         if conditions.is_empty() {
-            return false;
+            return None;
         }
 
+        let mut regex_captures = Vec::new();
+
         // 固定使用 AND 逻辑：所有条件都必须满足
-        conditions.iter().all(|condition| {
-            self.check_single_condition(condition, file_info)
-        })
+        for condition in conditions {
+            match condition {
+                RuleCondition::NameRegex { pattern } => {
+                    if let Ok(regex) = Regex::new(pattern) {
+                        if let Some(caps) = regex.captures(&file_info.name) {
+                            // 提取所有捕获组（跳过第0个，因为它是整个匹配）
+                            for i in 1..caps.len() {
+                                if let Some(m) = caps.get(i) {
+                                    regex_captures.push(m.as_str().to_string());
+                                }
+                            }
+                            // 继续检查其他条件
+                        } else {
+                            return None;  // 正则不匹配，整个规则不匹配
+                        }
+                    } else {
+                        return None;  // 正则表达式无效
+                    }
+                }
+                _ => {
+                    // 检查其他条件
+                    if !self.check_single_condition(condition, file_info) {
+                        return None;  // 有条件不满足
+                    }
+                }
+            }
+        }
+
+        Some(regex_captures)
     }
 
     /// 检查单个条件
@@ -107,12 +145,93 @@ impl RuleEngine {
                     false
                 }
             }
+
+            RuleCondition::CreatedTime { time_type, comparison, days, datetime } => {
+                if let Some(created) = file_info.created_at {
+                    let now = Utc::now();
+                    
+                    let target_time = if time_type == "relative" {
+                        // 相对时间：计算N天前的时间
+                        if let Some(d) = days {
+                            now - chrono::Duration::days(*d as i64)
+                        } else {
+                            return false;
+                        }
+                    } else if time_type == "absolute" {
+                        // 绝对时间：解析日期时间字符串
+                        if let Some(dt_str) = datetime {
+                            if let Ok(dt) = chrono::DateTime::parse_from_rfc3339(dt_str) {
+                                dt.with_timezone(&Utc)
+                            } else {
+                                return false;
+                            }
+                        } else {
+                            return false;
+                        }
+                    } else {
+                        return false;
+                    };
+                    
+                    // 根据比较方式判断
+                    match comparison.as_str() {
+                        "before" => created < target_time,
+                        "after" => created > target_time,
+                        _ => false,
+                    }
+                } else {
+                    false
+                }
+            }
+
+            RuleCondition::ModifiedTime { time_type, comparison, days, datetime } => {
+                if let Some(modified) = file_info.modified_at {
+                    let now = Utc::now();
+                    
+                    let target_time = if time_type == "relative" {
+                        // 相对时间：计算N天前的时间
+                        if let Some(d) = days {
+                            now - chrono::Duration::days(*d as i64)
+                        } else {
+                            return false;
+                        }
+                    } else if time_type == "absolute" {
+                        // 绝对时间：解析日期时间字符串
+                        if let Some(dt_str) = datetime {
+                            if let Ok(dt) = chrono::DateTime::parse_from_rfc3339(dt_str) {
+                                dt.with_timezone(&Utc)
+                            } else {
+                                return false;
+                            }
+                        } else {
+                            return false;
+                        }
+                    } else {
+                        return false;
+                    };
+                    
+                    // 根据比较方式判断
+                    match comparison.as_str() {
+                        "before" => modified < target_time,
+                        "after" => modified > target_time,
+                        _ => false,
+                    }
+                } else {
+                    false
+                }
+            }
         }
     }
 
     /// 解析路径中的占位符
-    fn resolve_placeholders(&self, template: &str, file_info: &FileInfo) -> String {
+    fn resolve_placeholders(&self, template: &str, file_info: &FileInfo, regex_captures: &[String]) -> String {
         let mut result = template.to_string();
+        
+        // 正则表达式捕获组 - 支持 $1, $2, $3... 或 ${1}, ${2}, ${3}...
+        for (i, capture) in regex_captures.iter().enumerate() {
+            let index = i + 1;
+            result = result.replace(&format!("${}", index), capture);
+            result = result.replace(&format!("${{{}}}", index), capture);
+        }
         
         // 文件名（不含扩展名）
         let name_without_ext = file_info.name
@@ -141,8 +260,8 @@ impl RuleEngine {
         result
     }
     
-    /// 获取目标路径
-    pub fn get_destination_path(&self, action: &RuleAction, file_info: &FileInfo, base_path: &Path) -> Option<String> {
+    /// 获取目标路径（支持正则捕获组）
+    pub fn get_destination_path(&self, action: &RuleAction, file_info: &FileInfo, base_path: &Path, regex_captures: &[String]) -> Option<String> {
         match action {
             RuleAction::MoveTo { destination } | RuleAction::CopyTo { destination } => {
                 // 检查是否为回收站特殊路径
@@ -150,8 +269,8 @@ impl RuleEngine {
                     return Some("{recycle}".to_string());
                 }
                 
-                // 解析占位符
-                let resolved_destination = self.resolve_placeholders(destination, file_info);
+                // 解析占位符（包括正则捕获组）
+                let resolved_destination = self.resolve_placeholders(destination, file_info, regex_captures);
                 
                 let dest_path = if Path::new(&resolved_destination).is_absolute() {
                     Path::new(&resolved_destination).to_path_buf()
@@ -161,8 +280,8 @@ impl RuleEngine {
                 Some(dest_path.to_string_lossy().to_string())
             }
             RuleAction::Rename { pattern } => {
-                // 解析占位符
-                let new_name = self.resolve_placeholders(pattern, file_info);
+                // 解析占位符（包括正则捕获组）
+                let new_name = self.resolve_placeholders(pattern, file_info, regex_captures);
                 
                 let parent = Path::new(&file_info.path).parent()?;
                 Some(parent.join(new_name).to_string_lossy().to_string())

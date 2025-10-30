@@ -1865,6 +1865,23 @@ function updateConditionInputs() {
         case 'regex':
             container.innerHTML = `
                 <input type="text" id="conditionInput" placeholder="输入正则表达式（如：^report_.*\\.pdf$）" />
+                <div style="margin-top: 8px; padding: 10px; background: #f8f9fa; border-radius: 6px; font-size: 12px; color: #6b7280; line-height: 1.6;">
+                    <strong style="color: #374151;">💡 正则捕获组使用说明：</strong><br>
+                    <span style="color: #dc2626;">⚠️ 正则匹配的是<strong>包含扩展名</strong>的完整文件名</span><br><br>
+                    
+                    <strong style="color: #374151;">📌 两种使用模式：</strong><br>
+                    <strong>模式1 - 只用正则</strong>（精确控制）<br>
+                    • 正则：<code style="background: #e5e7eb; padding: 2px 6px; border-radius: 3px; color: #1f2937;">^(\\d{4})-(\\d{2})-(\\d{2}).*\\.txt$</code><br>
+                    • 扩展名：不填<br>
+                    ✓ 适合需要精确匹配扩展名的场景<br><br>
+                    
+                    <strong>模式2 - 扩展名 + 简化正则</strong>（推荐）<br>
+                    • 正则：<code style="background: #e5e7eb; padding: 2px 6px; border-radius: 3px; color: #1f2937;">^(\\d{4})-(\\d{2})-(\\d{2}).*</code> ← 不用写扩展名<br>
+                    • 扩展名：<code style="background: #e5e7eb; padding: 2px 6px; border-radius: 3px; color: #1f2937;">txt, pdf, docx</code><br>
+                    ✓ 适合同一规则适配多种扩展名<br><br>
+                    
+                    <strong>捕获组引用：</strong>使用 <code style="background: #e5e7eb; padding: 2px 6px; border-radius: 3px; color: #1f2937;">$1</code>, <code style="background: #e5e7eb; padding: 2px 6px; border-radius: 3px; color: #1f2937;">$2</code> 在目标路径中引用 <code style="background: #e5e7eb; padding: 2px 6px; border-radius: 3px; color: #1f2937;">()</code> 捕获的内容
+                </div>
             `;
             break;
         case 'size':
@@ -1877,16 +1894,81 @@ function updateConditionInputs() {
         case 'modified':
             const timeLabel = type === 'created' ? '创建时间' : '修改时间';
             container.innerHTML = `
-                <input type="number" id="minDays" placeholder="至少N天前" min="0" style="flex: 1;" title="文件${timeLabel}距今至少多少天（留空表示不限制）" />
-                <span style="margin: 0 8px; color: #999;">~</span>
-                <input type="number" id="maxDays" placeholder="至多N天前" min="0" style="flex: 1;" title="文件${timeLabel}距今至多多少天（留空表示不限制）" />
-                <p class="hint" style="margin-top: 8px; font-size: 12px; color: #666;">
-                    📅 示例：<br>
-                    • 最近7天${timeLabel}的文件：至少留空，至多填 7<br>
-                    • 30天前或更早${timeLabel}的文件：至少填 30，至多留空<br>
-                    • 7-30天前${timeLabel}的文件：至少填 7，至多填 30
-                </p>
+                <div style="display: flex; flex-direction: column; gap: 12px;">
+                    <div style="display: flex; gap: 8px; align-items: center;">
+                        <select id="timeMode" style="flex: 1;">
+                            <option value="relative">相对时间（最近N天）</option>
+                            <option value="absolute">绝对时间（具体日期）</option>
+                        </select>
+                        <select id="timeComparison" style="flex: 1;">
+                            <option value="before">在此之前</option>
+                            <option value="after">在此之后</option>
+                        </select>
+                    </div>
+                    
+                    <!-- 相对时间选择 -->
+                    <div id="relativeTimeContainer" style="display: flex; flex-direction: column; gap: 8px;">
+                        <select id="timePreset" style="width: 100%;">
+                            <option value="">自定义天数</option>
+                            <option value="1">最近1天（24小时内）</option>
+                            <option value="3">最近3天</option>
+                            <option value="7">最近一周（7天）</option>
+                            <option value="14">最近两周（14天）</option>
+                            <option value="30">最近一个月（30天）</option>
+                            <option value="90">最近三个月（90天）</option>
+                            <option value="180">最近半年（180天）</option>
+                            <option value="365">最近一年（365天）</option>
+                        </select>
+                        <input type="number" id="customDays" placeholder="或输入自定义天数" min="1" style="width: 100%;" />
+                    </div>
+                    
+                    <!-- 绝对时间选择 -->
+                    <div id="absoluteTimeContainer" style="display: none;">
+                        <input type="datetime-local" id="absoluteDateTime" style="width: 100%;" />
+                    </div>
+                    
+                    <p class="hint" style="margin: 0; font-size: 12px; color: #666;">
+                        📅 <strong>相对时间</strong>示例：<br>
+                        • "最近7天 + 在此之后" = 最近7天内的文件<br>
+                        • "30天 + 在此之前" = 30天前或更早的文件<br><br>
+                        📆 <strong>绝对时间</strong>示例：<br>
+                        • "2024-01-01 + 在此之后" = 2024年1月1日之后的文件<br>
+                        • "2023-12-31 23:59 + 在此之前" = 2023年及之前的文件
+                    </p>
+                </div>
             `;
+            
+            // 添加事件监听器
+            const timeModeSelect = container.querySelector('#timeMode');
+            const relativeContainer = container.querySelector('#relativeTimeContainer');
+            const absoluteContainer = container.querySelector('#absoluteTimeContainer');
+            const presetSelect = container.querySelector('#timePreset');
+            const customInput = container.querySelector('#customDays');
+            
+            timeModeSelect.addEventListener('change', function() {
+                if (this.value === 'relative') {
+                    relativeContainer.style.display = 'flex';
+                    absoluteContainer.style.display = 'none';
+                } else {
+                    relativeContainer.style.display = 'none';
+                    absoluteContainer.style.display = 'block';
+                }
+            });
+            
+            presetSelect.addEventListener('change', function() {
+                if (this.value) {
+                    customInput.value = '';
+                    customInput.disabled = true;
+                } else {
+                    customInput.disabled = false;
+                }
+            });
+            
+            customInput.addEventListener('input', function() {
+                if (this.value) {
+                    presetSelect.value = '';
+                }
+            });
             break;
     }
 }
@@ -1902,15 +1984,31 @@ function addCondition() {
             'name': 'NameContains',
             'regex': 'NameRegex',
             'size': 'SizeRange',
-            'created': 'CreatedDaysAgo',
-            'modified': 'ModifiedDaysAgo'
+            'created': ['CreatedTime', 'CreatedDaysAgo'],  // 兼容新旧条件类型
+            'modified': ['ModifiedTime', 'ModifiedDaysAgo']  // 兼容新旧条件类型
         };
         
-        const backendType = typeMap[type];
-        const exists = appState.currentConditions.some(cond => cond.type === backendType);
+        const backendTypes = typeMap[type];
+        
+        let exists = false;
+        if (Array.isArray(backendTypes)) {
+            // 检查多个可能的类型（用于时间条件）
+            exists = appState.currentConditions.some(cond => backendTypes.includes(cond.type));
+        } else {
+            // 检查单个类型
+            exists = appState.currentConditions.some(cond => cond.type === backendTypes);
+        }
         
         if (exists) {
-            showNotification('该类型的条件已存在，请编辑现有条件或删除后重新添加', 'error');
+            const typeName = {
+                'extension': '扩展名',
+                'name': '文件名包含',
+                'regex': '正则表达式',
+                'size': '文件大小',
+                'created': '创建时间',
+                'modified': '修改时间'
+            }[type];
+            showNotification(`"${typeName}"条件已存在，每种条件只能添加一次。\n请编辑现有条件或删除后重新添加。`, 'error');
             return;
         }
     }
@@ -1959,41 +2057,72 @@ function addCondition() {
             };
             break;
         }
-        case 'created': {
-            const min = document.getElementById('minDays').value;
-            const max = document.getElementById('maxDays').value;
-            if (!min && !max) {
-                showNotification('请输入至少一个天数限制', 'error');
-                return;
-            }
-            condition = {
-                type: 'CreatedDaysAgo',
-                min: min ? parseInt(min) : null,
-                max: max ? parseInt(max) : null,
-                displayText: min && max 
-                    ? `创建时间: ${min}-${max}天前` 
-                    : min 
-                        ? `创建时间: ${min}天前或更早` 
-                        : `创建时间: ${max}天内`
-            };
-            break;
-        }
+        case 'created':
         case 'modified': {
-            const min = document.getElementById('minDays').value;
-            const max = document.getElementById('maxDays').value;
-            if (!min && !max) {
-                showNotification('请输入至少一个天数限制', 'error');
-                return;
+            const timeMode = document.getElementById('timeMode').value;
+            const timeComparison = document.getElementById('timeComparison').value;
+            const timeLabel = type === 'created' ? '创建时间' : '修改时间';
+            const conditionTypeName = type === 'created' ? 'CreatedTime' : 'ModifiedTime';
+            const comparisonText = timeComparison === 'before' ? '之前' : '之后';
+            
+            let days = null;
+            let datetime = null;
+            let displayText = '';
+            
+            if (timeMode === 'relative') {
+                // 相对时间
+                const presetValue = document.getElementById('timePreset').value;
+                const customValue = document.getElementById('customDays').value;
+                
+                if (presetValue) {
+                    days = parseInt(presetValue);
+                } else if (customValue) {
+                    days = parseInt(customValue);
+                } else {
+                    showNotification('请选择预设时间或输入自定义天数', 'error');
+                    return;
+                }
+                
+                const dayText = days === 1 ? '1天（24小时）' : 
+                               days === 7 ? '7天（一周）' : 
+                               days === 30 ? '30天（一个月）' : 
+                               `${days}天`;
+                
+                if (timeComparison === 'after') {
+                    displayText = `${timeLabel}: 最近${dayText}内`;
+                } else {
+                    displayText = `${timeLabel}: ${dayText}前或更早`;
+                }
+            } else {
+                // 绝对时间
+                const datetimeValue = document.getElementById('absoluteDateTime').value;
+                if (!datetimeValue) {
+                    showNotification('请选择具体日期时间', 'error');
+                    return;
+                }
+                
+                // 转换为ISO 8601格式（RFC 3339）
+                const localDatetime = new Date(datetimeValue);
+                datetime = localDatetime.toISOString();
+                
+                const formattedDate = new Date(datetimeValue).toLocaleString('zh-CN', {
+                    year: 'numeric',
+                    month: '2-digit',
+                    day: '2-digit',
+                    hour: '2-digit',
+                    minute: '2-digit'
+                });
+                
+                displayText = `${timeLabel}: ${formattedDate}${comparisonText}`;
             }
+            
             condition = {
-                type: 'ModifiedDaysAgo',
-                min: min ? parseInt(min) : null,
-                max: max ? parseInt(max) : null,
-                displayText: min && max 
-                    ? `修改时间: ${min}-${max}天前` 
-                    : min 
-                        ? `修改时间: ${min}天前或更早` 
-                        : `修改时间: ${max}天内`
+                type: conditionTypeName,
+                time_type: timeMode,
+                comparison: timeComparison,
+                days: days,
+                datetime: datetime,
+                displayText: displayText
             };
             break;
         }

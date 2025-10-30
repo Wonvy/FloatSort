@@ -455,17 +455,17 @@ async fn preview_file_organization(path: String, state: State<'_, AppState>) -> 
     // 查找匹配的规则
     let engine = crate::rule_engine::RuleEngine::new(config.rules.clone());
     
-    if let Some(rule) = engine.find_matching_rule(&file_info) {
+    if let Some(rule_match) = engine.find_matching_rule(&file_info) {
         // 计算目标路径（使用当前目录作为基础路径）
         let base_path = Path::new(&path).parent()
             .ok_or_else(|| "无法获取父目录".to_string())?;
         
-        if let Some(dest_path) = engine.get_destination_path(&rule.action, &file_info, base_path) {
+        if let Some(dest_path) = engine.get_destination_path(&rule_match.rule.action, &file_info, base_path, &rule_match.regex_captures) {
             // 如果目标路径是回收站，直接返回
             if dest_path == "已移动到回收站" || dest_path == "{recycle}" {
                 return Ok(serde_json::json!({
                     "matched": true,
-                    "rule_name": rule.name,
+                    "rule_name": rule_match.rule.name,
                     "original_path": path,
                     "target_path": "🗑️ 回收站",
                     "is_directory": file_info.is_directory,
@@ -484,7 +484,7 @@ async fn preview_file_organization(path: String, state: State<'_, AppState>) -> 
             
             return Ok(serde_json::json!({
                 "matched": true,
-                "rule_name": rule.name,
+                "rule_name": rule_match.rule.name,
                 "original_path": path,
                 "target_path": full_target_path,
                 "is_directory": file_info.is_directory,
@@ -520,17 +520,17 @@ async fn preview_file_organization_with_rule(path: String, rule_id: String, stat
     // 检查文件是否匹配该规则
     let engine = crate::rule_engine::RuleEngine::new(vec![rule.clone()]);
     
-    if let Some(_matched_rule) = engine.find_matching_rule(&file_info) {
+    if let Some(rule_match) = engine.find_matching_rule(&file_info) {
         // 计算目标路径
         let base_path = Path::new(&path).parent()
             .ok_or_else(|| "无法获取父目录".to_string())?;
         
-        if let Some(dest_path) = engine.get_destination_path(&rule.action, &file_info, base_path) {
+        if let Some(dest_path) = engine.get_destination_path(&rule_match.rule.action, &file_info, base_path, &rule_match.regex_captures) {
             // 如果目标路径是回收站，直接返回
             if dest_path == "已移动到回收站" || dest_path == "{recycle}" {
                 return Ok(serde_json::json!({
                     "matched": true,
-                    "rule_name": rule.name,
+                    "rule_name": rule_match.rule.name,
                     "original_path": path,
                     "target_path": "🗑️ 回收站",
                     "is_directory": file_info.is_directory,
@@ -549,7 +549,7 @@ async fn preview_file_organization_with_rule(path: String, rule_id: String, stat
             
             return Ok(serde_json::json!({
                 "matched": true,
-                "rule_name": rule.name,
+                "rule_name": rule_match.rule.name,
                 "original_path": path,
                 "target_path": full_target_path,
                 "is_directory": file_info.is_directory,

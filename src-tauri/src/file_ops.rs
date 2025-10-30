@@ -49,16 +49,16 @@ pub fn get_file_info(path: &Path) -> Result<FileInfo> {
 pub fn organize_file(file_info: &FileInfo, rules: &[Rule]) -> Result<Option<String>> {
     let engine = RuleEngine::new(rules.to_vec());
 
-    // 查找匹配的规则
-    let rule = match engine.find_matching_rule(file_info) {
-        Some(r) => r,
+    // 查找匹配的规则（获取匹配结果，包含正则捕获组）
+    let rule_match = match engine.find_matching_rule(file_info) {
+        Some(m) => m,
         None => return Ok(None),
     };
 
-    info!("应用规则 '{}' 到文件 {}", rule.name, file_info.name);
+    info!("应用规则 '{}' 到文件 {}", rule_match.rule.name, file_info.name);
 
-    // 执行规则动作，传递冲突处理策略
-    let result = execute_action(&rule.action, file_info, &engine, &rule.conflict_strategy);
+    // 执行规则动作，传递冲突处理策略和正则捕获组
+    let result = execute_action(&rule_match.rule.action, file_info, &engine, &rule_match.rule.conflict_strategy, &rule_match.regex_captures);
     
     // 记录文件操作日志
     match &result {
@@ -67,7 +67,7 @@ pub fn organize_file(file_info: &FileInfo, rules: &[Rule]) -> Result<Option<Stri
                 "移动文件",
                 &file_info.path,
                 Some(dest),
-                Some(&rule.name),
+                Some(&rule_match.rule.name),
                 true,
                 None,
             );
@@ -78,7 +78,7 @@ pub fn organize_file(file_info: &FileInfo, rules: &[Rule]) -> Result<Option<Stri
                 "移动文件",
                 &file_info.path,
                 None,
-                Some(&rule.name),
+                Some(&rule_match.rule.name),
                 false,
                 Some(&e.to_string()),
             );
@@ -108,7 +108,7 @@ pub fn organize_single_file(file_path: &str, rules: &[Rule]) -> Result<String> {
 }
 
 /// 执行规则动作
-fn execute_action(action: &RuleAction, file_info: &FileInfo, engine: &RuleEngine, conflict_strategy: &ConflictStrategy) -> Result<Option<String>> {
+fn execute_action(action: &RuleAction, file_info: &FileInfo, engine: &RuleEngine, conflict_strategy: &ConflictStrategy, regex_captures: &[String]) -> Result<Option<String>> {
     let source_path = Path::new(&file_info.path);
     let base_path = source_path.parent().unwrap_or(Path::new("."));
 
@@ -120,7 +120,7 @@ fn execute_action(action: &RuleAction, file_info: &FileInfo, engine: &RuleEngine
                 Ok(Some("已移动到回收站".to_string()))
             } else {
                 let dest_path = engine
-                    .get_destination_path(action, file_info, base_path)
+                    .get_destination_path(action, file_info, base_path, regex_captures)
                     .context("无法获取目标路径")?;
                 
                 move_file_with_strategy(source_path, &dest_path, conflict_strategy)?;
@@ -130,7 +130,7 @@ fn execute_action(action: &RuleAction, file_info: &FileInfo, engine: &RuleEngine
 
         RuleAction::CopyTo { destination: _ } => {
             let dest_path = engine
-                .get_destination_path(action, file_info, base_path)
+                .get_destination_path(action, file_info, base_path, regex_captures)
                 .context("无法获取目标路径")?;
             
             copy_file_with_strategy(source_path, &dest_path, conflict_strategy)?;
@@ -139,7 +139,7 @@ fn execute_action(action: &RuleAction, file_info: &FileInfo, engine: &RuleEngine
 
         RuleAction::Rename { pattern: _ } => {
             let new_path = engine
-                .get_destination_path(action, file_info, base_path)
+                .get_destination_path(action, file_info, base_path, regex_captures)
                 .context("无法获取新文件名")?;
             
             fs::rename(source_path, &new_path)
