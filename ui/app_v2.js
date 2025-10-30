@@ -465,7 +465,7 @@ function setupBackendListeners() {
             // 自动处理模式：立即整理文件
             console.log('[文件检测] 自动处理模式，立即整理');
             try {
-                const result = await invoke('process_file', { filePath });
+                const result = await invoke('process_file', { path: filePath });
                 if (result) {
                     console.log('[文件检测] 文件整理成功:', result);
                     addActivity(
@@ -489,10 +489,19 @@ function setupBackendListeners() {
             if (!appState.pendingFilesByFolder[folder.id]) {
                 appState.pendingFilesByFolder[folder.id] = [];
             }
-            appState.pendingFilesByFolder[folder.id].push({
-                path: filePath,
-                name: fileName
-            });
+            
+            // 检查文件是否已经在待处理列表中（去重）
+            const existingFile = appState.pendingFilesByFolder[folder.id].find(f => f.path === filePath);
+            if (!existingFile) {
+                appState.pendingFilesByFolder[folder.id].push({
+                    path: filePath,
+                    name: fileName
+                });
+                console.log('[文件检测] 文件已加入待处理队列:', fileName);
+            } else {
+                console.log('[文件检测] 文件已在待处理队列中，跳过:', fileName);
+            }
+            
             // 更新文件夹列表显示
             renderFolders();
         }
@@ -1249,7 +1258,7 @@ function renderFolders() {
                 </div>
                 
                 <div class="folder-path-col">
-                    <div class="folder-path" title="${folder.path}">${folder.path}</div>
+                    <div class="folder-path" title="${folder.path}" onclick="openFolderInExplorer('${folder.path.replace(/\\/g, '\\\\')}')">${folder.path}</div>
                 </div>
                 
                 <div class="folder-rules-col">
@@ -2788,6 +2797,18 @@ async function openFolder(path) {
     } catch (error) {
         console.error('[打开文件夹] 失败:', error);
         showNotification('无法打开文件夹: ' + error, 'error');
+    }
+}
+
+// ========== 文件夹操作 ==========
+
+// 在系统文件管理器中打开文件夹
+async function openFolderInExplorer(folderPath) {
+    try {
+        await invoke('open_folder', { path: folderPath });
+    } catch (error) {
+        console.error('打开文件夹失败:', error);
+        showNotification('打开文件夹失败: ' + error, 'error');
     }
 }
 

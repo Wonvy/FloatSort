@@ -332,6 +332,13 @@ body {
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.folder-path:hover {
+    color: #007bff;
+    text-decoration: underline;
 }
 
 .folder-rules-col {
