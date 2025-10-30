@@ -11,6 +11,7 @@ const appState = {
     pendingBatch: [],  // 待整理文件队列
     batchThreshold: 1,  // 批量确认阈值（从配置读取）
     currentConditions: [],  // 当前规则的条件列表
+    currentExtensions: [],  // 当前规则的扩展名列表
     currentRuleIndex: -1,  // 当前选中的规则索引（-1表示所有规则）
     editingConditionIndex: -1,  // 正在编辑的条件索引（-1表示新增）
     isCollapsed: false,  // 窗口是否折叠
@@ -262,6 +263,24 @@ function setupEventListeners() {
     // 条件构建器
     document.getElementById('conditionType').addEventListener('change', updateConditionInputs);
     document.getElementById('addConditionBtn').addEventListener('click', addCondition);
+    
+    // 扩展名标签管理
+    const extensionInput = document.getElementById('extensionInput');
+    const addExtensionBtn = document.getElementById('addExtensionBtn');
+    
+    if (extensionInput) {
+        // 回车键添加扩展名
+        extensionInput.addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') {
+                e.preventDefault();
+                addExtension();
+            }
+        });
+    }
+    
+    if (addExtensionBtn) {
+        addExtensionBtn.addEventListener('click', addExtension);
+    }
     
     // 占位符标签按钮
     setupPlaceholderButtons();
@@ -1595,11 +1614,6 @@ function updateConditionInputs() {
     container.innerHTML = '';
     
     switch (type) {
-        case 'extension':
-            container.innerHTML = `
-                <input type="text" id="conditionInput" placeholder="输入扩展名，逗号分隔（如：jpg,png,gif）" />
-            `;
-            break;
         case 'name':
             container.innerHTML = `
                 <input type="text" id="conditionInput" placeholder="输入文件名关键字" />
@@ -1661,20 +1675,6 @@ function addCondition() {
     let condition = null;
     
     switch (type) {
-        case 'extension': {
-            const input = document.getElementById('conditionInput').value.trim();
-            if (!input) {
-                showNotification('请输入文件扩展名', 'error');
-                return;
-            }
-            const values = input.split(',').map(v => v.trim()).filter(v => v);
-            condition = {
-                type: 'Extension',
-                values: values,
-                displayText: `扩展名: ${values.join(', ')}`
-            };
-            break;
-        }
         case 'name': {
             const pattern = document.getElementById('conditionInput').value.trim();
             if (!pattern) {
@@ -1785,9 +1785,6 @@ function editCondition(index) {
     const typeSelect = document.getElementById('conditionType');
     
     switch(condition.type) {
-        case 'Extension':
-            typeSelect.value = 'extension';
-            break;
         case 'NameContains':
             typeSelect.value = 'name';
             break;
@@ -1813,9 +1810,6 @@ function editCondition(index) {
         const inputField = document.getElementById('conditionInput');
         
         switch(condition.type) {
-            case 'Extension':
-                if (inputField) inputField.value = condition.values ? condition.values.join(', ') : '';
-                break;
             case 'NameContains':
             case 'NameRegex':
                 if (inputField) inputField.value = condition.pattern || '';
@@ -1922,7 +1916,6 @@ function updateConditionTypeOptions() {
     const addedTypes = new Set(appState.currentConditions.map(cond => {
         // 将后端类型映射到前端下拉框的value
         const typeMap = {
-            'Extension': 'extension',
             'NameContains': 'name',
             'NameRegex': 'regex',
             'SizeRange': 'size',
@@ -1936,7 +1929,6 @@ function updateConditionTypeOptions() {
     if (appState.editingConditionIndex >= 0) {
         const editingType = appState.currentConditions[appState.editingConditionIndex].type;
         const typeMap = {
-            'Extension': 'extension',
             'NameContains': 'name',
             'NameRegex': 'regex',
             'SizeRange': 'size',
@@ -1985,10 +1977,65 @@ function getConditionTypeLabel(type) {
     return labels[type] || '⚙️';
 }
 
+// ========== 扩展名标签管理 ==========
+function renderExtensionTags() {
+    const container = document.getElementById('extensionTags');
+    if (!appState.currentExtensions || appState.currentExtensions.length === 0) {
+        container.innerHTML = '<div style="color: #999; font-size: 12px;">暂无扩展名，请在下方输入添加</div>';
+        return;
+    }
+    
+    container.innerHTML = appState.currentExtensions.map(ext => `
+        <div class="extension-tag">
+            <span class="extension-tag-text">${ext}</span>
+            <button class="extension-tag-remove" onclick="removeExtension('${ext}')" type="button">×</button>
+        </div>
+    `).join('');
+}
+
+function addExtension() {
+    const input = document.getElementById('extensionInput');
+    let extension = input.value.trim().toLowerCase();
+    
+    if (!extension) {
+        showNotification('请输入扩展名', 'error');
+        return;
+    }
+    
+    // 移除开头的点号（如果有）
+    extension = extension.replace(/^\.+/, '');
+    
+    // 验证扩展名（只允许字母、数字、横线）
+    if (!/^[a-z0-9\-]+$/.test(extension)) {
+        showNotification('扩展名只能包含字母、数字和横线', 'error');
+        return;
+    }
+    
+    // 检查是否已存在
+    if (appState.currentExtensions.includes(extension)) {
+        showNotification('该扩展名已添加', 'error');
+        return;
+    }
+    
+    // 添加扩展名
+    appState.currentExtensions.push(extension);
+    renderExtensionTags();
+    
+    // 清空输入框
+    input.value = '';
+    input.focus();
+}
+
+window.removeExtension = function(extension) {
+    appState.currentExtensions = appState.currentExtensions.filter(ext => ext !== extension);
+    renderExtensionTags();
+};
+
 // ========== 规则管理函数 ==========
 async function openRuleModal(ruleId = null) {
     appState.editingRuleId = ruleId;
     appState.currentConditions = [];
+    appState.currentExtensions = [];  // 重置扩展名列表
     appState.editingConditionIndex = -1; // 重置编辑状态
     
     const modal = document.getElementById('ruleModal');
@@ -2028,14 +2075,13 @@ async function openRuleModal(ruleId = null) {
             }
         }
         
-        // 加载现有条件（过滤掉 FileType 条件，因为现在由复选框处理）
+        // 加载现有条件（过滤掉 FileType 和 Extension 条件）
+        // Extension现在由标签处理，FileType由复选框处理
         appState.currentConditions = rule.conditions
-            .filter(cond => cond.type !== 'FileType')
+            .filter(cond => cond.type !== 'FileType' && cond.type !== 'Extension')
             .map(cond => {
             let displayText = '';
-            if (cond.type === 'Extension') {
-                displayText = `扩展名: ${cond.values.join(', ')}`;
-            } else if (cond.type === 'NameContains') {
+            if (cond.type === 'NameContains') {
                 displayText = `文件名包含: ${cond.pattern}`;
             } else if (cond.type === 'NameRegex') {
                 displayText = `正则匹配: ${cond.pattern}`;
@@ -2058,14 +2104,21 @@ async function openRuleModal(ruleId = null) {
             }
             return { ...cond, displayText };
         });
+        
+        // 加载扩展名标签
+        const extensionCondition = rule.conditions.find(c => c.type === 'Extension');
+        if (extensionCondition && extensionCondition.values) {
+            appState.currentExtensions = [...extensionCondition.values];
+        }
     } else {
         // 新增模式
         title.textContent = '📝 创建规则';
     }
     
-    // 初始化条件构建器
+    // 初始化条件构建器和扩展名标签
     updateConditionInputs();
     renderConditions();
+    renderExtensionTags();
     
     modal.style.display = 'flex';
 }
@@ -2095,8 +2148,8 @@ async function saveRule() {
         return;
     }
     
-    if (appState.currentConditions.length === 0) {
-        showNotification('请至少添加一个条件', 'error');
+    if (appState.currentConditions.length === 0 && appState.currentExtensions.length === 0) {
+        showNotification('请至少添加一个条件或扩展名', 'error');
         return;
     }
     
@@ -2105,6 +2158,14 @@ async function saveRule() {
         const { displayText, ...rest } = cond;
         return rest;
     });
+    
+    // 如果有扩展名，添加 Extension 条件
+    if (appState.currentExtensions.length > 0) {
+        conditions.push({
+            type: 'Extension',
+            values: [...appState.currentExtensions]
+        });
+    }
     
     // 根据复选框状态添加 FileType 条件
     let fileType;

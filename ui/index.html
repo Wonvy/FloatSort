@@ -269,12 +269,25 @@
                     </div>
                     
                     <div class="form-group">
-                        <label>条件设置（同时满足所有条件）</label>
+                        <label>文件扩展名</label>
+                        <div class="extension-tags-container">
+                            <div class="extension-tags" id="extensionTags">
+                                <!-- 扩展名标签将显示在这里 -->
+                            </div>
+                            <div class="extension-input-wrapper">
+                                <input type="text" id="extensionInput" placeholder="输入扩展名后按回车（如：jpg）" />
+                                <button type="button" class="btn-add-extension" id="addExtensionBtn" title="添加扩展名">+</button>
+                            </div>
+                        </div>
+                        <p class="hint">提示：不需要包含点号，直接输入扩展名即可（如：jpg、png、pdf）</p>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label>其他条件（可选，同时满足所有条件）</label>
                         <div class="conditions-builder">
                             <div class="condition-selector">
                                 <div class="condition-inputs-group">
                                     <select id="conditionType">
-                                        <option value="extension">文件扩展名</option>
                                         <option value="name">文件名包含</option>
                                         <option value="regex">正则表达式</option>
                                         <option value="size">文件大小</option>

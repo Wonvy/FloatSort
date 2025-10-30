@@ -873,6 +873,116 @@ label {
     color: #333;
 }
 
+/* 扩展名标签容器 */
+.extension-tags-container {
+    border: 1px solid #d1d5db;
+    border-radius: 6px;
+    padding: 8px;
+    background: #f8f9fa;
+}
+
+.extension-tags {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin-bottom: 8px;
+    min-height: 32px;
+}
+
+.extension-tag {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 4px 10px;
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: white;
+    border-radius: 4px;
+    font-size: 12px;
+    font-weight: 500;
+    animation: tagFadeIn 0.2s ease;
+}
+
+@keyframes tagFadeIn {
+    from {
+        opacity: 0;
+        transform: scale(0.8);
+    }
+    to {
+        opacity: 1;
+        transform: scale(1);
+    }
+}
+
+.extension-tag-text {
+    user-select: none;
+}
+
+.extension-tag-remove {
+    background: none;
+    border: none;
+    color: white;
+    cursor: pointer;
+    padding: 0;
+    width: 16px;
+    height: 16px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 50%;
+    font-size: 14px;
+    line-height: 1;
+    transition: background 0.2s;
+}
+
+.extension-tag-remove:hover {
+    background: rgba(255, 255, 255, 0.2);
+}
+
+.extension-input-wrapper {
+    display: flex;
+    gap: 6px;
+}
+
+.extension-input-wrapper input {
+    flex: 1;
+    padding: 6px 10px;
+    border: 1px solid #d1d5db;
+    border-radius: 4px;
+    font-size: 13px;
+}
+
+.extension-input-wrapper input:focus {
+    outline: none;
+    border-color: #667eea;
+    box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+}
+
+.btn-add-extension {
+    width: 32px;
+    height: 32px;
+    padding: 0;
+    background: #667eea;
+    color: white;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 18px;
+    font-weight: bold;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.2s;
+}
+
+.btn-add-extension:hover {
+    background: #5568d3;
+    transform: scale(1.05);
+}
+
+.btn-add-extension:active {
+    transform: scale(0.95);
+}
+
 .hint-inline {
     font-size: 11px;
     color: #999;
