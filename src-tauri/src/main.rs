@@ -7,9 +7,11 @@ mod rule_engine;
 mod file_ops;
 mod models;
 mod activity_log;
+mod scheduler;
 
 use config::{AppConfig, WatchFolder};
 use file_monitor::FileMonitor;
+use scheduler::Scheduler;
 use models::Rule;
 use std::sync::{Arc, Mutex};
 use std::collections::HashSet;
@@ -340,8 +342,8 @@ async fn start_monitoring(
         return Err("没有已启用的监控文件夹，请先添加并启用文件夹".to_string());
     }
     
-    // 创建并启动文件监控器
-    let monitor = FileMonitor::new(config.clone(), window)
+    // 创建并启动文件监控器（仅处理 Immediate 和 Manual 模式）
+    let monitor = FileMonitor::new(config.clone(), window.clone())
         .map_err(|e| format!("创建并启动监控器失败: {}", e))?;
     
     // 保存监控器实例
@@ -350,6 +352,12 @@ async fn start_monitoring(
     
     let folder_names: Vec<_> = enabled_folders.iter().map(|f| f.name.as_str()).collect();
     info!("文件监控已启动，监控文件夹: {:?}", folder_names);
+    
+    // 创建并启动调度器（处理 OnStartup 和 Scheduled 模式）
+    let scheduler = Scheduler::new(state.config.clone(), window);
+    scheduler.start();
+    info!("调度器已启动");
+    
     Ok(())
 }
 
