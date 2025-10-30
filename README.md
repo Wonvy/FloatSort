@@ -1,6 +1,24 @@
 # FloatSort
 
-🚀 **智能悬浮文件整理器** - 轻量、高效、智能
+<div align="center">
+
+🚀 **智能文件整理器** - 轻量、高效、智能
+
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
+[![GitHub release](https://img.shields.io/github/v/release/Wonvy/FloatSort)](https://github.com/Wonvy/FloatSort/releases)
+[![Build Status](https://img.shields.io/github/actions/workflow/status/Wonvy/FloatSort/build.yml?branch=main)](https://github.com/Wonvy/FloatSort/actions)
+[![Rust](https://img.shields.io/badge/Rust-1.70+-orange.svg)](https://www.rust-lang.org)
+[![Tauri](https://img.shields.io/badge/Tauri-1.5-blue.svg)](https://tauri.app)
+
+[功能特性](#-功能特性) •
+[快速开始](#-快速开始) •
+[文档](#-文档) •
+[贡献指南](CONTRIBUTING.md) •
+[更新日志](CHANGELOG.md)
+
+</div>
+
+---
 
 ## 📋 项目简介
 
@@ -43,15 +61,18 @@ cd FloatSort
 ### 开发模式
 
 ```bash
-# 方式1：使用启动脚本（Windows）
-开始开发.bat
+# Windows
+.\scripts\dev-cn.bat
+# 或使用 PowerShell
+.\scripts\dev.ps1
 
-# 方式2：手动启动
+# Linux/macOS
+chmod +x scripts/dev.sh
+./scripts/dev.sh
+
+# 手动启动
 cd src-tauri
 cargo run
-
-# 方式3：使用 Tauri CLI（如果已安装）
-cargo tauri dev
 ```
 
 ### 构建发布版本
@@ -174,19 +195,51 @@ cargo build
 - app.js
 - favicon.ico
 
+## 📚 文档
+
+- [📖 用户指南](docs/USER_GUIDE.md) - 详细的使用说明
+- [💻 开发文档](docs/DEVELOPMENT.md) - 开发环境配置
+- [🏗️ 架构设计](docs/ARCHITECTURE.md) - 技术架构说明
+- [🔨 构建指南](docs/BUILD.md) - 编译打包说明
+- [❓ 常见问题](docs/FAQ.md) - FAQ
+- [🚀 GitHub Actions](docs/GITHUB_ACTIONS_GUIDE.md) - CI/CD 使用
+- [✨ 功能列表](docs/FEATURES.md) - 完整功能清单
+
+## 🛡️ 安全
+
+请查看 [SECURITY.md](SECURITY.md) 了解安全政策和如何报告漏洞。
+
 ## 📄 开源协议
 
-MIT License
+本项目采用 [MIT License](LICENSE) 开源协议。
 
 ## 🤝 贡献
 
-欢迎提交 Issue 和 Pull Request！
+我们欢迎所有形式的贡献！请阅读 [贡献指南](CONTRIBUTING.md) 了解如何参与。
+
+- 🐛 [报告 Bug](https://github.com/Wonvy/FloatSort/issues/new?template=bug_report.yml)
+- ✨ [功能建议](https://github.com/Wonvy/FloatSort/issues/new?template=feature_request.yml)
+- 💬 [参与讨论](https://github.com/Wonvy/FloatSort/discussions)
+
+## 🌟 支持项目
+
+如果这个项目对您有帮助，请给个 ⭐️ Star！
+
+## 📊 项目统计
+
+![Alt](https://repobeats.axiom.co/api/embed/your-analytics-key.svg "Repobeats analytics image")
 
 ## 📮 联系方式
 
-- Issues: [GitHub Issues](your-repo-url/issues)
-- Email: your-email@example.com
+- **Issues**: [GitHub Issues](https://github.com/Wonvy/FloatSort/issues)
+- **Discussions**: [GitHub Discussions](https://github.com/Wonvy/FloatSort/discussions)
 
 ---
 
+<div align="center">
+
 **Made with ❤️ using Rust & Tauri**
+
+Copyright © 2025 [Wonvy](https://github.com/Wonvy)
+
+</div>

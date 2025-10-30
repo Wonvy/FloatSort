@@ -1,0 +1,93 @@
+name: 🐛 Bug 报告
+description: 报告一个问题或错误
+title: "[Bug]: "
+labels: ["bug", "待分类"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        感谢您花时间填写此错误报告！请提供尽可能详细的信息。
+
+  - type: textarea
+    id: description
+    attributes:
+      label: 问题描述
+      description: 简要描述您遇到的问题
+      placeholder: 告诉我们发生了什么
+    validations:
+      required: true
+
+  - type: textarea
+    id: steps
+    attributes:
+      label: 复现步骤
+      description: 如何复现这个问题？
+      placeholder: |
+        1. 打开应用
+        2. 点击 '...'
+        3. 滚动到 '...'
+        4. 看到错误
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: 预期行为
+      description: 您期望发生什么？
+      placeholder: 应该...
+    validations:
+      required: true
+
+  - type: textarea
+    id: actual
+    attributes:
+      label: 实际行为
+      description: 实际发生了什么？
+      placeholder: 但是...
+    validations:
+      required: true
+
+  - type: dropdown
+    id: os
+    attributes:
+      label: 操作系统
+      description: 您使用的操作系统
+      options:
+        - Windows 10
+        - Windows 11
+        - macOS (Intel)
+        - macOS (Apple Silicon)
+        - Linux (Ubuntu)
+        - Linux (其他发行版)
+    validations:
+      required: true
+
+  - type: input
+    id: version
+    attributes:
+      label: FloatSort 版本
+      description: 您使用的 FloatSort 版本（在"关于"中查看）
+      placeholder: 例如 v0.1.0
+    validations:
+      required: true
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: 日志文件
+      description: 如果有错误日志，请粘贴到这里（位于 log/ 目录）
+      render: shell
+
+  - type: textarea
+    id: screenshots
+    attributes:
+      label: 截图
+      description: 如果适用，添加截图帮助说明问题
+
+  - type: textarea
+    id: additional
+    attributes:
+      label: 其他信息
+      description: 其他任何相关信息
+
