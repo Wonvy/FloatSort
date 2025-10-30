@@ -124,6 +124,7 @@ impl Default for AppConfig {
                         destination: "Pictures".to_string(),
                     },
                     priority: 1,
+                    conflict_strategy: crate::models::ConflictStrategy::Skip,
                 },
                 Rule {
                     id: "rule_documents".to_string(),
@@ -145,6 +146,7 @@ impl Default for AppConfig {
                         destination: "Documents".to_string(),
                     },
                     priority: 2,
+                    conflict_strategy: crate::models::ConflictStrategy::Skip,
                 },
             ],
             show_notifications: true,

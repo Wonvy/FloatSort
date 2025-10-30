@@ -444,48 +444,49 @@ function setupWindowListeners() {
 
 // ========== 后端事件监听 ==========
 function setupBackendListeners() {
-    listen('file-detected', event => {
+    listen('file-detected', async event => {
         const filePath = event.payload.file_path;
         const fileName = filePath.split('\\').pop() || filePath.split('/').pop();
         
+        console.log('[文件检测] 检测到文件:', fileName, '批量阈值:', appState.batchThreshold);
         addActivity(`📥 检测到文件: ${fileName}`);
         
-        // 如果未达到批量阈值，自动整理
-        // 如果达到阈值，添加到批量队列
+        // 添加到批量队列
         appState.pendingBatch.push({
             path: filePath,
             name: fileName
         });
         
+        // 如果达到批量阈值，显示确认窗口
         if (appState.pendingBatch.length >= appState.batchThreshold) {
+            console.log('[文件检测] 达到批量阈值，显示确认窗口');
             showBatchConfirm();
+        } else {
+            // 未达到阈值，自动整理这个文件
+            console.log('[文件检测] 未达到阈值，自动整理文件');
+            try {
+                const result = await invoke('process_file', { filePath });
+                if (result) {
+                    console.log('[文件检测] 文件整理成功:', result);
+                    addActivity(
+                        `✅ <strong>${fileName}</strong>`,
+                        'success',
+                        `从: ${filePath}<br>到: ${result}`
+                    );
+                    appState.filesProcessed++;
+                    updateStats();
+                } else {
+                    console.log('[文件检测] 文件未匹配任何规则');
+                    addActivity(`⚠️ 未匹配规则: ${fileName}`);
+                }
+                // 从批量队列中移除
+                appState.pendingBatch = appState.pendingBatch.filter(f => f.path !== filePath);
+            } catch (error) {
+                console.error('[文件检测] 处理文件失败:', error);
+                addActivity(`❌ ${fileName} 处理失败: ${error}`, 'error');
+                appState.pendingBatch = appState.pendingBatch.filter(f => f.path !== filePath);
+            }
         }
-    });
-    
-    listen('file-organized', event => {
-        const { file_name, original_path, new_path } = event.payload;
-        addActivity(
-            `✅ <strong>${file_name}</strong>`,
-            'success',
-            `从: ${original_path}<br>到: ${new_path}`
-        );
-        appState.filesProcessed++;
-        updateStats();
-        
-        // 从批量队列中移除已整理的文件
-        appState.pendingBatch = appState.pendingBatch.filter(f => f.path !== original_path);
-    });
-    
-    listen('file-no-match', event => {
-        addActivity(`⚠️ 未匹配规则: ${event.payload.file_name}`);
-        
-        // 从批量队列中移除未匹配的文件
-        const filePath = event.payload.file_path;
-        appState.pendingBatch = appState.pendingBatch.filter(f => f.path !== filePath);
-    });
-    
-    listen('file-error', event => {
-        addActivity(`❌ 错误: ${event.payload.error}`, 'error');
     });
     
     // 监听拖拽文件事件
@@ -1113,9 +1114,12 @@ async function processFilesWithRuleDirectly(files, ruleId) {
 async function loadAppData() {
     try {
         await loadConfig();
-        await loadFolders();
-        await loadRules();
+        await loadRules();    // 先加载规则
+        await loadFolders();  // 再加载文件夹（这样渲染时能找到关联的规则）
         updateStats();
+        
+        // 启动文件监控
+        await startFileMonitoring();
     } catch (error) {
         console.error('加载数据失败:', error);
         showNotification('加载数据失败', 'error');
@@ -1213,31 +1217,91 @@ function renderFolders() {
         const associatedRules = appState.rules.filter(r => folder.rule_ids.includes(r.id));
         
         return `
-            <div class="folder-card ${!folder.enabled ? 'disabled' : ''}" data-folder-id="${folder.id}">
+            <div class="folder-card compact ${!folder.enabled ? 'disabled' : ''}" data-folder-id="${folder.id}">
                 <button class="folder-toggle ${folder.enabled ? 'active' : ''}" 
-                        onclick="toggleFolderMonitoring('${folder.id}')">
+                        onclick="toggleFolderMonitoring('${folder.id}')" title="${folder.enabled ? '禁用' : '启用'}">
                 </button>
-                <div class="folder-header">
-                    <div class="folder-info">
-                        <div class="folder-name">${folder.name}</div>
-                        <div class="folder-path">${folder.path}</div>
-                    </div>
+                
+                <div class="folder-name-col">
+                    <div class="folder-name">${folder.name}</div>
                 </div>
-                <div class="folder-rules">
-                    <div class="folder-rules-title">规则 (${associatedRules.length})</div>
-                    <div class="rule-tags">
-                        ${associatedRules.length > 0 
-                            ? associatedRules.map(r => `<span class="rule-tag">${r.name}</span>`).join('')
-                            : '<span class="hint" style="font-size: 10px; color: #ccc;">未关联</span>'}
-                    </div>
+                
+                <div class="folder-path-col">
+                    <div class="folder-path" title="${folder.path}">${folder.path}</div>
                 </div>
+                
+                <div class="folder-rules-col">
+                    ${associatedRules.length > 0 
+                        ? associatedRules.map(r => `
+                            <span class="rule-tag-with-edit">
+                                <span class="rule-tag-name">${r.name}</span>
+                                <button class="rule-tag-edit-btn" onclick="event.stopPropagation(); editRule('${r.id}')" title="编辑规则">
+                                    <svg width="10" height="10" viewBox="0 0 16 16" fill="none">
+                                        <path d="M11.5 2L14 4.5L5.5 13H3V10.5L11.5 2Z" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+                                    </svg>
+                                </button>
+                            </span>
+                        `).join('')
+                        : '<span class="hint-text">未关联规则</span>'}
+                </div>
+                
                 <div class="folder-actions">
-                    <button class="btn-secondary btn-sm" onclick="editFolder('${folder.id}')">编辑</button>
-                    <button class="btn-secondary btn-sm" onclick="deleteFolder('${folder.id}')">删除</button>
+                    <button class="btn-icon" onclick="organizeNow('${folder.id}')" title="立即整理">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M21 12c0 1.2-4.03 6-9 6s-9-4.8-9-6c0-1.2 4.03-6 9-6s9 4.8 9 6Z"></path>
+                            <circle cx="12" cy="12" r="3"></circle>
+                            <path d="M12 2v4"></path>
+                            <path d="M12 18v4"></path>
+                            <path d="m4.93 4.93 2.83 2.83"></path>
+                            <path d="m16.24 16.24 2.83 2.83"></path>
+                            <path d="M2 12h4"></path>
+                            <path d="M18 12h4"></path>
+                            <path d="m4.93 19.07 2.83-2.83"></path>
+                            <path d="m16.24 7.76 2.83-2.83"></path>
+                        </svg>
+                    </button>
+                    <button class="btn-icon" onclick="editFolder('${folder.id}')" title="编辑">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
+                            <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
+                        </svg>
+                    </button>
+                    <button class="btn-icon" onclick="deleteFolder('${folder.id}')" title="删除">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M3 6h18"></path>
+                            <path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"></path>
+                            <path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"></path>
+                        </svg>
+                    </button>
                 </div>
             </div>
         `;
     }).join('');
+}
+
+// 立即整理文件夹
+async function organizeNow(folderId) {
+    try {
+        const folder = appState.folders.find(f => f.id === folderId);
+        if (!folder) {
+            showNotification('文件夹不存在', 'error');
+            return;
+        }
+        
+        showNotification(`正在整理 "${folder.name}"...`, 'info');
+        
+        // 调用后端进行整理
+        const result = await invoke('organize_folder_now', { folderId });
+        
+        showNotification(`整理完成: ${result.organized}个文件已整理`, 'success');
+        addActivity(`🗂️ 立即整理: ${folder.name} - ${result.organized}个文件`);
+        
+        // 刷新统计
+        updateStats();
+    } catch (error) {
+        console.error('立即整理失败:', error);
+        showNotification(`整理失败: ${error}`, 'error');
+    }
 }
 
 // ========== 渲染规则列表 ==========
@@ -1381,7 +1445,7 @@ function renderRules() {
                     </button>
                 </div>
                 <div class="rule-actions">
-                    <button class="btn-icon btn-sm" onclick="editRule('${rule.id}')" title="编辑">
+                    <button class="btn-icon btn-sm btn-always-visible" onclick="editRule('${rule.id}')" title="编辑">
                         <svg width="14" height="14" viewBox="0 0 16 16" fill="none">
                             <path d="M11.5 2L14 4.5L5.5 13H3V10.5L11.5 2Z" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
                             <path d="M10 3.5L12.5 6" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
@@ -1490,6 +1554,11 @@ async function openFolderModal(folderId = null) {
                     <input type="checkbox" value="${rule.id}" ${folderId && appState.folders.find(f => f.id === folderId)?.rule_ids.includes(rule.id) ? 'checked' : ''}>
                     <span>${rule.name}</span>
                 </label>
+                <button type="button" class="rule-quick-edit-btn" onclick="event.preventDefault(); editRule('${rule.id}')" title="快速编辑规则">
+                    <svg width="12" height="12" viewBox="0 0 16 16" fill="none">
+                        <path d="M11.5 2L14 4.5L5.5 13H3V10.5L11.5 2Z" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+                    </svg>
+                </button>
                 <div class="rule-sort-buttons">
                     <button type="button" class="sort-btn" onclick="moveRuleUp(${index})" ${index === 0 ? 'disabled' : ''}>
                         ▲
@@ -1583,9 +1652,30 @@ async function saveFolder() {
         await loadFolders();
         closeFolderModal();
         updateStats();
+        
+        // 重新启动文件监控
+        await startFileMonitoring();
     } catch (error) {
         console.error('保存文件夹失败:', error);
         showNotification(`保存失败: ${error}`, 'error');
+    }
+}
+
+// 启动文件监控
+async function startFileMonitoring() {
+    try {
+        // 检查是否有已启用的文件夹
+        const enabledFolders = appState.folders.filter(f => f.enabled);
+        if (enabledFolders.length === 0) {
+            console.log('没有已启用的监控文件夹，跳过启动监控');
+            return;
+        }
+        
+        await invoke('start_monitoring');
+        console.log(`✓ 文件监控已启动，监控 ${enabledFolders.length} 个文件夹`);
+    } catch (error) {
+        console.error('启动文件监控失败:', error);
+        // 不显示错误通知，因为这是后台操作
     }
 }
 
@@ -1602,6 +1692,9 @@ async function toggleFolderMonitoring(folderId) {
                 newState ? 'success' : 'info'
             );
             addActivity(`${newState ? '🟢' : '🔴'} ${folder.name} 监控${newState ? '启用' : '停用'}`);
+            
+            // 重新启动文件监控以应用更改
+            await startFileMonitoring();
         }
     } catch (error) {
         console.error('切换监控失败:', error);
@@ -2118,6 +2211,10 @@ async function openRuleModal(ruleId = null) {
         document.getElementById('ruleName').value = rule.name;
         document.getElementById('targetFolder').value = rule.action.destination;
         
+        // 设置文件冲突处理策略
+        const conflictStrategy = rule.conflict_strategy || 'skip';
+        document.getElementById('conflictStrategy').value = conflictStrategy;
+        
         // 检查是否有 FileType 条件，并设置复选框
         const fileTypeCondition = rule.conditions.find(c => c.type === 'FileType');
         if (fileTypeCondition) {
@@ -2248,6 +2345,9 @@ async function saveRule() {
         file_type: fileType
     });
     
+    // 获取文件冲突处理策略
+    const conflictStrategy = document.getElementById('conflictStrategy').value || 'skip';
+    
     const rule = {
         id: appState.editingRuleId || `rule_${Date.now()}`,
         name,
@@ -2256,6 +2356,7 @@ async function saveRule() {
         conditions: conditions,
         action: { type: 'MoveTo', destination: target },
         priority: 0,
+        conflict_strategy: conflictStrategy,
     };
     
     try {
@@ -2409,9 +2510,20 @@ async function toggleRule(ruleId) {
 
 // ========== 统计信息 ==========
 function updateStats() {
-    document.getElementById('filesProcessedCount').textContent = appState.filesProcessed;
-    document.getElementById('foldersCount').textContent = appState.folders.filter(f => f.enabled).length;
-    document.getElementById('rulesCount').textContent = appState.rules.filter(r => r.enabled).length;
+    const filesProcessedElement = document.getElementById('filesProcessedCount');
+    const foldersCountElement = document.getElementById('foldersCount');
+    const rulesCountElement = document.getElementById('rulesCount');
+    
+    if (filesProcessedElement) {
+        filesProcessedElement.textContent = appState.filesProcessed;
+        console.log('[统计] 更新已处理文件数:', appState.filesProcessed);
+    }
+    if (foldersCountElement) {
+        foldersCountElement.textContent = appState.folders.filter(f => f.enabled).length;
+    }
+    if (rulesCountElement) {
+        rulesCountElement.textContent = appState.rules.filter(r => r.enabled).length;
+    }
 }
 
 // ========== 配置导入导出 ==========
@@ -2478,9 +2590,10 @@ async function importConfig() {
             
             // 重新加载所有数据
             setTimeout(async () => {
-                await loadFolders();
-                await loadRules();
+                await loadRules();    // 先加载规则
+                await loadFolders();  // 再加载文件夹
                 updateStats();
+                await startFileMonitoring(); // 重新启动文件监控
                 showNotification('配置导入完成', 'success');
             }, 1000);
         }
@@ -2915,8 +3028,8 @@ async function confirmBatch() {
     appState.selectedRuleIds = null;
     
     // 刷新界面
-    await loadFolders();
-    await loadRules();
+    await loadRules();    // 先加载规则
+    await loadFolders();  // 再加载文件夹
     updateStats();
 }
 

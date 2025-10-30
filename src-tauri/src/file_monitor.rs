@@ -1,7 +1,4 @@
 use crate::config::AppConfig;
-use crate::file_ops;
-use crate::models::{FileInfo, Rule};
-use crate::rule_engine::RuleEngine;
 use anyhow::Result;
 use notify::{Config, Event, RecommendedWatcher, RecursiveMode, Watcher};
 use std::path::{Path, PathBuf};
@@ -49,6 +46,17 @@ impl FileMonitor {
             }
         }
 
+        // 克隆配置和窗口用于初始扫描
+        let config_for_scan = config.clone();
+        let window_for_scan = window.clone();
+        
+        // 在启动监控后，对已存在的文件进行初始扫描
+        thread::spawn(move || {
+            info!("开始对监控文件夹进行初始扫描...");
+            Self::scan_existing_files(&config_for_scan, &window_for_scan);
+            info!("初始扫描完成");
+        });
+
         // 克隆配置和窗口用于线程
         let config_clone = config.clone();
         let window_clone = window.clone();
@@ -65,6 +73,52 @@ impl FileMonitor {
         Ok(Self {
             _watcher: Arc::new(Mutex::new(watcher)),
         })
+    }
+    
+    /// 扫描监控文件夹中已存在的文件
+    fn scan_existing_files(config: &AppConfig, window: &Window) {
+        use std::fs;
+        
+        // 获取所有已启用的文件夹
+        let enabled_folders: Vec<_> = config.folders.iter().filter(|f| f.enabled).collect();
+        
+        for folder in enabled_folders {
+            let path = Path::new(&folder.path);
+            if !path.exists() || !path.is_dir() {
+                warn!("文件夹不存在或不是目录: {}", folder.path);
+                continue;
+            }
+            
+            info!("扫描文件夹: {} ({})", folder.name, folder.path);
+            
+            // 读取文件夹中的所有文件（非递归）
+            match fs::read_dir(path) {
+                Ok(entries) => {
+                    let mut file_count = 0;
+                    for entry in entries {
+                        if let Ok(entry) = entry {
+                            let entry_path = entry.path();
+                            
+                            // 只处理文件，忽略目录
+                            if entry_path.is_file() {
+                                file_count += 1;
+                                info!("发现文件: {:?}", entry_path);
+                                
+                                // 等待一小段时间，避免太快
+                                std::thread::sleep(std::time::Duration::from_millis(100));
+                                
+                                // 处理文件
+                                Self::process_file(entry_path, config, window);
+                            }
+                        }
+                    }
+                    info!("文件夹 '{}' 扫描完成，共 {} 个文件", folder.name, file_count);
+                }
+                Err(e) => {
+                    error!("读取文件夹 '{}' 失败: {}", folder.path, e);
+                }
+            }
+        }
     }
 
     /// 处理文件系统事件
@@ -102,11 +156,12 @@ impl FileMonitor {
         }
     }
 
-    /// 处理单个文件
-    fn process_file(path: PathBuf, config: &AppConfig, window: &Window) {
-        info!("开始处理文件: {:?}", path);
+    /// 处理单个文件 - 只检测并通知前端，由前端决定是否整理
+    fn process_file(path: PathBuf, _config: &AppConfig, window: &Window) {
+        info!("检测到文件: {:?}", path);
         
-        // 发送文件检测事件到前端
+        // 只发送文件检测事件到前端，由前端决定是否整理
+        // 前端会根据批量阈值来决定是自动整理还是显示确认窗口
         let _ = window.emit(
             "file-detected",
             serde_json::json!({
@@ -114,124 +169,7 @@ impl FileMonitor {
             }),
         );
         
-        match file_ops::get_file_info(&path) {
-            Ok(file_info) => {
-                info!("✓ 获取文件信息成功: {} ({})", file_info.name, file_info.extension);
-
-                // 根据文件路径找到对应的文件夹配置
-                let folder = config.folders.iter()
-                    .filter(|f| f.enabled)
-                    .find(|f| path.starts_with(&f.path));
-                
-                if let Some(folder) = folder {
-                    // 获取该文件夹关联的规则
-                    let applicable_rules: Vec<Rule> = config.rules.iter()
-                        .filter(|r| folder.rule_ids.contains(&r.id))
-                        .cloned()
-                        .collect();
-                    
-                    info!("文件夹 '{}' 应用 {} 条规则", folder.name, applicable_rules.len());
-                    
-                    // 尝试整理文件（使用文件夹路径作为基础路径）
-                    match Self::organize_file_with_base(&file_info, &applicable_rules, &folder.path) {
-                        Ok(Some(new_path)) => {
-                            info!("✓ 文件已整理: {} -> {}", file_info.path, new_path);
-                            
-                            // 发送通知到前端
-                            let _ = window.emit(
-                                "file-organized",
-                                serde_json::json!({
-                                    "original_path": file_info.path,
-                                    "new_path": new_path.clone(),
-                                    "file_name": file_info.name.clone(),
-                                }),
-                            );
-                        }
-                        Ok(None) => {
-                            info!("○ 文件未匹配任何规则: {}", file_info.name);
-                            
-                            // 发送未匹配通知到前端
-                            let _ = window.emit(
-                                "file-no-match",
-                                serde_json::json!({
-                                    "file_name": file_info.name,
-                                    "file_path": file_info.path,
-                                }),
-                            );
-                        }
-                        Err(e) => {
-                            error!("✗ 整理文件失败: {} - {}", file_info.name, e);
-                            
-                            let _ = window.emit(
-                                "file-error",
-                                serde_json::json!({
-                                    "file_path": file_info.path,
-                                    "file_name": file_info.name,
-                                    "error": e.to_string(),
-                                }),
-                            );
-                        }
-                    }
-                } else {
-                    warn!("文件 {} 不属于任何已启用的监控文件夹", file_info.name);
-                }
-            }
-            Err(e) => {
-                error!("✗ 获取文件信息失败: {:?} - {}", path, e);
-                
-                let _ = window.emit(
-                    "file-error",
-                    serde_json::json!({
-                        "file_path": path.to_string_lossy().to_string(),
-                        "error": format!("获取文件信息失败: {}", e),
-                    }),
-                );
-            }
-        }
-    }
-    
-    /// 使用指定的基础路径整理文件
-    fn organize_file_with_base(file_info: &FileInfo, rules: &[Rule], base_path: &str) -> Result<Option<String>> {
-        use std::fs;
-        
-        let engine = RuleEngine::new(rules.to_vec());
-        
-        // 查找匹配的规则
-        if let Some(rule) = engine.find_matching_rule(file_info) {
-            info!("应用规则 '{}' 到文件 {}", rule.name, file_info.name);
-            
-            // 使用监控根目录作为基础路径
-            let base = Path::new(base_path);
-            
-            if let Some(dest_folder) = engine.get_destination_path(&rule.action, file_info, base) {
-                let source = Path::new(&file_info.path);
-                let dest_dir = PathBuf::from(&dest_folder);
-                
-                // 创建目标目录
-                fs::create_dir_all(&dest_dir)?;
-                
-                // 构建完整目标路径
-                let file_name = source.file_name()
-                    .ok_or_else(|| anyhow::anyhow!("无法获取文件名"))?;
-                let final_dest = dest_dir.join(file_name);
-                
-                // 移动文件（尝试重命名，失败则复制+删除）
-                if let Err(_) = fs::rename(source, &final_dest) {
-                    // 跨分区移动：复制后删除
-                    fs::copy(source, &final_dest)?;
-                    fs::remove_file(source)?;
-                }
-                
-                let final_dest_str = final_dest.to_string_lossy().to_string();
-                info!("文件已移动: {:?} -> {}", source, final_dest_str);
-                
-                Ok(Some(final_dest_str))
-            } else {
-                Ok(None)
-            }
-        } else {
-            Ok(None)
-        }
+        info!("✓ 文件检测事件已发送到前端: {:?}", path);
     }
 }
 

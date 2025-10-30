@@ -39,6 +39,24 @@ pub enum RuleCondition {
     ModifiedDaysAgo { min: Option<u64>, max: Option<u64> },
 }
 
+/// 文件冲突处理策略
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "lowercase")]
+pub enum ConflictStrategy {
+    /// 跳过（默认）
+    Skip,
+    /// 覆盖
+    Overwrite,
+    /// 重命名为副本
+    Rename,
+}
+
+impl Default for ConflictStrategy {
+    fn default() -> Self {
+        ConflictStrategy::Skip
+    }
+}
+
 /// 规则动作
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(tag = "type")]
@@ -68,6 +86,9 @@ pub struct Rule {
     pub conditions: Vec<RuleCondition>,
     pub action: RuleAction,
     pub priority: i32,
+    /// 文件冲突处理策略（默认为跳过）
+    #[serde(default)]
+    pub conflict_strategy: ConflictStrategy,
 }
 
 fn default_logic() -> String {

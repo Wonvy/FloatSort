@@ -301,6 +301,125 @@ body {
     border-color: #000;
 }
 
+/* 文件夹卡片紧凑布局 */
+.folder-card.compact {
+    display: grid;
+    grid-template-columns: 38px minmax(100px, 1fr) minmax(150px, 2fr) minmax(100px, 1.5fr) 120px;
+    gap: 12px;
+    align-items: center;
+    padding: 10px 12px;
+}
+
+.folder-name-col {
+    display: flex;
+    align-items: center;
+}
+
+.folder-name {
+    font-weight: 500;
+    font-size: 14px;
+    color: #333;
+}
+
+.folder-path-col {
+    display: flex;
+    align-items: center;
+}
+
+.folder-path {
+    font-size: 12px;
+    color: #666;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.folder-rules-col {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+    align-items: center;
+}
+
+.rule-tag-small {
+    display: inline-block;
+    padding: 2px 8px;
+    background: #f0f4ff;
+    color: #667eea;
+    border-radius: 10px;
+    font-size: 11px;
+    font-weight: 500;
+    white-space: nowrap;
+}
+
+.rule-tag-with-edit {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 2px 6px 2px 8px;
+    background: #f0f4ff;
+    color: #667eea;
+    border-radius: 10px;
+    font-size: 11px;
+    font-weight: 500;
+    white-space: nowrap;
+    transition: all 0.2s;
+}
+
+.rule-tag-with-edit:hover {
+    background: #e0e9ff;
+}
+
+.rule-tag-name {
+    display: inline-block;
+}
+
+.rule-tag-edit-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 16px;
+    height: 16px;
+    padding: 0;
+    background: transparent;
+    border: none;
+    color: #667eea;
+    cursor: pointer;
+    border-radius: 3px;
+    transition: all 0.15s;
+    opacity: 0.5;
+}
+
+.rule-tag-edit-btn:hover {
+    background: rgba(102, 126, 234, 0.2);
+    opacity: 1;
+    transform: scale(1.15);
+}
+
+.rule-tag-edit-btn:active {
+    transform: scale(0.95);
+}
+
+.rule-tag-edit-btn svg {
+    width: 10px;
+    height: 10px;
+}
+
+.hint-text {
+    font-size: 11px;
+    color: #999;
+}
+
+.folder-actions {
+    display: flex;
+    gap: 6px;
+    justify-content: flex-end;
+}
+
+.folder-card.disabled {
+    opacity: 0.5;
+}
+
 .rule-card:hover .rule-order-controls,
 .rule-card:hover .rule-actions {
     opacity: 1;
@@ -565,6 +684,11 @@ body {
     flex-shrink: 0;
     opacity: 0;
     transition: opacity 0.2s ease;
+}
+
+/* 编辑按钮始终显示 */
+.rule-actions .btn-always-visible {
+    opacity: 1;
 }
 
 .card-header {
@@ -1182,6 +1306,40 @@ input[readonly] {
 .rule-sort-item .checkbox-label {
     flex: 1;
     margin: 0;
+}
+
+.rule-quick-edit-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 24px;
+    height: 24px;
+    padding: 0;
+    margin-left: 8px;
+    background: transparent;
+    border: 1px solid transparent;
+    color: #667eea;
+    cursor: pointer;
+    border-radius: 4px;
+    transition: all 0.15s;
+    opacity: 0.5;
+    flex-shrink: 0;
+}
+
+.rule-quick-edit-btn:hover {
+    background: #f0f4ff;
+    border-color: #667eea;
+    opacity: 1;
+    transform: scale(1.1);
+}
+
+.rule-quick-edit-btn:active {
+    transform: scale(0.95);
+}
+
+.rule-quick-edit-btn svg {
+    width: 12px;
+    height: 12px;
 }
 
 .rule-sort-buttons {

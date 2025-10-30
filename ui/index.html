@@ -369,6 +369,16 @@
                             </div>
                         </div>
                     </div>
+                    
+                    <div class="form-group">
+                        <label for="conflictStrategy">文件冲突处理 <span class="hint-inline">（目标位置已存在同名文件时）</span></label>
+                        <select id="conflictStrategy">
+                            <option value="skip">跳过（保留原文件）</option>
+                            <option value="overwrite">覆盖（替换为新文件）</option>
+                            <option value="rename">重命名（新文件加"副本"后缀）</option>
+                        </select>
+                        <p class="hint">默认为"跳过"，可避免意外覆盖重要文件</p>
+                    </div>
                 </form>
             </div>
             <div class="modal-footer">

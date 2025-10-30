@@ -1,4 +1,4 @@
-use crate::models::{FileInfo, Rule, RuleAction};
+use crate::models::{ConflictStrategy, FileInfo, Rule, RuleAction};
 use crate::rule_engine::RuleEngine;
 use crate::activity_log;
 use anyhow::{Context, Result};
@@ -57,8 +57,8 @@ pub fn organize_file(file_info: &FileInfo, rules: &[Rule]) -> Result<Option<Stri
 
     info!("应用规则 '{}' 到文件 {}", rule.name, file_info.name);
 
-    // 执行规则动作
-    let result = execute_action(&rule.action, file_info, &engine);
+    // 执行规则动作，传递冲突处理策略
+    let result = execute_action(&rule.action, file_info, &engine, &rule.conflict_strategy);
     
     // 记录文件操作日志
     match &result {
@@ -100,7 +100,7 @@ pub fn organize_single_file(file_path: &str, rules: &[Rule]) -> Result<String> {
 }
 
 /// 执行规则动作
-fn execute_action(action: &RuleAction, file_info: &FileInfo, engine: &RuleEngine) -> Result<Option<String>> {
+fn execute_action(action: &RuleAction, file_info: &FileInfo, engine: &RuleEngine, conflict_strategy: &ConflictStrategy) -> Result<Option<String>> {
     let source_path = Path::new(&file_info.path);
     let base_path = source_path.parent().unwrap_or(Path::new("."));
 
@@ -115,7 +115,7 @@ fn execute_action(action: &RuleAction, file_info: &FileInfo, engine: &RuleEngine
                     .get_destination_path(action, file_info, base_path)
                     .context("无法获取目标路径")?;
                 
-                move_file(source_path, &dest_path)?;
+                move_file_with_strategy(source_path, &dest_path, conflict_strategy)?;
                 Ok(Some(dest_path))
             }
         }
@@ -125,7 +125,7 @@ fn execute_action(action: &RuleAction, file_info: &FileInfo, engine: &RuleEngine
                 .get_destination_path(action, file_info, base_path)
                 .context("无法获取目标路径")?;
             
-            copy_file(source_path, &dest_path)?;
+            copy_file_with_strategy(source_path, &dest_path, conflict_strategy)?;
             Ok(Some(dest_path))
         }
 
@@ -160,8 +160,8 @@ fn move_to_recycle_bin(source: &Path) -> Result<()> {
     Ok(())
 }
 
-/// 移动文件
-fn move_file(source: &Path, dest_dir: &str) -> Result<()> {
+/// 根据冲突策略移动文件
+fn move_file_with_strategy(source: &Path, dest_dir: &str, strategy: &ConflictStrategy) -> Result<()> {
     let dest_path = PathBuf::from(dest_dir);
     
     // 创建目标目录
@@ -173,7 +173,26 @@ fn move_file(source: &Path, dest_dir: &str) -> Result<()> {
         .file_name()
         .context("无法获取文件名")?;
 
-    let final_dest = dest_path.join(file_name);
+    let mut final_dest = dest_path.join(file_name);
+
+    // 检查文件是否已存在
+    if final_dest.exists() {
+        match strategy {
+            ConflictStrategy::Skip => {
+                info!("目标文件已存在，跳过: {:?}", final_dest);
+                return Ok(());
+            }
+            ConflictStrategy::Overwrite => {
+                info!("目标文件已存在，将覆盖: {:?}", final_dest);
+                // 继续执行，会覆盖
+            }
+            ConflictStrategy::Rename => {
+                // 生成副本文件名
+                final_dest = generate_copy_name(&final_dest)?;
+                info!("目标文件已存在，重命名为: {:?}", final_dest);
+            }
+        }
+    }
 
     // 移动文件
     fs::rename(source, &final_dest)
@@ -189,8 +208,8 @@ fn move_file(source: &Path, dest_dir: &str) -> Result<()> {
     Ok(())
 }
 
-/// 复制文件
-fn copy_file(source: &Path, dest_dir: &str) -> Result<()> {
+/// 根据冲突策略复制文件
+fn copy_file_with_strategy(source: &Path, dest_dir: &str, strategy: &ConflictStrategy) -> Result<()> {
     let dest_path = PathBuf::from(dest_dir);
     
     // 创建目标目录
@@ -202,7 +221,26 @@ fn copy_file(source: &Path, dest_dir: &str) -> Result<()> {
         .file_name()
         .context("无法获取文件名")?;
 
-    let final_dest = dest_path.join(file_name);
+    let mut final_dest = dest_path.join(file_name);
+
+    // 检查文件是否已存在
+    if final_dest.exists() {
+        match strategy {
+            ConflictStrategy::Skip => {
+                info!("目标文件已存在，跳过: {:?}", final_dest);
+                return Ok(());
+            }
+            ConflictStrategy::Overwrite => {
+                info!("目标文件已存在，将覆盖: {:?}", final_dest);
+                // 继续执行，会覆盖
+            }
+            ConflictStrategy::Rename => {
+                // 生成副本文件名
+                final_dest = generate_copy_name(&final_dest)?;
+                info!("目标文件已存在，重命名为: {:?}", final_dest);
+            }
+        }
+    }
 
     // 复制文件
     fs::copy(source, &final_dest)
@@ -210,6 +248,41 @@ fn copy_file(source: &Path, dest_dir: &str) -> Result<()> {
 
     info!("文件已复制: {:?} -> {:?}", source, final_dest);
     Ok(())
+}
+
+/// 生成副本文件名（例如：file.txt -> file (副本).txt，file (副本).txt -> file (副本 2).txt）
+fn generate_copy_name(path: &Path) -> Result<PathBuf> {
+    let parent = path.parent().context("无法获取父目录")?;
+    let stem = path.file_stem()
+        .and_then(|s| s.to_str())
+        .context("无法获取文件名")?;
+    let extension = path.extension()
+        .and_then(|e| e.to_str())
+        .unwrap_or("");
+
+    // 尝试找到可用的副本文件名
+    for i in 1..1000 {
+        let new_name = if i == 1 {
+            if extension.is_empty() {
+                format!("{} (副本)", stem)
+            } else {
+                format!("{} (副本).{}", stem, extension)
+            }
+        } else {
+            if extension.is_empty() {
+                format!("{} (副本 {})", stem, i)
+            } else {
+                format!("{} (副本 {}).{}", stem, i, extension)
+            }
+        };
+
+        let new_path = parent.join(&new_name);
+        if !new_path.exists() {
+            return Ok(new_path);
+        }
+    }
+
+    anyhow::bail!("无法生成可用的副本文件名")
 }
 
 
