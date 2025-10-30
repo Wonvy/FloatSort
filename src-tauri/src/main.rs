@@ -6,16 +6,18 @@ mod file_monitor;
 mod rule_engine;
 mod file_ops;
 mod models;
+mod activity_log;
 
 use config::{AppConfig, WatchFolder};
 use file_monitor::FileMonitor;
 use models::Rule;
 use std::sync::{Arc, Mutex};
 use std::collections::HashSet;
+use std::fs;
 use tauri::{State, SystemTray, SystemTrayMenu, SystemTrayMenuItem, CustomMenuItem, SystemTrayEvent, Manager};
 use tracing::info;
 use tracing_subscriber;
-use chrono;
+use chrono::Local;
 
 // 应用状态
 struct AppState {
@@ -583,6 +585,32 @@ fn show_from_tray(window: tauri::Window) -> Result<(), String> {
     Ok(())
 }
 
+// Tauri 命令：获取今日活动日志
+#[tauri::command]
+fn get_activity_logs() -> Result<Vec<String>, String> {
+    let log_file_name = format!("log/floatsort_{}.log", Local::now().format("%Y-%m-%d"));
+    
+    if !std::path::Path::new(&log_file_name).exists() {
+        return Ok(Vec::new());
+    }
+    
+    let content = fs::read_to_string(&log_file_name)
+        .map_err(|e| e.to_string())?;
+    
+    // 返回最后100行日志
+    let lines: Vec<String> = content
+        .lines()
+        .rev()
+        .take(100)
+        .map(|s| s.to_string())
+        .collect::<Vec<_>>()
+        .into_iter()
+        .rev()
+        .collect();
+    
+    Ok(lines)
+}
+
 // Tauri 命令：退出应用程序
 #[tauri::command]
 fn exit_app(app_handle: tauri::AppHandle) -> Result<(), String> {
@@ -691,6 +719,7 @@ fn main() {
             get_statistics,
             hide_to_tray,
             show_from_tray,
+            get_activity_logs,
             exit_app
         ])
         .setup(|_app| {

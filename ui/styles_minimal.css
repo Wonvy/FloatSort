@@ -300,6 +300,11 @@ body {
 .rule-card:hover {
     border-color: #000;
 }
+
+.rule-card:hover .rule-order-controls,
+.rule-card:hover .rule-actions {
+    opacity: 1;
+}
 .rule-card.selected {
     border: 2.5px solid #667eea !important;
     background: linear-gradient(135deg, rgba(102, 126, 234, 0.05) 0%, rgba(118, 75, 162, 0.03) 100%);
@@ -372,6 +377,8 @@ body {
     align-items: center;
     gap: 4px;
     flex-shrink: 0;
+    opacity: 0;
+    transition: opacity 0.2s ease;
 }
 
 .order-btn {
@@ -556,6 +563,8 @@ body {
     display: flex;
     gap: 4px;
     flex-shrink: 0;
+    opacity: 0;
+    transition: opacity 0.2s ease;
 }
 
 .card-header {
@@ -713,7 +722,7 @@ input:checked + .slider:before {
 .activity-log {
     border: 1px solid #e8e8e8;
     border-radius: 4px;
-    max-height: 400px;
+    max-height: calc(100vh - 250px);
     overflow-y: auto;
 }
 
@@ -1418,6 +1427,80 @@ input[readonly] {
 
 .batch-file-item-compact:last-child {
     margin-bottom: 0;
+}
+
+/* 两行显示的文件项（用于匹配文件） */
+.batch-file-item-compact-two-line {
+    display: flex;
+    align-items: flex-start;
+    padding: 8px 12px;
+    margin-bottom: 4px;
+    margin-left: 20px;
+    background: #f8fef8;
+    border-radius: 4px;
+    border-left: 3px solid #27ae60;
+    transition: all 0.2s;
+}
+
+.batch-file-item-compact-two-line:hover {
+    background: #fff;
+    box-shadow: 0 2px 4px rgba(39, 174, 96, 0.1);
+}
+
+.batch-file-item-compact-two-line:last-child {
+    margin-bottom: 0;
+}
+
+/* 规则名称显示在左侧 */
+.batch-file-rule {
+    display: inline-block;
+    background: #667eea;
+    color: white;
+    padding: 3px 8px;
+    border-radius: 3px;
+    font-size: 11px;
+    font-weight: 500;
+    margin-right: 10px;
+    flex-shrink: 0;
+    align-self: flex-start;
+    margin-top: 2px;
+}
+
+/* 路径容器 */
+.batch-file-paths {
+    flex: 1;
+    min-width: 0;
+}
+
+/* 从路径和到路径 */
+.batch-file-from,
+.batch-file-to {
+    font-size: 12px;
+    font-family: 'Consolas', 'Courier New', monospace;
+    line-height: 1.6;
+    word-break: break-all;
+}
+
+.batch-file-from {
+    color: #6c757d;
+    margin-bottom: 2px;
+}
+
+.batch-file-to {
+    color: #27ae60;
+    font-weight: 500;
+}
+
+/* 路径目录部分 */
+.path-dir {
+    color: inherit;
+    opacity: 0.7;
+}
+
+/* 路径文件名部分（高亮） */
+.path-file {
+    color: #667eea;
+    font-weight: 700;
 }
 
 .file-path-full {

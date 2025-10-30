@@ -72,6 +72,10 @@ function initializeApp() {
     // setupCollapseExpand(); // 已禁用：不再需要窗口折叠功能
     // startPositionMonitoring(); // 已禁用：不再需要窗口折叠功能
     loadAppData();
+    loadActivityLogs();
+    
+    // 每10秒刷新一次日志
+    setInterval(loadActivityLogs, 10000);
     
     console.log('✓ FloatSort V2 已就绪');
 }
@@ -826,7 +830,7 @@ async function showBatchConfirmWithRule(ruleId) {
     // 匹配的文件
     if (matchedFiles.length > 0) {
         html += `
-            <div class="batch-section">
+            <div class="batch-section matched">
                 <div class="batch-section-header matched">
                     <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
                         <circle cx="8" cy="8" r="7" stroke="#27ae60" stroke-width="2" fill="none"/>
@@ -836,16 +840,24 @@ async function showBatchConfirmWithRule(ruleId) {
                     <span class="section-count">${matchedFiles.length}</span>
                 </div>
                 <div class="batch-section-content">
-                    ${matchedFiles.map(file => `
-                        <div class="batch-file-item">
-                            <div class="file-icon">📄</div>
-                            <div class="file-info">
-                                <div class="file-name">${file.name}</div>
-                                <div class="file-path from">来自: ${file.path}</div>
-                                <div class="file-path to">移至: ${file.targetPath}</div>
+                    ${matchedFiles.map(file => {
+                        // 提取源文件名
+                        const sourceFileName = file.path.split(/[\\/]/).pop();
+                        const sourcePath = file.path.substring(0, file.path.lastIndexOf(sourceFileName));
+                        // 提取目标文件名
+                        const targetFileName = file.targetPath.split(/[\\/]/).pop();
+                        const targetPath = file.targetPath.substring(0, file.targetPath.lastIndexOf(targetFileName));
+                        
+                        return `
+                        <div class="batch-file-item-compact-two-line">
+                            <div class="batch-file-rule">${file.ruleName || '规则'}</div>
+                            <div class="batch-file-paths">
+                                <div class="batch-file-from">从: <span class="path-dir">${sourcePath}</span><span class="path-file">${sourceFileName}</span></div>
+                                <div class="batch-file-to">到: <span class="path-dir">${targetPath}</span><span class="path-file">${targetFileName}</span></div>
                             </div>
                         </div>
-                    `).join('')}
+                        `;
+                    }).join('')}
                 </div>
             </div>
         `;
@@ -953,7 +965,7 @@ async function showBatchConfirmWithMultipleRules(ruleIds) {
     // 匹配的文件
     if (matchedFiles.length > 0) {
         html += `
-            <div class="batch-section">
+            <div class="batch-section matched">
                 <div class="batch-section-header matched">
                     <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
                         <circle cx="8" cy="8" r="7" stroke="#27ae60" stroke-width="2" fill="none"/>
@@ -963,17 +975,24 @@ async function showBatchConfirmWithMultipleRules(ruleIds) {
                     <span class="section-count">${matchedFiles.length}</span>
                 </div>
                 <div class="batch-section-content">
-                    ${matchedFiles.map(file => `
-                        <div class="batch-file-item">
-                            <div class="file-icon">📄</div>
-                            <div class="file-info">
-                                <div class="file-name">${file.name}</div>
-                                <div class="file-path from">来自: ${file.path}</div>
-                                <div class="file-path to">移至: ${file.targetPath}</div>
-                                <div class="file-path" style="color: #667eea; font-size: 11px;">规则: ${file.ruleName}</div>
+                    ${matchedFiles.map(file => {
+                        // 提取源文件名
+                        const sourceFileName = file.path.split(/[\\/]/).pop();
+                        const sourcePath = file.path.substring(0, file.path.lastIndexOf(sourceFileName));
+                        // 提取目标文件名
+                        const targetFileName = file.targetPath.split(/[\\/]/).pop();
+                        const targetPath = file.targetPath.substring(0, file.targetPath.lastIndexOf(targetFileName));
+                        
+                        return `
+                        <div class="batch-file-item-compact-two-line">
+                            <div class="batch-file-rule">${file.ruleName || '规则'}</div>
+                            <div class="batch-file-paths">
+                                <div class="batch-file-from">从: <span class="path-dir">${sourcePath}</span><span class="path-file">${sourceFileName}</span></div>
+                                <div class="batch-file-to">到: <span class="path-dir">${targetPath}</span><span class="path-file">${targetFileName}</span></div>
                             </div>
                         </div>
-                    `).join('')}
+                        `;
+                    }).join('')}
                 </div>
             </div>
         `;
@@ -1266,11 +1285,15 @@ function renderRules() {
         
         // 处理目标路径显示
         const destination = rule.action.destination;
+        const isRecycleBin = destination === '{recycle}'; // 检测回收站
         const isAbsolutePath = /^[A-Z]:\\/i.test(destination); // 检测绝对路径（Windows）
         let displayPath = destination;
         let iconColor = '#667eea'; // 默认紫色
         
-        if (isAbsolutePath) {
+        if (isRecycleBin) {
+            iconColor = '#ef4444'; // 红色（回收站）
+            displayPath = '回收站';
+        } else if (isAbsolutePath) {
             iconColor = '#f97316'; // 橙色
             // 提取驱动器和最后的文件夹名
             const parts = destination.split(/[\\/]/);
@@ -2265,6 +2288,30 @@ function updateStats() {
 }
 
 // ========== 活动日志 ==========
+// 加载活动日志
+async function loadActivityLogs() {
+    try {
+        const logs = await invoke('get_activity_logs');
+        const activityLog = document.getElementById('activityLog');
+        
+        if (!logs || logs.length === 0) {
+            activityLog.innerHTML = '<div class="activity-empty">暂无活动记录</div>';
+            return;
+        }
+        
+        activityLog.innerHTML = logs.map(log => `
+            <div class="activity-item">
+                <div class="activity-log-line">${log}</div>
+            </div>
+        `).join('');
+        
+        // 滚动到底部
+        activityLog.scrollTop = activityLog.scrollHeight;
+    } catch (error) {
+        console.error('加载活动日志失败:', error);
+    }
+}
+
 function addActivity(message, type = 'info', details = null) {
     const activityLog = document.getElementById('activityLog');
     const item = document.createElement('div');
@@ -2490,7 +2537,7 @@ async function showBatchConfirm() {
     // 匹配的文件（始终显示，不折叠）
     if (matchedFiles.length > 0) {
         html += `
-            <div class="batch-section">
+            <div class="batch-section matched">
                 <div class="batch-section-header matched">
                     <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
                         <circle cx="8" cy="8" r="7" stroke="#27ae60" stroke-width="2" fill="none"/>
@@ -2500,16 +2547,24 @@ async function showBatchConfirm() {
                     <span class="section-count">${matchedFiles.length}</span>
                 </div>
                 <div class="batch-section-content">
-                    ${matchedFiles.map(file => `
-                        <div class="batch-file-item">
-                            <div class="file-icon">📄</div>
-                            <div class="file-info">
-                                <div class="file-name">${file.name}${file.ruleName ? ` <span style="color: #667eea; font-size: 11px; font-weight: 500;">[${file.ruleName}]</span>` : ''}</div>
-                                <div class="file-path from">从: ${file.path}</div>
-                                <div class="file-path to matched">到: ${file.targetPath}</div>
+                    ${matchedFiles.map(file => {
+                        // 提取源文件名
+                        const sourceFileName = file.path.split(/[\\/]/).pop();
+                        const sourcePath = file.path.substring(0, file.path.lastIndexOf(sourceFileName));
+                        // 提取目标文件名
+                        const targetFileName = file.targetPath.split(/[\\/]/).pop();
+                        const targetPath = file.targetPath.substring(0, file.targetPath.lastIndexOf(targetFileName));
+                        
+                        return `
+                        <div class="batch-file-item-compact-two-line">
+                            <div class="batch-file-rule">${file.ruleName || '规则'}</div>
+                            <div class="batch-file-paths">
+                                <div class="batch-file-from">从: <span class="path-dir">${sourcePath}</span><span class="path-file">${sourceFileName}</span></div>
+                                <div class="batch-file-to">到: <span class="path-dir">${targetPath}</span><span class="path-file">${targetFileName}</span></div>
                             </div>
                         </div>
-                    `).join('')}
+                        `;
+                    }).join('')}
                 </div>
             </div>
         `;

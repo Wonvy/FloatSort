@@ -1,5 +1,6 @@
 use crate::models::{FileInfo, Rule, RuleAction};
 use crate::rule_engine::RuleEngine;
+use crate::activity_log;
 use anyhow::{Context, Result};
 use chrono::{DateTime, Utc};
 use std::fs;
@@ -57,7 +58,34 @@ pub fn organize_file(file_info: &FileInfo, rules: &[Rule]) -> Result<Option<Stri
     info!("应用规则 '{}' 到文件 {}", rule.name, file_info.name);
 
     // 执行规则动作
-    execute_action(&rule.action, file_info, &engine)
+    let result = execute_action(&rule.action, file_info, &engine);
+    
+    // 记录文件操作日志
+    match &result {
+        Ok(Some(dest)) => {
+            let _ = activity_log::log_file_operation(
+                "移动文件",
+                &file_info.path,
+                Some(dest),
+                Some(&rule.name),
+                true,
+                None,
+            );
+        }
+        Ok(None) => {}
+        Err(e) => {
+            let _ = activity_log::log_file_operation(
+                "移动文件",
+                &file_info.path,
+                None,
+                Some(&rule.name),
+                false,
+                Some(&e.to_string()),
+            );
+        }
+    }
+    
+    result
 }
 
 /// 手动整理单个文件
