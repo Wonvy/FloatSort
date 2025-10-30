@@ -611,6 +611,41 @@ fn get_activity_logs() -> Result<Vec<String>, String> {
     Ok(lines)
 }
 
+// Tauri 命令：导出配置
+#[tauri::command]
+fn export_config(state: State<AppState>) -> Result<serde_json::Value, String> {
+    let config = state.config.lock().map_err(|e| e.to_string())?;
+    let config_json = serde_json::to_value(&*config).map_err(|e| e.to_string())?;
+    info!("配置已导出");
+    Ok(config_json)
+}
+
+// Tauri 命令：导入配置
+#[tauri::command]
+fn import_config(config: AppConfig, state: State<AppState>) -> Result<(), String> {
+    let mut app_config = state.config.lock().map_err(|e| e.to_string())?;
+    *app_config = config.clone();
+    config.save_to_file("data/config.json").map_err(|e| e.to_string())?;
+    info!("配置已导入并保存");
+    Ok(())
+}
+
+// Tauri 命令：保存文件
+#[tauri::command]
+fn save_file(path: String, content: String) -> Result<(), String> {
+    std::fs::write(&path, content).map_err(|e| format!("保存文件失败: {}", e))?;
+    info!("文件已保存到: {}", path);
+    Ok(())
+}
+
+// Tauri 命令：读取文件
+#[tauri::command]
+fn read_file(path: String) -> Result<String, String> {
+    let content = std::fs::read_to_string(&path).map_err(|e| format!("读取文件失败: {}", e))?;
+    info!("文件已读取: {}", path);
+    Ok(content)
+}
+
 // Tauri 命令：退出应用程序
 #[tauri::command]
 fn exit_app(app_handle: tauri::AppHandle) -> Result<(), String> {
@@ -720,6 +755,10 @@ fn main() {
             hide_to_tray,
             show_from_tray,
             get_activity_logs,
+            export_config,
+            import_config,
+            save_file,
+            read_file,
             exit_app
         ])
         .setup(|_app| {

@@ -267,6 +267,7 @@ function setupEventListeners() {
     // 扩展名标签管理
     const extensionInput = document.getElementById('extensionInput');
     const addExtensionBtn = document.getElementById('addExtensionBtn');
+    const enableExtensions = document.getElementById('enableExtensions');
     
     if (extensionInput) {
         // 回车键添加扩展名
@@ -282,8 +283,29 @@ function setupEventListeners() {
         addExtensionBtn.addEventListener('click', addExtension);
     }
     
+    // 监听扩展名启用/禁用复选框
+    if (enableExtensions) {
+        enableExtensions.addEventListener('change', updateExtensionState);
+    }
+    
+    // 监听应用范围复选框，自动禁用/启用扩展名
+    const applyToFiles = document.getElementById('applyToFiles');
+    const applyToFolders = document.getElementById('applyToFolders');
+    
+    if (applyToFiles) {
+        applyToFiles.addEventListener('change', updateExtensionAvailability);
+    }
+    
+    if (applyToFolders) {
+        applyToFolders.addEventListener('change', updateExtensionAvailability);
+    }
+    
     // 占位符标签按钮
     setupPlaceholderButtons();
+    
+    // 导入/导出配置
+    document.getElementById('exportConfigBtn').addEventListener('click', exportConfig);
+    document.getElementById('importConfigBtn').addEventListener('click', importConfig);
     
     // 设置
     document.getElementById('animationSelect').addEventListener('change', (e) => {
@@ -1978,6 +2000,42 @@ function getConditionTypeLabel(type) {
 }
 
 // ========== 扩展名标签管理 ==========
+
+// 更新扩展名区域的启用/禁用状态
+function updateExtensionState() {
+    const enableExtensions = document.getElementById('enableExtensions');
+    const extensionContainer = document.getElementById('extensionContainer');
+    
+    if (!enableExtensions || !extensionContainer) return;
+    
+    if (enableExtensions.checked) {
+        extensionContainer.classList.remove('disabled');
+    } else {
+        extensionContainer.classList.add('disabled');
+    }
+}
+
+// 根据应用范围自动更新扩展名的可用性
+function updateExtensionAvailability() {
+    const applyToFiles = document.getElementById('applyToFiles');
+    const applyToFolders = document.getElementById('applyToFolders');
+    const enableExtensions = document.getElementById('enableExtensions');
+    const extensionContainer = document.getElementById('extensionContainer');
+    
+    if (!applyToFiles || !applyToFolders || !enableExtensions || !extensionContainer) return;
+    
+    // 如果只勾选了文件夹（没有勾选文件），则禁用扩展名功能
+    if (!applyToFiles.checked && applyToFolders.checked) {
+        enableExtensions.checked = false;
+        enableExtensions.disabled = true;
+        extensionContainer.classList.add('disabled');
+    } else {
+        // 如果勾选了文件，则允许启用扩展名
+        enableExtensions.disabled = false;
+        updateExtensionState();
+    }
+}
+
 function renderExtensionTags() {
     const container = document.getElementById('extensionTags');
     if (!appState.currentExtensions || appState.currentExtensions.length === 0) {
@@ -2109,6 +2167,9 @@ async function openRuleModal(ruleId = null) {
         const extensionCondition = rule.conditions.find(c => c.type === 'Extension');
         if (extensionCondition && extensionCondition.values) {
             appState.currentExtensions = [...extensionCondition.values];
+            document.getElementById('enableExtensions').checked = true;
+        } else {
+            document.getElementById('enableExtensions').checked = false;
         }
     } else {
         // 新增模式
@@ -2119,6 +2180,10 @@ async function openRuleModal(ruleId = null) {
     updateConditionInputs();
     renderConditions();
     renderExtensionTags();
+    
+    // 更新扩展名的可用性
+    updateExtensionAvailability();
+    updateExtensionState();
     
     modal.style.display = 'flex';
 }
@@ -2159,8 +2224,9 @@ async function saveRule() {
         return rest;
     });
     
-    // 如果有扩展名，添加 Extension 条件
-    if (appState.currentExtensions.length > 0) {
+    // 如果扩展名功能已启用且有扩展名，添加 Extension 条件
+    const enableExtensions = document.getElementById('enableExtensions');
+    if (enableExtensions && enableExtensions.checked && appState.currentExtensions.length > 0) {
         conditions.push({
             type: 'Extension',
             values: [...appState.currentExtensions]
@@ -2346,6 +2412,82 @@ function updateStats() {
     document.getElementById('filesProcessedCount').textContent = appState.filesProcessed;
     document.getElementById('foldersCount').textContent = appState.folders.filter(f => f.enabled).length;
     document.getElementById('rulesCount').textContent = appState.rules.filter(r => r.enabled).length;
+}
+
+// ========== 配置导入导出 ==========
+async function exportConfig() {
+    try {
+        // 获取当前配置
+        const config = await invoke('export_config');
+        
+        // 创建JSON文件
+        const dataStr = JSON.stringify(config, null, 2);
+        const dataBlob = new Blob([dataStr], { type: 'application/json' });
+        
+        // 生成文件名（包含时间戳）
+        const now = new Date();
+        const timestamp = now.toISOString().replace(/[:.]/g, '-').slice(0, -5);
+        const fileName = `floatsort-config-${timestamp}.json`;
+        
+        // 使用Tauri的save命令
+        const { save } = window.__TAURI__.dialog;
+        const filePath = await save({
+            defaultPath: fileName,
+            filters: [{
+                name: 'JSON',
+                extensions: ['json']
+            }]
+        });
+        
+        if (filePath) {
+            // 保存文件
+            await invoke('save_file', { path: filePath, content: dataStr });
+            showNotification('配置已导出', 'success');
+            addActivity(`📤 导出配置到: ${filePath}`);
+        }
+    } catch (error) {
+        console.error('导出配置失败:', error);
+        showNotification(`导出失败: ${error}`, 'error');
+    }
+}
+
+async function importConfig() {
+    try {
+        // 打开文件选择对话框
+        const { open } = window.__TAURI__.dialog;
+        const selected = await open({
+            multiple: false,
+            filters: [{
+                name: 'JSON',
+                extensions: ['json']
+            }]
+        });
+        
+        if (selected) {
+            // 读取文件内容
+            const content = await invoke('read_file', { path: selected });
+            
+            // 解析JSON
+            const config = JSON.parse(content);
+            
+            // 导入配置
+            await invoke('import_config', { config });
+            
+            showNotification('配置已导入，正在重新加载...', 'success');
+            addActivity(`📥 导入配置从: ${selected}`);
+            
+            // 重新加载所有数据
+            setTimeout(async () => {
+                await loadFolders();
+                await loadRules();
+                updateStats();
+                showNotification('配置导入完成', 'success');
+            }, 1000);
+        }
+    } catch (error) {
+        console.error('导入配置失败:', error);
+        showNotification(`导入失败: ${error}`, 'error');
+    }
 }
 
 // ========== 活动日志 ==========
