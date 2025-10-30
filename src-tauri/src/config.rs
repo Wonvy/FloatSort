@@ -367,7 +367,13 @@ impl AppConfig {
                     name: folder_name,
                     enabled: old_config.auto_start.unwrap_or(false),
                     rule_ids: old_config.rules.iter().map(|r| r.id.clone()).collect(),
-                    processing_mode: ProcessingMode::Manual,
+                    processing_mode: Some(ProcessingMode::Manual),
+                    trigger_mode: TriggerMode::Manual,
+                    schedule_type: None,
+                    schedule_interval_minutes: None,
+                    schedule_daily_time: None,
+                    schedule_weekly_day: None,
+                    schedule_weekly_time: None,
                 });
             }
         }
