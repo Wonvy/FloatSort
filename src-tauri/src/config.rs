@@ -5,7 +5,39 @@ use std::fs;
 use std::path::Path;
 use tracing::{info, warn};
 
-/// 文件处理模式
+/// 触发模式
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "lowercase")]
+pub enum TriggerMode {
+    /// 立即执行
+    Immediate,
+    /// 手动确认
+    Manual,
+    /// 启动时执行
+    OnStartup,
+    /// 定时执行
+    Scheduled,
+}
+
+impl Default for TriggerMode {
+    fn default() -> Self {
+        TriggerMode::Manual
+    }
+}
+
+/// 定时类型
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "lowercase")]
+pub enum ScheduleType {
+    /// 间隔执行（每N分钟）
+    Interval,
+    /// 每天执行
+    Daily,
+    /// 每周执行
+    Weekly,
+}
+
+/// 文件处理模式（兼容旧版本）
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[serde(rename_all = "lowercase")]
 pub enum ProcessingMode {
@@ -39,9 +71,88 @@ pub struct WatchFolder {
     /// 关联的规则 ID 列表
     pub rule_ids: Vec<String>,
     
-    /// 文件处理模式（默认为手动）
+    /// 文件处理模式（默认为手动）- 兼容旧版本
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub processing_mode: Option<ProcessingMode>,
+    
+    /// 触发模式（新版本）
     #[serde(default)]
-    pub processing_mode: ProcessingMode,
+    pub trigger_mode: TriggerMode,
+    
+    /// 定时类型
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub schedule_type: Option<ScheduleType>,
+    
+    /// 间隔分钟数（用于 Interval 类型）
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub schedule_interval_minutes: Option<u32>,
+    
+    /// 每天执行时间（用于 Daily 类型）格式: "HH:MM"
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub schedule_daily_time: Option<String>,
+    
+    /// 每周星期几（用于 Weekly 类型）0=周日, 1=周一, ..., 6=周六
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub schedule_weekly_day: Option<u8>,
+    
+    /// 每周执行时间（用于 Weekly 类型）格式: "HH:MM"
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub schedule_weekly_time: Option<String>,
+}
+
+impl WatchFolder {
+    /// 迁移旧的 processing_mode 到新的 trigger_mode
+    pub fn migrate_processing_mode(&mut self) {
+        if let Some(old_mode) = &self.processing_mode {
+            self.trigger_mode = match old_mode {
+                ProcessingMode::Auto => TriggerMode::Immediate,
+                ProcessingMode::Manual => TriggerMode::Manual,
+            };
+            self.processing_mode = None; // 清除旧字段
+        }
+    }
+    
+    /// 获取触发模式的显示文本
+    pub fn get_trigger_display(&self) -> String {
+        match &self.trigger_mode {
+            TriggerMode::Immediate => "🚀 立即执行".to_string(),
+            TriggerMode::Manual => "✋ 手动确认".to_string(),
+            TriggerMode::OnStartup => "🔄 启动时执行".to_string(),
+            TriggerMode::Scheduled => {
+                match &self.schedule_type {
+                    Some(ScheduleType::Interval) => {
+                        let minutes = self.schedule_interval_minutes.unwrap_or(30);
+                        if minutes < 60 {
+                            format!("⏱️ 每{}分钟", minutes)
+                        } else {
+                            let hours = minutes / 60;
+                            format!("⏱️ 每{}小时", hours)
+                        }
+                    }
+                    Some(ScheduleType::Daily) => {
+                        let time = self.schedule_daily_time.as_deref().unwrap_or("09:00");
+                        format!("⏰ 每天 {}", time)
+                    }
+                    Some(ScheduleType::Weekly) => {
+                        let day = self.schedule_weekly_day.unwrap_or(1);
+                        let time = self.schedule_weekly_time.as_deref().unwrap_or("09:00");
+                        let day_name = match day {
+                            0 => "周日",
+                            1 => "周一",
+                            2 => "周二",
+                            3 => "周三",
+                            4 => "周四",
+                            5 => "周五",
+                            6 => "周六",
+                            _ => "周一",
+                        };
+                        format!("📅 每{} {}", day_name, time)
+                    }
+                    None => "⏱️ 定时执行".to_string(),
+                }
+            }
+        }
+    }
 }
 
 /// 应用配置
@@ -214,6 +325,21 @@ impl AppConfig {
         if config.version < 2 {
             config = Self::migrate_v1_to_v2(config)?;
             info!("配置已从 V1 迁移到 V2");
+            // 保存迁移后的配置
+            config.save_to_file(path)?;
+        }
+        
+        // 迁移 processing_mode 到 trigger_mode（所有版本都需要）
+        let mut migrated = false;
+        for folder in config.folders.iter_mut() {
+            if folder.processing_mode.is_some() {
+                folder.migrate_processing_mode();
+                migrated = true;
+            }
+        }
+        
+        if migrated {
+            info!("已迁移 processing_mode 到新的 trigger_mode");
             // 保存迁移后的配置
             config.save_to_file(path)?;
         }
