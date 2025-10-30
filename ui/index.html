@@ -272,14 +272,92 @@
                             <p class="hint">加载中...</p>
                         </div>
                     </div>
+                    
+                    <!-- 触发模式配置 -->
                     <div class="form-group">
-                        <label for="processingMode">文件处理模式 <span class="hint-inline">（检测到新文件时的处理方式）</span></label>
-                        <select id="processingMode">
-                            <option value="manual">手动处理（显示待处理数量，点击确认）</option>
-                            <option value="auto">自动处理（立即按规则整理）</option>
-                        </select>
-                        <p class="hint">默认为"手动处理"，可避免误操作</p>
+                        <label>执行方式 <span class="hint-inline">（检测到新文件时的处理方式）</span></label>
+                        <div class="trigger-mode-selector">
+                            <label class="trigger-option">
+                                <input type="radio" name="triggerMode" value="immediate">
+                                <span class="trigger-label">🚀 立即执行</span>
+                                <span class="trigger-desc">检测到文件立即整理</span>
+                            </label>
+                            <label class="trigger-option">
+                                <input type="radio" name="triggerMode" value="manual" checked>
+                                <span class="trigger-label">✋ 手动确认</span>
+                                <span class="trigger-desc">添加到待处理列表</span>
+                            </label>
+                            <label class="trigger-option">
+                                <input type="radio" name="triggerMode" value="on_startup">
+                                <span class="trigger-label">🔄 启动时执行</span>
+                                <span class="trigger-desc">程序启动时处理</span>
+                            </label>
+                            <label class="trigger-option">
+                                <input type="radio" name="triggerMode" value="scheduled">
+                                <span class="trigger-label">⏱️ 定时执行</span>
+                                <span class="trigger-desc">按时间计划执行</span>
+                            </label>
+                        </div>
                     </div>
+                    
+                    <!-- 定时执行配置（仅在选择"定时执行"时显示） -->
+                    <div class="form-group" id="scheduledConfig" style="display: none;">
+                        <label>定时设置</label>
+                        <div class="schedule-config">
+                            <!-- 间隔执行 -->
+                            <label class="schedule-option">
+                                <input type="radio" name="scheduleType" value="interval" checked>
+                                <span class="schedule-label">⏱️ 间隔执行</span>
+                            </label>
+                            <div class="schedule-details" id="intervalConfig">
+                                <label>每
+                                    <select id="scheduleInterval">
+                                        <option value="15">15 分钟</option>
+                                        <option value="30" selected>30 分钟</option>
+                                        <option value="60">1 小时</option>
+                                        <option value="120">2 小时</option>
+                                        <option value="180">3 小时</option>
+                                        <option value="360">6 小时</option>
+                                        <option value="720">12 小时</option>
+                                    </select>
+                                </label>
+                            </div>
+                            
+                            <!-- 每天执行 -->
+                            <label class="schedule-option">
+                                <input type="radio" name="scheduleType" value="daily">
+                                <span class="schedule-label">⏰ 每天执行</span>
+                            </label>
+                            <div class="schedule-details" id="dailyConfig" style="display: none;">
+                                <label>时间：
+                                    <input type="time" id="scheduleDailyTime" value="09:00">
+                                </label>
+                            </div>
+                            
+                            <!-- 每周执行 -->
+                            <label class="schedule-option">
+                                <input type="radio" name="scheduleType" value="weekly">
+                                <span class="schedule-label">📅 每周执行</span>
+                            </label>
+                            <div class="schedule-details" id="weeklyConfig" style="display: none;">
+                                <label>星期：
+                                    <select id="scheduleWeeklyDay">
+                                        <option value="0">周日</option>
+                                        <option value="1" selected>周一</option>
+                                        <option value="2">周二</option>
+                                        <option value="3">周三</option>
+                                        <option value="4">周四</option>
+                                        <option value="5">周五</option>
+                                        <option value="6">周六</option>
+                                    </select>
+                                </label>
+                                <label>时间：
+                                    <input type="time" id="scheduleWeeklyTime" value="09:00">
+                                </label>
+                            </div>
+                        </div>
+                    </div>
+                    
                     <div class="form-group">
                         <label class="checkbox-label">
                             <input type="checkbox" id="folderEnabled" checked>

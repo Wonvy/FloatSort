@@ -312,13 +312,22 @@ body {
 
 .folder-name-col {
     display: flex;
-    align-items: center;
+    flex-direction: column;
+    justify-content: center;
+    gap: 4px;
 }
 
 .folder-name {
     font-weight: 500;
     font-size: 14px;
     color: #333;
+}
+
+.folder-trigger {
+    font-size: 11px;
+    color: #667eea;
+    font-weight: 500;
+    letter-spacing: 0.3px;
 }
 
 .folder-path-col {

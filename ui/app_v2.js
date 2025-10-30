@@ -1259,6 +1259,47 @@ async function loadRules() {
     }
 }
 
+// ========== 触发模式显示文本 ==========
+function getTriggerModeDisplay(folder) {
+    // 兼容旧版本：如果没有 trigger_mode，使用 processing_mode
+    if (!folder.trigger_mode && folder.processing_mode) {
+        folder.trigger_mode = folder.processing_mode === 'auto' ? 'immediate' : 'manual';
+    }
+    
+    const triggerMode = folder.trigger_mode || 'manual';
+    
+    switch (triggerMode) {
+        case 'immediate':
+            return '🚀 立即执行';
+        case 'manual':
+            return '✋ 手动确认';
+        case 'on_startup':
+            return '🔄 启动时执行';
+        case 'scheduled':
+            const scheduleType = folder.schedule_type;
+            if (scheduleType === 'interval') {
+                const minutes = folder.schedule_interval_minutes || 30;
+                if (minutes < 60) {
+                    return `⏱️ 每${minutes}分钟`;
+                } else {
+                    const hours = Math.floor(minutes / 60);
+                    return `⏱️ 每${hours}小时`;
+                }
+            } else if (scheduleType === 'daily') {
+                const time = folder.schedule_daily_time || '09:00';
+                return `⏰ 每天 ${time}`;
+            } else if (scheduleType === 'weekly') {
+                const day = folder.schedule_weekly_day || 1;
+                const time = folder.schedule_weekly_time || '09:00';
+                const dayNames = ['周日', '周一', '周二', '周三', '周四', '周五', '周六'];
+                return `📅 每${dayNames[day]} ${time}`;
+            }
+            return '⏱️ 定时执行';
+        default:
+            return '✋ 手动确认';
+    }
+}
+
 // ========== 渲染文件夹列表 ==========
 function renderFolders() {
     const folderList = document.getElementById('folderList');
@@ -1290,6 +1331,9 @@ function renderFolders() {
             }
         }
         
+        // 获取触发模式显示文本
+        const triggerDisplay = getTriggerModeDisplay(folder);
+        
         return `
             <div class="folder-card compact ${!folder.enabled ? 'disabled' : ''}" data-folder-id="${folder.id}">
                 <button class="folder-toggle ${folder.enabled ? 'active' : ''}" 
@@ -1298,6 +1342,7 @@ function renderFolders() {
                 
                 <div class="folder-name-col">
                     <div class="folder-name">${folder.name}</div>
+                    <div class="folder-trigger">${triggerDisplay}</div>
                 </div>
                 
                 <div class="folder-path-col">
