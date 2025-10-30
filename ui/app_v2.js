@@ -2793,6 +2793,14 @@ function showDeleteConfirm(item) {
             <br><br>
             <span style="color: #e74c3c; font-size: 13px;">⚠️ 删除后将停止监控此文件夹</span>
         `;
+    } else if (item.type === 'group') {
+        message.innerHTML = `
+            确定要删除规则组 <strong style="color: #667eea;">"${item.destination || '(未设置)'}"</strong> 吗？
+            <br><br>
+            <span style="color: #666;">此操作将删除该组内的 <strong style="color: #e74c3c;">${item.ruleCount}</strong> 个规则</span>
+            <br><br>
+            <span style="color: #e74c3c; font-size: 13px;">⚠️ 组内所有规则都将被删除</span>
+        `;
     } else if (item.type === 'condition') {
         message.innerHTML = `
             确定要删除此条件吗？
@@ -2833,6 +2841,22 @@ async function executeDelete() {
             showNotification(`文件夹 "${item.name}" 已删除`, 'success');
             addActivity(`🗑️ 删除文件夹: ${item.name}`);
             await loadFolders();
+        } else if (item.type === 'group') {
+            // 删除规则组（删除组内所有规则）
+            const rulesInGroup = appState.rules.filter(r => r.action.destination === item.destination);
+            let deletedCount = 0;
+            for (const rule of rulesInGroup) {
+                try {
+                    await invoke('delete_rule', { ruleId: rule.id });
+                    deletedCount++;
+                } catch (error) {
+                    console.error(`删除规则 ${rule.name} 失败:`, error);
+                }
+            }
+            showNotification(`规则组 "${item.destination || '(未设置)'}" 已删除（${deletedCount} 个规则）`, 'success');
+            addActivity(`🗑️ 已删除组 [${item.destination || '(未设置)'}] 及其 ${deletedCount} 个规则`);
+            await loadRules();
+            await loadFolders(); // 重新加载文件夹以更新关联
         } else if (item.type === 'condition') {
             // 删除条件（仅前端操作）
             appState.currentConditions.splice(item.index, 1);

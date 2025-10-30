@@ -276,27 +276,15 @@ window.toggleGroup = async function(destination) {
 };
 
 // 删除整个组
-window.deleteGroup = async function(destination, groupIndex) {
+window.deleteGroup = function(destination, groupIndex) {
     const rulesInGroup = appState.rules.filter(r => r.action.destination === destination);
     
-    // 显示确认对话框
-    const confirmed = confirm(`确定要删除组 "${destination || '(未设置)'}" 及其包含的 ${rulesInGroup.length} 个规则吗？`);
-    if (!confirmed) return;
-    
-    // 删除组内所有规则
-    for (const rule of rulesInGroup) {
-        try {
-            await invoke('delete_rule', { ruleId: rule.id });
-        } catch (error) {
-            console.error(`删除规则 ${rule.name} 失败:`, error);
-        }
-    }
-    
-    // 从状态中移除
-    appState.rules = appState.rules.filter(r => r.action.destination !== destination);
-    
-    renderRulesGrouped();
-    addActivity(`🗑️ 已删除组 [${destination || '(未设置)'}] 及其 ${rulesInGroup.length} 个规则`);
+    // 显示删除确认模态框
+    showDeleteConfirm({
+        type: 'group',
+        destination: destination,
+        ruleCount: rulesInGroup.length
+    });
 };
 
 // 上移组
