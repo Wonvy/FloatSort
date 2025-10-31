@@ -1731,11 +1731,18 @@ function renderSplitView() {
                     return `
                         <div class="split-folder-item ${destination === appState.selectedFolderId ? 'active' : ''}"
                              onclick="selectFolderInSplit('${destination.replace(/\\/g, '\\\\').replace(/'/g, "\\'")}')">
-                            <div class="split-folder-name" style="color: ${iconColor};">${displayPath}</div>
-                            <div class="split-folder-path" title="${destination}">${destination}</div>
-                            <div class="split-folder-stats">
-                                <span>📋 ${group.rules.length} 个规则</span>
+                            <div class="split-folder-info">
+                                <div class="split-folder-name" style="color: ${iconColor};">${displayPath}</div>
+                                <div class="split-folder-path" title="${destination}">${destination}</div>
+                                <div class="split-folder-stats">
+                                    <span>📋 ${group.rules.length} 个规则</span>
+                                </div>
                             </div>
+                            <button class="btn-icon btn-sm split-add-rule" onclick="addRuleToSplitFolder('${destination.replace(/\\/g, '\\\\').replace(/'/g, "\\'")}', event)" title="添加规则到此文件夹">
+                                <svg width="14" height="14" viewBox="0 0 16 16" fill="none">
+                                    <path d="M8 3V13M3 8H13" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+                                </svg>
+                            </button>
                         </div>
                     `;
                 }).join('')}
@@ -1855,6 +1862,20 @@ function renderSplitView() {
 window.selectFolderInSplit = function(folderId) {
     appState.selectedFolderId = folderId;
     renderRules();
+}
+
+// 为分栏视图的文件夹添加规则
+window.addRuleToSplitFolder = function(destination, event) {
+    // 阻止事件冒泡，防止触发文件夹选择
+    if (event) {
+        event.stopPropagation();
+    }
+    
+    // 设置预设目标路径
+    appState.presetDestination = destination;
+    
+    // 打开规则模态框
+    openRuleModal();
 }
 
 // 分栏视图中的规则排序

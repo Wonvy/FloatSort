@@ -269,6 +269,10 @@ body {
 }
 
 .split-folder-item {
+    position: relative;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
     padding: 12px 16px;
     cursor: pointer;
     transition: all 0.2s;
@@ -284,6 +288,11 @@ body {
     border-left: 3px solid #667eea;
 }
 
+.split-folder-info {
+    flex: 1;
+    min-width: 0; /* 允许文本截断 */
+}
+
 .split-folder-name {
     font-size: 14px;
     font-weight: 500;
@@ -294,6 +303,9 @@ body {
 .split-folder-path {
     font-size: 12px;
     color: #6b7280;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
 }
 
 .split-folder-stats {
@@ -303,6 +315,18 @@ body {
     margin-top: 6px;
     font-size: 11px;
     color: #9ca3af;
+}
+
+/* 分栏视图添加规则按钮 */
+.split-add-rule {
+    opacity: 0;
+    transition: opacity 0.2s;
+    flex-shrink: 0;
+    margin-left: 8px;
+}
+
+.split-folder-item:hover .split-add-rule {
+    opacity: 1;
 }
 
 .split-empty-state {
