@@ -4257,10 +4257,13 @@ async function confirmBatch() {
     
     addActivity(`[批量] 批量整理完成 - 成功:${successCount} 跳过:${skipCount} 失败:${failCount}`);
     
-    // 清除选中的规则ID(s)
+    // 清除已处理的文件批次
+    appState.pendingBatch = [];
+    
+    // 清除选中的规则ID(s)，但保留 currentBatchFolderId
     appState.selectedRuleId = null;
     appState.selectedRuleIds = null;
-    appState.currentBatchFolderId = null;
+    // 注意：保留 currentBatchFolderId，以便新文件加入时窗口能自动刷新
     
     // 清除已处理文件对应的待处理队列
     for (const folderId in appState.pendingFilesByFolder) {
