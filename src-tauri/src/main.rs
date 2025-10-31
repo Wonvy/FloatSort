@@ -9,6 +9,7 @@ mod models;
 mod activity_log;
 mod scheduler;
 mod window_snap;
+mod i18n;
 
 use config::{AppConfig, WatchFolder};
 use file_monitor::FileMonitor;
@@ -86,6 +87,20 @@ fn save_stability_settings(file_stability_delay: u32, file_stability_checks: u32
     config.file_stability_checks = file_stability_checks;
     config.save_to_file("data/config.json").map_err(|e| e.to_string())?;
     info!("文件稳定性设置已保存: 延迟{}秒, {}次检查", file_stability_delay, file_stability_checks);
+    Ok(())
+}
+
+// Tauri 命令：保存语言设置
+#[tauri::command]
+fn save_language_setting(language: String, state: State<AppState>) -> Result<(), String> {
+    let mut config = state.config.lock().map_err(|e| e.to_string())?;
+    config.language = language.clone();
+    config.save_to_file("data/config.json").map_err(|e| e.to_string())?;
+    
+    // 同步更新Rust日志的语言设置
+    i18n::set_language(&language);
+    
+    info!("{}: {}", i18n::t("language.saved"), language);
     Ok(())
 }
 
@@ -637,7 +652,7 @@ fn get_statistics(state: State<AppState>) -> Result<serde_json::Value, String> {
 #[tauri::command]
 fn hide_to_tray(window: tauri::Window) -> Result<(), String> {
     window.hide().map_err(|e| e.to_string())?;
-    info!("窗口已隐藏到托盘");
+    info!("{}", i18n::t("window.hidden"));
     Ok(())
 }
 
@@ -685,7 +700,7 @@ fn clear_activity_logs() -> Result<(), String> {
         // 清空日志文件内容（保留文件）
         fs::write(&log_file_name, "")
             .map_err(|e| format!("清空日志文件失败: {}", e))?;
-        info!("活动日志已清空");
+        info!("{}", i18n::t("activity.cleared"));
     }
     
     Ok(())
@@ -748,6 +763,9 @@ fn main() {
     // 加载配置
     let config = AppConfig::load_or_default("data/config.json")
         .expect("无法加载配置文件");
+
+    // 初始化i18n语言设置
+    i18n::set_language(&config.language);
 
     // 创建应用状态
     let app_state = AppState {
@@ -812,6 +830,7 @@ fn main() {
             save_window_size,
             save_animation_settings,
             save_stability_settings,
+            save_language_setting,
             add_rule,
             get_rules,
             remove_rule,

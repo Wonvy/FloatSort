@@ -88,7 +88,6 @@
             </button>
             <button class="tab-btn tab-icon-only" data-tab="settings" title="设置">
                 <svg width="16" height="16"><use href="#icon-settings"/></svg>
-                <span>设置</span>
             </button>
         </nav>
 
@@ -98,7 +97,7 @@
             <!-- 规则 Tab -->
             <section class="tab-pane active" id="rules-pane">
                 <div class="pane-header">
-                    <h2>整理规则</h2>
+                    <h2 id="rulesPaneTitle">整理规则</h2>
                     <div class="header-actions">
                         <div class="view-switcher">
                             <button class="view-switcher-btn" id="viewSwitcherBtn" onclick="toggleViewDropdown()">
@@ -132,15 +131,15 @@
                             </div>
                         </div>
                         <button class="btn-primary" id="addRuleBtn">
-                            + 添加规则
+                            <span id="addRuleBtnText">+ 添加规则</span>
                         </button>
                     </div>
                 </div>
                 <div class="rules-list" id="rulesList">
                     <div class="empty-state">
                         <svg class="empty-icon" width="48" height="48"><use href="#icon-doc"/></svg>
-                        <p>暂无规则</p>
-                        <p class="empty-hint">创建规则来自动整理文件</p>
+                        <p id="noRulesText">暂无规则</p>
+                        <p class="empty-hint" id="noRulesHint">创建规则来自动整理文件</p>
                     </div>
                 </div>
             </section>
@@ -148,16 +147,16 @@
             <!-- 文件夹 Tab -->
             <section class="tab-pane" id="folders-pane">
                 <div class="pane-header">
-                    <h2>监控文件夹</h2>
+                    <h2 id="foldersPaneTitle">监控文件夹</h2>
                     <button class="btn-primary" id="addFolderBtn">
-                        + 添加文件夹
+                        <span id="addFolderBtnText">+ 添加文件夹</span>
                     </button>
                 </div>
                 <div class="folder-list" id="folderList">
                     <div class="empty-state">
                         <svg class="empty-icon" width="48" height="48"><use href="#icon-folder"/></svg>
-                        <p>暂无监控文件夹</p>
-                        <p class="empty-hint">点击上方按钮添加文件夹开始监控</p>
+                        <p id="noFoldersText">暂无监控文件夹</p>
+                        <p class="empty-hint" id="noFoldersHint">点击上方按钮添加文件夹开始监控</p>
                     </div>
                 </div>
             </section>
@@ -165,20 +164,20 @@
             <!-- 日志 Tab -->
             <section class="tab-pane" id="logs-pane">
                 <div class="pane-header">
-                    <h2>活动日志</h2>
+                    <h2 id="activityLogTitle">活动日志</h2>
                     <div style="display: flex; gap: 8px;">
                         <button class="btn-secondary" id="clearActivityBtn">
-                            🗑️ 清空日志
+                            <span id="clearActivityBtnText">🗑️ 清空日志</span>
                         </button>
                         <button class="btn-secondary" id="clearProcessedBtn" title="清除已处理文件记录，允许重新整理之前处理过的文件">
-                            🔄 清除记录
+                            <span id="clearProcessedBtnText">🔄 清除记录</span>
                         </button>
                     </div>
                 </div>
                 <div class="activity-log" id="activityLog">
                     <div class="activity-item">
-                        <span class="activity-time">启动</span>
-                        <span class="activity-message">FloatSort V2 已就绪</span>
+                        <span class="activity-time" id="initialActivityTime">启动</span>
+                        <span class="activity-message" id="initialActivityMessage">FloatSort V2 已就绪</span>
                     </div>
                 </div>
             </section>
@@ -186,14 +185,34 @@
             <!-- 设置 Tab -->
             <section class="tab-pane" id="settings-pane">
                 <div class="pane-header">
-                    <h2>应用设置</h2>
+                    <h2 id="settingsPaneTitle">应用设置</h2>
                 </div>
                 
                 <div class="settings-section">
-                    <h3>窗口动画</h3>
+                    <h3 id="interfaceSettingsTitle">界面设置</h3>
                     <div class="setting-item-inline">
                         <div class="setting-group">
-                            <label class="setting-label" for="animationSelect">动画效果</label>
+                            <label class="setting-label" id="languageLabel">语言 / Language</label>
+                            <div class="language-flags">
+                                <button class="flag-btn active" data-lang="zh-CN" title="简体中文" onclick="changeLanguage('zh-CN')">
+                                    🇨🇳
+                                </button>
+                                <button class="flag-btn" data-lang="en-US" title="English" onclick="changeLanguage('en-US')">
+                                    🇺🇸
+                                </button>
+                                <button class="flag-btn" data-lang="ja-JP" title="日本語" onclick="changeLanguage('ja-JP')">
+                                    🇯🇵
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="settings-section">
+                    <h3 id="animationSettingsTitle">窗口动画</h3>
+                    <div class="setting-item-inline">
+                        <div class="setting-group">
+                            <label class="setting-label" for="animationSelect" id="animationLabel">动画效果</label>
                             <select id="animationSelect" class="setting-select">
                                 <option value="none">无动画</option>
                                 <option value="fade">淡入淡出</option>
@@ -201,7 +220,7 @@
                             </select>
                         </div>
                         <div class="setting-group">
-                            <label class="setting-label" for="animationSpeedSelect">动画速度</label>
+                            <label class="setting-label" for="animationSpeedSelect" id="animationSpeedLabel">动画速度</label>
                             <select id="animationSpeedSelect" class="setting-select">
                                 <option value="fast">快速</option>
                                 <option value="normal">正常</option>
@@ -212,11 +231,11 @@
                 </div>
 
                 <div class="settings-section">
-                    <h3>文件稳定性检查</h3>
-                    <p class="setting-description">防止正在编辑的文件被意外移动，确保文件完全写入完成后再处理</p>
+                    <h3 id="stabilitySettingsTitle">文件稳定性检查</h3>
+                    <p class="setting-description" id="stabilityDescription">防止正在编辑的文件被意外移动，确保文件完全写入完成后再处理</p>
                     <div class="setting-item-inline">
                         <div class="setting-group">
-                            <label class="setting-label" for="stabilityDelaySelect">初始延迟</label>
+                            <label class="setting-label" for="stabilityDelaySelect" id="stabilityDelayLabel">初始延迟</label>
                             <select id="stabilityDelaySelect" class="setting-select">
                                 <option value="1">1秒</option>
                                 <option value="2">2秒</option>
@@ -226,7 +245,7 @@
                             </select>
                         </div>
                         <div class="setting-group">
-                            <label class="setting-label" for="stabilityChecksSelect">稳定检查次数</label>
+                            <label class="setting-label" for="stabilityChecksSelect" id="stabilityChecksLabel">稳定检查次数</label>
                             <select id="stabilityChecksSelect" class="setting-select">
                                 <option value="1">1次</option>
                                 <option value="2">2次（推荐）</option>
@@ -235,11 +254,11 @@
                             </select>
                         </div>
                     </div>
-                    <p class="hint">检测到文件后，等待初始延迟时间，然后每隔1秒检查文件是否稳定（大小和修改时间不变），连续稳定指定次数后才处理</p>
+                    <p class="hint" id="stabilityHint">检测到文件后，等待初始延迟时间，然后每隔1秒检查文件是否稳定（大小和修改时间不变），连续稳定指定次数后才处理</p>
                 </div>
 
                 <div class="settings-section">
-                    <h3>配置管理</h3>
+                    <h3 id="configManagementTitle">配置管理</h3>
                     <div class="config-actions">
                         <button class="btn-config" id="exportConfigBtn">
                             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -247,7 +266,7 @@
                                 <polyline points="7 10 12 15 17 10"></polyline>
                                 <line x1="12" y1="15" x2="12" y2="3"></line>
                             </svg>
-                            导出配置
+                            <span id="exportConfigText">导出配置</span>
                         </button>
                         <button class="btn-config" id="importConfigBtn">
                             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -255,10 +274,10 @@
                                 <polyline points="17 8 12 3 7 8"></polyline>
                                 <line x1="12" y1="3" x2="12" y2="15"></line>
                             </svg>
-                            导入配置
+                            <span id="importConfigText">导入配置</span>
                         </button>
                     </div>
-                    <p class="hint">导出配置可以备份您的规则、文件夹等设置；导入配置会覆盖当前设置</p>
+                    <p class="hint" id="configManagementHint">导出配置可以备份您的规则、文件夹等设置；导入配置会覆盖当前设置</p>
                 </div>
                 
                 <div class="settings-section">
@@ -270,7 +289,7 @@
                         </div>
                         <div class="stat-card">
                             <div class="stat-value" id="foldersCount">0</div>
-                            <div class="stat-label">监控文件夹</div>
+                            <div class="stat-label" id="foldersStatLabel">监控文件夹</div>
                         </div>
                         <div class="stat-card">
                             <div class="stat-value" id="rulesCount">0</div>
@@ -294,53 +313,53 @@
             <div class="modal-body">
                 <form id="folderForm">
                     <div class="form-group">
-                        <label for="folderPath">文件夹路径 <span class="required">*</span></label>
+                        <label for="folderPath" id="folderPathLabel">文件夹路径 <span class="required">*</span></label>
                         <div class="input-group">
                             <input type="text" id="folderPath" readonly required>
                             <button type="button" class="btn-secondary" id="browseFolderBtn">浏览</button>
                         </div>
                     </div>
                     <div class="form-group">
-                        <label for="folderName">文件夹名称 <span class="required">*</span></label>
+                        <label for="folderName" id="folderNameLabel">文件夹名称 <span class="required">*</span></label>
                         <input type="text" id="folderName" placeholder="例如：桌面下载" required>
                     </div>
                     <div class="form-group">
-                        <label title="选择要应用于此文件夹的规则">关联规则</label>
+                        <label id="folderRulesLabel" title="选择要应用于此文件夹的规则">关联规则</label>
                         <div class="checkbox-group" id="folderRules">
-                            <p class="hint">加载中...</p>
+                            <p class="hint" id="folderRulesLoading">加载中...</p>
                         </div>
                     </div>
                     
                     <!-- 触发模式配置 -->
                     <div class="form-group">
-                        <label title="检测到新文件时的处理方式">执行方式</label>
+                        <label id="triggerModeLabel" title="检测到新文件时的处理方式">执行方式</label>
                         <div class="trigger-mode-selector">
                             <label class="trigger-option">
                                 <input type="radio" name="triggerMode" value="immediate">
                                 <div>
-                                    <span class="trigger-label">🚀 立即执行</span>
-                                    <span class="trigger-desc">检测到文件立即整理</span>
+                                    <span class="trigger-label" id="triggerImmediateLabel">🚀 立即执行</span>
+                                    <span class="trigger-desc" id="triggerImmediateDesc">检测到文件立即整理</span>
                                 </div>
                             </label>
                             <label class="trigger-option">
                                 <input type="radio" name="triggerMode" value="manual" checked>
                                 <div>
-                                    <span class="trigger-label">✋ 手动确认</span>
-                                    <span class="trigger-desc">添加到待处理列表</span>
+                                    <span class="trigger-label" id="triggerManualLabel">✋ 手动确认</span>
+                                    <span class="trigger-desc" id="triggerManualDesc">添加到待处理列表</span>
                                 </div>
                             </label>
                             <label class="trigger-option">
                                 <input type="radio" name="triggerMode" value="on_startup">
                                 <div>
-                                    <span class="trigger-label">🔄 启动时执行</span>
-                                    <span class="trigger-desc">程序启动时处理</span>
+                                    <span class="trigger-label" id="triggerStartupLabel">🔄 启动时执行</span>
+                                    <span class="trigger-desc" id="triggerStartupDesc">程序启动时处理</span>
                                 </div>
                             </label>
                             <label class="trigger-option">
                                 <input type="radio" name="triggerMode" value="scheduled">
                                 <div>
-                                    <span class="trigger-label">⏱️ 定时执行</span>
-                                    <span class="trigger-desc">按时间计划执行</span>
+                                    <span class="trigger-label" id="triggerScheduledLabel">⏱️ 定时执行</span>
+                                    <span class="trigger-desc" id="triggerScheduledDesc">按时间计划执行</span>
                                 </div>
                             </label>
                         </div>
@@ -407,7 +426,7 @@
                     <div class="form-group">
                         <label class="checkbox-label">
                             <input type="checkbox" id="folderEnabled" checked>
-                            <span>立即启用监控</span>
+                            <span id="folderEnabledLabel">立即启用监控</span>
                         </label>
                     </div>
                 </form>
@@ -431,33 +450,33 @@
             <div class="modal-body">
                 <form id="ruleForm">
                     <div class="form-group form-group-inline">
-                        <label for="ruleName">规则名称 <span class="required">*</span></label>
+                        <label for="ruleName" id="ruleNameLabel">规则名称 <span class="required">*</span></label>
                         <input type="text" id="ruleName" placeholder="例如：图片文件归类" required>
                     </div>
                     
                     <div class="form-group form-group-inline">
-                        <label title="选择规则应用于文件、文件夹或两者">应用范围</label>
+                        <label id="fileScopeLabel" title="选择规则应用于文件、文件夹或两者">应用范围</label>
                         <div class="file-type-checkboxes">
                             <label class="checkbox-label" title="对文件应用此规则">
                                 <input type="checkbox" id="applyToFiles" checked>
-                                <span>文件</span>
+                                <span id="applyToFilesLabel">文件</span>
                             </label>
                             <label class="checkbox-label" title="对文件夹应用此规则">
                                 <input type="checkbox" id="applyToFolders">
-                                <span>文件夹</span>
+                                <span id="applyToFoldersLabel">文件夹</span>
                             </label>
                         </div>
                     </div>
                     
                     <div class="form-group form-group-inline">
-                        <label title="选择需要匹配的文件扩展名，不需要包含点号">文件扩展名</label>
+                        <label title="选择需要匹配的文件扩展名，不需要包含点号" id="fileExtensionsLabel">文件扩展名</label>
                         <div class="extension-wrapper">
                             <div class="extension-tags-container" id="extensionContainer">
                                 <div class="extension-tags" id="extensionTags">
                                     <!-- 扩展名标签将显示在这里 -->
                                 </div>
                                 <div class="extension-input-wrapper">
-                                    <input type="text" id="extensionInput" placeholder="输入扩展名后按回车（如：jpg）" title="不需要包含点号，直接输入扩展名即可（如：jpg、png、pdf）" />
+                                    <input type="text" id="extensionInput" placeholder="例如: jpg" title="不需要包含点号，直接输入扩展名即可（如：jpg、png、pdf）" />
                                     <button type="button" class="btn-add-extension" id="addExtensionBtn" title="添加扩展名">+</button>
                                 </div>
                             </div>
@@ -466,7 +485,7 @@
                     </div>
                     
                     <div class="form-group form-group-inline">
-                        <label title="可添加文件名、大小、时间等条件，多个条件需同时满足">其他条件（可选）</label>
+                        <label title="可添加文件名、大小、时间等条件，多个条件需同时满足" id="otherConditionsLabel">其他条件（可选）</label>
                         <div class="conditions-builder">
                             <div class="condition-selector">
                                 <div class="condition-inputs-group">
@@ -490,7 +509,7 @@
                     </div>
                     
                     <div class="form-group form-group-inline">
-                        <label for="targetFolder" title="相对路径：相对于监控文件夹的子目录名 | 绝对路径：完整的系统路径 | 可使用占位符动态生成路径">目标文件夹 <span class="required">*</span></label>
+                        <label for="targetFolder" title="相对路径：相对于监控文件夹的子目录名 | 绝对路径：完整的系统路径 | 可使用占位符动态生成路径" id="targetFolderLabel">目标文件夹 <span class="required">*</span></label>
                         <div class="target-folder-wrapper">
                             <div class="input-with-button">
                                 <input type="text" id="targetFolder" placeholder="例如：Pictures/{year}/{month} 或 C:\Documents\Photos" title="支持相对路径、绝对路径和占位符，点击下方按钮快速插入占位符" required>
@@ -502,25 +521,25 @@
                             </div>
                             <div class="placeholder-tags">
                             <div class="tag-group">
-                                <span class="tag-group-label">文件属性:</span>
+                                <span class="tag-group-label" id="filePropsLabel">文件属性:</span>
                                 <button type="button" class="tag-btn" data-placeholder="{name}" title="文件名（不含扩展名）">{name}</button>
                                 <button type="button" class="tag-btn" data-placeholder="{ext}" title="扩展名">{ext}</button>
                             </div>
                             <div class="tag-group">
-                                <span class="tag-group-label">日期时间:</span>
+                                <span class="tag-group-label" id="dateTimeLabel">日期时间:</span>
                                 <button type="button" class="tag-btn" data-placeholder="{year}" title="年份（4位数字）">{year}</button>
                                 <button type="button" class="tag-btn" data-placeholder="{month}" title="月份（2位数字）">{month}</button>
                                 <button type="button" class="tag-btn" data-placeholder="{day}" title="日期（2位数字）">{day}</button>
                             </div>
                             <div class="tag-group">
-                                <span class="tag-group-label">正则捕获:</span>
+                                <span class="tag-group-label" id="regexCaptureLabel">正则捕获:</span>
                                 <button type="button" class="tag-btn" data-placeholder="$1" title="正则表达式第1个捕获组">$1</button>
                                 <button type="button" class="tag-btn" data-placeholder="$2" title="正则表达式第2个捕获组">$2</button>
                                 <button type="button" class="tag-btn" data-placeholder="$3" title="正则表达式第3个捕获组">$3</button>
                                 <button type="button" class="tag-btn" data-placeholder="$4" title="正则表达式第4个捕获组">$4</button>
                             </div>
                             <div class="tag-group">
-                                <span class="tag-group-label">系统路径:</span>
+                                <span class="tag-group-label" id="systemPathLabel">系统路径:</span>
                                 <button type="button" class="tag-btn" data-placeholder="{desktop}" title="桌面目录">{desktop}</button>
                                 <button type="button" class="tag-btn" data-placeholder="{documents}" title="文档目录">{documents}</button>
                                 <button type="button" class="tag-btn" data-placeholder="{downloads}" title="下载目录">{downloads}</button>
@@ -529,7 +548,7 @@
                                 <button type="button" class="tag-btn" data-placeholder="{videos}" title="视频目录">{videos}</button>
                             </div>
                             <div class="tag-group">
-                                <span class="tag-group-label">特殊操作:</span>
+                                <span class="tag-group-label" id="specialActionLabel">特殊操作:</span>
                                 <button type="button" class="tag-btn tag-btn-recycle" data-placeholder="{recycle}" title="移动到回收站（文件不会被永久删除）">🗑️ {recycle}</button>
                             </div>
                             </div>
@@ -537,7 +556,7 @@
                     </div>
                     
                     <div class="form-group form-group-inline">
-                        <label for="conflictStrategy" title="当目标位置已存在同名文件时的处理策略">文件冲突处理</label>
+                        <label for="conflictStrategy" title="当目标位置已存在同名文件时的处理策略" id="conflictStrategyLabel">文件冲突处理</label>
                         <select id="conflictStrategy" title="默认为跳过，可避免意外覆盖重要文件">
                             <option value="skip">跳过（保留原文件）</option>
                             <option value="overwrite">覆盖（替换为新文件）</option>

@@ -1,4 +1,5 @@
 use crate::models::Rule;
+use crate::i18n;
 use anyhow::{Context, Result};
 use serde::{Deserialize, Serialize};
 use std::fs;
@@ -196,6 +197,10 @@ pub struct AppConfig {
     #[serde(default = "default_animation_speed")]
     pub animation_speed: String,
     
+    /// 界面语言: zh-CN, en-US, ja-JP
+    #[serde(default = "default_language")]
+    pub language: String,
+    
     /// 文件稳定性检查延迟（秒）- 检测到文件后等待多久再检查稳定性
     #[serde(default = "default_stability_delay")]
     pub file_stability_delay: u32,
@@ -230,6 +235,10 @@ fn default_animation() -> String {
 
 fn default_animation_speed() -> String {
     "normal".to_string()
+}
+
+fn default_language() -> String {
+    "zh-CN".to_string()
 }
 
 fn default_stability_delay() -> u32 {
@@ -304,6 +313,7 @@ impl Default for AppConfig {
             window_height: 520,
             animation: "none".to_string(),
             animation_speed: "normal".to_string(),
+            language: default_language(),
             file_stability_delay: default_stability_delay(),
             file_stability_checks: default_stability_checks(),
             watch_paths: None,
@@ -390,6 +400,7 @@ impl AppConfig {
             window_height: 520,
             animation: "none".to_string(),
             animation_speed: "normal".to_string(),
+            language: default_language(),
             file_stability_delay: default_stability_delay(),
             file_stability_checks: default_stability_checks(),
             watch_paths: None,
@@ -404,7 +415,7 @@ impl AppConfig {
         if path.exists() {
             Self::load_from_file(path)
         } else {
-            warn!("配置文件不存在，使用默认配置");
+            warn!("{}", i18n::t("config.not_found"));
             let config = Self::default();
             
             // 尝试保存默认配置
@@ -429,7 +440,7 @@ impl AppConfig {
         fs::write(path, content)
             .with_context(|| format!("无法写入配置文件: {:?}", path))?;
         
-        info!("配置已保存到 {:?}", path);
+        info!("{} {:?}", i18n::t("config.saved"), path);
         Ok(())
     }
 }

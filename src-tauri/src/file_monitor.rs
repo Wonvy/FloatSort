@@ -1,4 +1,5 @@
 use crate::config::AppConfig;
+use crate::i18n;
 use anyhow::Result;
 use notify::{Config, Event, RecommendedWatcher, RecursiveMode, Watcher};
 use std::path::{Path, PathBuf};
@@ -182,7 +183,7 @@ impl FileMonitor {
         // 在新线程中进行稳定性检查
         thread::spawn(move || {
             if Self::wait_for_file_stable(&path_clone, &config_clone) {
-                info!("文件已稳定，发送检测事件: {:?}", path_clone);
+                info!("{}: {:?}", i18n::t("file.sending_event"), path_clone);
                 
                 // 发送文件检测事件到前端
                 let _ = window_clone.emit(
@@ -192,9 +193,9 @@ impl FileMonitor {
                     }),
                 );
                 
-                info!("✓ 文件检测事件已发送到前端: {:?}", path_clone);
+                info!("✓ {}: {:?}", i18n::t("file.event_sent"), path_clone);
             } else {
-                warn!("文件稳定性检查失败，跳过: {:?}", path_clone);
+                warn!("{}: {:?}", i18n::t("file.stability_failed"), path_clone);
             }
         });
     }
@@ -260,10 +261,10 @@ impl FileMonitor {
                         // 比较文件大小和修改时间
                         if current.size == last.size && current.modified == last.modified {
                             stable_count += 1;
-                            info!("文件稳定检查 {}/{}: {:?}", stable_count, required_checks, path);
+                            info!("{} {}/{}: {:?}", i18n::t("file.stability_check"), stable_count, required_checks, path);
                             
                             if stable_count >= required_checks {
-                                info!("✓ 文件已稳定: {:?}", path);
+                                info!("✓ {}: {:?}", i18n::t("file.stable"), path);
                                 return true;
                             }
                         } else {
@@ -284,7 +285,7 @@ impl FileMonitor {
         }
         
         // 如果经过多次检查仍未稳定，返回 false
-        warn!("文件稳定性检查超时: {:?}", path);
+        warn!("{}: {:?}", i18n::t("file.stability_timeout"), path);
         false
     }
     

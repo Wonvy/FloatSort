@@ -1,5 +1,386 @@
 // FloatSort V2 - 主应用逻辑
 
+// ========== 多语言支持 ==========
+let currentLanguage = 'zh-CN';  // 默认语言
+let i18nData = null;  // 当前语言数据
+
+// 加载语言文件
+async function loadLanguage(lang) {
+    try {
+        const response = await fetch(`locales/${lang}.json`);
+        if (!response.ok) {
+            throw new Error(`Failed to load language file: ${lang}`);
+        }
+        i18nData = await response.json();
+        currentLanguage = lang;
+        console.log(`✓ 语言已加载: ${lang}`);
+        return true;
+    } catch (error) {
+        console.error(`✗ 语言加载失败: ${lang}`, error);
+        // 如果加载失败且不是中文，尝试加载中文作为后备
+        if (lang !== 'zh-CN') {
+            console.log('尝试加载默认语言 zh-CN...');
+            return await loadLanguage('zh-CN');
+        }
+        return false;
+    }
+}
+
+// 翻译函数 - 支持嵌套键（如 'common.cancel'）
+function t(key, replacements = {}) {
+    if (!i18nData) {
+        return key;
+    }
+    
+    // 分割键路径
+    const keys = key.split('.');
+    let value = i18nData;
+    
+    // 逐层访问嵌套对象
+    for (const k of keys) {
+        if (value && typeof value === 'object' && k in value) {
+            value = value[k];
+        } else {
+            console.warn(`翻译键不存在: ${key}`);
+            return key;
+        }
+    }
+    
+    // 如果最终值不是字符串，返回原键
+    if (typeof value !== 'string') {
+        console.warn(`翻译值不是字符串: ${key}`);
+        return key;
+    }
+    
+    // 替换变量 {{variable}}
+    let result = value;
+    for (const [placeholder, replacement] of Object.entries(replacements)) {
+        result = result.replace(new RegExp(`{{${placeholder}}}`, 'g'), replacement);
+    }
+    
+    return result;
+}
+
+// 切换语言并更新界面
+window.changeLanguage = async function(lang) {
+    const success = await loadLanguage(lang);
+    if (success) {
+        try {
+            // 保存语言设置
+            await invoke('save_language_setting', {
+                language: lang
+            });
+            
+            // 更新国旗按钮的active状态
+            document.querySelectorAll('.flag-btn').forEach(btn => {
+                if (btn.dataset.lang === lang) {
+                    btn.classList.add('active');
+                } else {
+                    btn.classList.remove('active');
+                }
+            });
+            
+            // 更新整个界面的文本
+            updateUILanguage();
+            
+            // 显示通知
+            showNotification(t('notifications.languageChanged'), 'success');
+        } catch (error) {
+            console.error('保存语言设置失败:', error);
+            showNotification('保存语言设置失败', 'error');
+        }
+    }
+}
+
+// 更新界面所有文本为当前语言
+function updateUILanguage() {
+    console.log('[翻译] 开始更新UI语言，当前语言:', currentLanguage);
+    
+    // 1. 更新主界面标签页
+    const foldersTab = document.querySelector('[data-tab="folders"]');
+    if (foldersTab) foldersTab.textContent = t('folders.title');
+    
+    const rulesTab = document.querySelector('[data-tab="rules"]');
+    if (rulesTab) rulesTab.textContent = t('rules.title');
+    
+    const activityTab = document.querySelector('[data-tab="activity"]');
+    if (activityTab) activityTab.textContent = t('activity.title');
+    
+    // 2. 更新文件夹面板
+    const foldersPaneTitle = document.getElementById('foldersPaneTitle');
+    if (foldersPaneTitle) {
+        foldersPaneTitle.textContent = t('folders.title');
+        console.log('[翻译] 文件夹标题:', t('folders.title'));
+    }
+    
+    const addFolderBtnText = document.getElementById('addFolderBtnText');
+    if (addFolderBtnText) {
+        addFolderBtnText.textContent = `+ ${t('folders.add')}`;
+        console.log('[翻译] 添加文件夹按钮:', t('folders.add'));
+    }
+    
+    // 更新空状态文本
+    const noFoldersText = document.getElementById('noFoldersText');
+    if (noFoldersText) noFoldersText.textContent = t('folders.noFolders');
+    
+    const noFoldersHint = document.getElementById('noFoldersHint');
+    if (noFoldersHint) noFoldersHint.textContent = t('folders.emptyHint');
+    
+    // 更新统计标签
+    const foldersStatLabel = document.getElementById('foldersStatLabel');
+    if (foldersStatLabel) foldersStatLabel.textContent = t('folders.title');
+    
+    // 3. 更新规则面板
+    const rulesPaneTitle = document.getElementById('rulesPaneTitle');
+    if (rulesPaneTitle) {
+        rulesPaneTitle.textContent = t('rules.title');
+        console.log('[翻译] 规则标题:', t('rules.title'));
+    }
+    
+    const addRuleBtnText = document.getElementById('addRuleBtnText');
+    if (addRuleBtnText) {
+        addRuleBtnText.textContent = `+ ${t('rules.add')}`;
+        console.log('[翻译] 添加规则按钮:', t('rules.add'));
+    }
+    
+    // 更新规则空状态文本
+    const noRulesText = document.getElementById('noRulesText');
+    if (noRulesText) noRulesText.textContent = t('rules.noRules');
+    
+    const noRulesHint = document.getElementById('noRulesHint');
+    if (noRulesHint) noRulesHint.textContent = t('rules.noRulesHint');
+    
+    // 更新视图模式标签
+    const viewModeLabel = document.getElementById('viewModeLabel');
+    if (viewModeLabel) {
+        const currentViewMode = document.querySelector('.view-option.active')?.dataset.value || 'grouped';
+        if (currentViewMode === 'grouped') {
+            viewModeLabel.textContent = t('rules.viewGrouped');
+        } else if (currentViewMode === 'list') {
+            viewModeLabel.textContent = t('rules.viewList');
+        } else if (currentViewMode === 'split') {
+            viewModeLabel.textContent = t('rules.viewSplit');
+        }
+    }
+    
+    // 更新视图下拉选项
+    const viewOptions = document.querySelectorAll('.view-option span');
+    if (viewOptions.length >= 3) {
+        viewOptions[0].textContent = t('rules.viewGrouped');
+        viewOptions[1].textContent = t('rules.viewList');
+        viewOptions[2].textContent = t('rules.viewSplit');
+    }
+    
+    // 4. 更新设置面板
+    const settingsPaneTitle = document.getElementById('settingsPaneTitle');
+    if (settingsPaneTitle) settingsPaneTitle.textContent = t('settings.title');
+    
+    // 更新设置部分的标题
+    const interfaceTitle = document.getElementById('interfaceSettingsTitle');
+    if (interfaceTitle) interfaceTitle.textContent = t('settings.interface');
+    
+    const animationTitle = document.getElementById('animationSettingsTitle');
+    if (animationTitle) animationTitle.textContent = t('settings.animation');
+    
+    const stabilityTitle = document.getElementById('stabilitySettingsTitle');
+    if (stabilityTitle) stabilityTitle.textContent = t('settings.fileStability');
+    
+    const configTitle = document.getElementById('configManagementTitle');
+    if (configTitle) configTitle.textContent = t('settings.configManagement');
+    
+    // 更新设置项标签和描述
+    const stabilityDesc = document.getElementById('stabilityDescription');
+    if (stabilityDesc) stabilityDesc.textContent = t('settings.stabilityDescription');
+    
+    const stabilityHint = document.getElementById('stabilityHint');
+    if (stabilityHint) stabilityHint.textContent = t('settings.stabilityHint');
+    
+    const configHint = document.getElementById('configManagementHint');
+    if (configHint) configHint.textContent = t('settings.configManagementHint');
+    
+    // 更新配置管理按钮
+    const exportText = document.getElementById('exportConfigText');
+    if (exportText) exportText.textContent = t('settings.exportConfig');
+    
+    const importText = document.getElementById('importConfigText');
+    if (importText) importText.textContent = t('settings.importConfig');
+    
+    // 更新设置项标签
+    const languageLabel = document.getElementById('languageLabel');
+    if (languageLabel) languageLabel.textContent = t('settings.language');
+    
+    const animationLabel = document.getElementById('animationLabel');
+    if (animationLabel) animationLabel.textContent = t('settings.animation');
+    
+    const animationSpeedLabel = document.getElementById('animationSpeedLabel');
+    if (animationSpeedLabel) animationSpeedLabel.textContent = t('settings.animationSpeed');
+    
+    const stabilityDelayLabel = document.getElementById('stabilityDelayLabel');
+    if (stabilityDelayLabel) stabilityDelayLabel.textContent = t('settings.stabilityDelay');
+    
+    const stabilityChecksLabel = document.getElementById('stabilityChecksLabel');
+    if (stabilityChecksLabel) stabilityChecksLabel.textContent = t('settings.stabilityChecks');
+    
+    // 更新动画效果选项
+    const animationSelect = document.getElementById('animationSelect');
+    if (animationSelect) {
+        animationSelect.options[0].textContent = t('settings.animationNone');
+        animationSelect.options[1].textContent = t('settings.animationFade');
+        animationSelect.options[2].textContent = t('settings.animationSlide');
+    }
+    
+    // 更新动画速度选项
+    const speedSelect = document.getElementById('animationSpeedSelect');
+    if (speedSelect) {
+        speedSelect.options[0].textContent = t('settings.speedFast');
+        speedSelect.options[1].textContent = t('settings.speedNormal');
+        speedSelect.options[2].textContent = t('settings.speedSlow');
+    }
+    
+    // 更新稳定性检查延迟选项
+    const delaySelect = document.getElementById('stabilityDelaySelect');
+    if (delaySelect) {
+        delaySelect.options[0].textContent = t('settings.delay1s');
+        delaySelect.options[1].textContent = t('settings.delay2s');
+        delaySelect.options[2].textContent = t('settings.delay3s');
+        delaySelect.options[3].textContent = t('settings.delay5s');
+        delaySelect.options[4].textContent = t('settings.delay10s');
+    }
+    
+    // 更新稳定性检查次数选项
+    const checksSelect = document.getElementById('stabilityChecksSelect');
+    if (checksSelect) {
+        checksSelect.options[0].textContent = t('settings.checks1');
+        checksSelect.options[1].textContent = t('settings.checks2');
+        checksSelect.options[2].textContent = t('settings.checks3');
+        checksSelect.options[3].textContent = t('settings.checks5');
+    }
+    
+    // 5. 更新活动日志面板
+    const activityLogTitle = document.getElementById('activityLogTitle');
+    if (activityLogTitle) activityLogTitle.textContent = t('activity.title');
+    
+    const clearActivityBtnText = document.getElementById('clearActivityBtnText');
+    if (clearActivityBtnText) clearActivityBtnText.textContent = '🗑️ ' + t('activity.clearLog');
+    
+    const clearProcessedBtnText = document.getElementById('clearProcessedBtnText');
+    if (clearProcessedBtnText) clearProcessedBtnText.textContent = '🔄 ' + t('activity.clearProcessed');
+    
+    // 更新按钮的 title 属性
+    const clearProcessedBtn = document.getElementById('clearProcessedBtn');
+    if (clearProcessedBtn) clearProcessedBtn.title = t('activity.clearProcessedHint');
+    
+    // 更新初始活动消息
+    const initialActivityTime = document.getElementById('initialActivityTime');
+    if (initialActivityTime) initialActivityTime.textContent = t('activity.startup');
+    
+    const initialActivityMessage = document.getElementById('initialActivityMessage');
+    if (initialActivityMessage) initialActivityMessage.textContent = t('activity.appReady');
+    
+    // 6. 更新文件夹和规则列表
+    renderFolders();
+    renderRules();
+    
+    // 7. 更新规则模态框
+    const ruleModalTitle = document.getElementById('ruleModalTitle');
+    if (ruleModalTitle) {
+        // 根据是否在编辑模式来设置标题
+        ruleModalTitle.textContent = appState.editingRuleId ? t('rules.edit') : t('rules.add');
+    }
+    
+    // 更新规则表单中的标签
+    const ruleNameLabel = document.getElementById('ruleNameLabel');
+    if (ruleNameLabel) ruleNameLabel.innerHTML = t('rules.name') + ' <span class="required">*</span>';
+    
+    const fileExtensionsLabel = document.getElementById('fileExtensionsLabel');
+    if (fileExtensionsLabel) fileExtensionsLabel.textContent = t('rules.fileExtensions');
+    
+    const otherConditionsLabel = document.getElementById('otherConditionsLabel');
+    if (otherConditionsLabel) otherConditionsLabel.textContent = t('rules.otherConditions');
+    
+    const targetFolderLabel = document.getElementById('targetFolderLabel');
+    if (targetFolderLabel) targetFolderLabel.innerHTML = t('rules.targetFolder') + ' <span class="required">*</span>';
+    
+    const conflictStrategyLabel = document.getElementById('conflictStrategyLabel');
+    if (conflictStrategyLabel) conflictStrategyLabel.textContent = t('rules.conflictHandling');
+    
+    // 更新规则表单中的按钮
+    const saveRuleBtn = document.getElementById('saveRuleBtn');
+    if (saveRuleBtn) saveRuleBtn.textContent = t('common.save');
+    
+    const cancelRuleBtn = document.getElementById('cancelRuleBtn');
+    if (cancelRuleBtn) cancelRuleBtn.textContent = t('common.cancel');
+    
+    // 更新冲突策略选项
+    const conflictStrategySelect = document.getElementById('conflictStrategy');
+    if (conflictStrategySelect) {
+        conflictStrategySelect.options[0].textContent = t('rules.conflictSkip');
+        conflictStrategySelect.options[1].textContent = t('rules.conflictReplace');
+        conflictStrategySelect.options[2].textContent = t('rules.conflictRename');
+    }
+    
+    // 8. 更新文件夹模态框
+    const folderModalTitle = document.getElementById('folderModalTitle');
+    if (folderModalTitle) {
+        folderModalTitle.textContent = appState.editingFolderId ? t('folders.edit') : t('folders.add');
+    }
+    
+    const folderPathLabel = document.getElementById('folderPathLabel');
+    if (folderPathLabel) folderPathLabel.innerHTML = t('folders.path') + ' <span class="required">*</span>';
+    
+    const folderNameLabel = document.getElementById('folderNameLabel');
+    if (folderNameLabel) folderNameLabel.innerHTML = t('common.name') + ' <span class="required">*</span>';
+    
+    const saveFolderBtn = document.getElementById('saveFolderBtn');
+    if (saveFolderBtn) saveFolderBtn.textContent = t('common.save');
+    
+    const cancelFolderBtn = document.getElementById('cancelFolderBtn');
+    if (cancelFolderBtn) cancelFolderBtn.textContent = t('common.cancel');
+    
+    const browseFolderBtn = document.getElementById('browseFolderBtn');
+    if (browseFolderBtn) browseFolderBtn.textContent = t('common.select');
+    
+    // 9. 更新批量确认窗口
+    const batchModal = document.getElementById('batchConfirmModal');
+    if (batchModal) {
+        const batchTitle = document.getElementById('batchModalTitle');
+        if (batchTitle) batchTitle.textContent = t('batch.title');
+        
+        const confirmBtn = document.getElementById('confirmBatch');
+        if (confirmBtn) confirmBtn.textContent = t('batch.confirmAndOrganize');
+        
+        const cancelBtn = document.getElementById('cancelBatch');
+        if (cancelBtn) cancelBtn.textContent = t('common.cancel');
+    }
+    
+    // 10. 更新删除确认对话框
+    const deleteModalTitle = document.querySelector('#deleteConfirmModal .modal-header h2');
+    if (deleteModalTitle) deleteModalTitle.textContent = t('deleteConfirm.title');
+    
+    // 11. 更新统计卡片
+    const statLabels = document.querySelectorAll('.stat-label');
+    if (statLabels.length >= 3) {
+        statLabels[0].textContent = t('activity.filesProcessed');
+        statLabels[1].textContent = t('folders.title');
+        statLabels[2].textContent = t('rules.title');
+    }
+    
+    const confirmDeleteBtn = document.getElementById('confirmDelete');
+    if (confirmDeleteBtn) confirmDeleteBtn.textContent = t('common.delete');
+    
+    const cancelDeleteBtn = document.getElementById('cancelDelete');
+    if (cancelDeleteBtn) cancelDeleteBtn.textContent = t('common.cancel');
+    
+    // 11. 更新空状态提示
+    const emptyRulesHint = document.querySelector('#rules-pane .empty-hint');
+    if (emptyRulesHint) emptyRulesHint.textContent = t('rules.noRules');
+    
+    const emptyFoldersHint = document.querySelector('#folders-pane .empty-hint');
+    if (emptyFoldersHint) emptyFoldersHint.textContent = t('folders.noFolders');
+    
+    console.log(`✓ 界面语言已更新: ${currentLanguage}`);
+}
+
 // ========== 全局状态 ==========
 const appState = {
     folders: [],
@@ -72,9 +453,9 @@ window.selectViewMode = function(mode) {
     }
     
     const modeNames = {
-        'grouped': '分组视图',
-        'list': '列表视图',
-        'split': '分栏视图'
+        'grouped': t('rules.viewGrouped'),
+        'list': t('rules.viewList'),
+        'split': t('rules.viewSplit')
     };
     console.log('[视图切换] 切换到:', modeNames[mode]);
 }
@@ -88,9 +469,9 @@ function updateViewDisplay(viewMode) {
     };
     
     const modeNames = {
-        'grouped': '分组视图',
-        'list': '列表视图',
-        'split': '分栏视图'
+        'grouped': t('rules.viewGrouped'),
+        'list': t('rules.viewList'),
+        'split': t('rules.viewSplit')
     };
     
     // 更新按钮图标
@@ -141,16 +522,29 @@ async function initTauriAPI() {
     });
 }
 
-function initializeApp() {
+async function initializeApp() {
     console.log('FloatSort V2 初始化中...');
     
+    // 1. 首先加载设置以获取用户的语言偏好
+    const settings = await getSettings();
+    const savedLanguage = settings?.language || 'zh-CN';
+    
+    // 2. 加载语言文件
+    await loadLanguage(savedLanguage);
+    
+    // 3. 初始化其他组件
     setupTabs();
     setupEventListeners();
     setupBackendListeners();
     setupWindowListeners();
     setupWindowSnap(); // 新的窗口折叠功能
+    
+    // 4. 加载数据（会触发渲染，需要在语言加载后）
     loadAppData();
     // loadActivityLogs();  // 已禁用：改为使用前端实时日志
+    
+    // 5. 更新界面语言（确保所有静态文本都被翻译）
+    updateUILanguage();
     
     // ❌ 移除定时刷新：会覆盖前端添加的实时日志
     // setInterval(loadActivityLogs, 10000);
@@ -427,6 +821,8 @@ function setupEventListeners() {
     document.getElementById('importConfigBtn').addEventListener('click', importConfig);
     
     // 设置
+    // 语言切换 - 使用国旗按钮，在HTML中通过onclick直接调用changeLanguage
+    
     document.getElementById('animationSelect').addEventListener('change', (e) => {
         appState.animation = e.target.value;
         saveAnimationSettings();
@@ -1302,9 +1698,41 @@ async function loadAppData() {
     }
 }
 
+// 辅助函数：获取当前设置
+async function getSettings() {
+    try {
+        const config = await invoke('get_config');
+        return {
+            language: config.language || 'zh-CN',
+            batchThreshold: config.batch_threshold || 1,
+            animation: config.animation || 'none',
+            animationSpeed: config.animation_speed || 'normal',
+            fileStabilityDelay: config.file_stability_delay || 3,
+            fileStabilityChecks: config.file_stability_checks || 2
+        };
+    } catch (error) {
+        console.error('获取设置失败:', error);
+        return {
+            language: 'zh-CN',
+            batchThreshold: 1,
+            animation: 'none',
+            animationSpeed: 'normal',
+            fileStabilityDelay: 3,
+            fileStabilityChecks: 2
+        };
+    }
+}
+
 async function loadConfig() {
     try {
         const config = await invoke('get_config');
+        
+        // 加载语言设置
+        const savedLanguage = config.language || 'zh-CN';
+        if (savedLanguage !== currentLanguage) {
+            await loadLanguage(savedLanguage);
+        }
+        
         appState.batchThreshold = config.batch_threshold || 1;
         console.log(`✓ 批量确认阈值: ${appState.batchThreshold}`);
         
@@ -1316,11 +1744,20 @@ async function loadConfig() {
         appState.fileStabilityDelay = config.file_stability_delay || 3;
         appState.fileStabilityChecks = config.file_stability_checks || 2;
         
-        // 更新UI中的下拉列表选项
+        // 更新UI中的选项和国旗按钮
         const animationSelect = document.getElementById('animationSelect');
         const speedSelect = document.getElementById('animationSpeedSelect');
         const stabilityDelaySelect = document.getElementById('stabilityDelaySelect');
         const stabilityChecksSelect = document.getElementById('stabilityChecksSelect');
+        
+        // 更新国旗按钮的active状态
+        document.querySelectorAll('.flag-btn').forEach(btn => {
+            if (btn.dataset.lang === currentLanguage) {
+                btn.classList.add('active');
+            } else {
+                btn.classList.remove('active');
+            }
+        });
         
         if (animationSelect) animationSelect.value = appState.animation;
         if (speedSelect) speedSelect.value = appState.animationSpeed;
@@ -1409,33 +1846,41 @@ function getTriggerModeDisplay(folder) {
     
     switch (triggerMode) {
         case 'immediate':
-            return '🚀 立即执行';
+            return t('folders.triggerImmediate');
         case 'manual':
-            return '✋ 手动确认';
+            return t('folders.triggerManual');
         case 'on_startup':
-            return '🔄 启动时执行';
+            return t('folders.triggerStartup');
         case 'scheduled':
             const scheduleType = folder.schedule_type;
             if (scheduleType === 'interval') {
                 const minutes = folder.schedule_interval_minutes || 30;
                 if (minutes < 60) {
-                    return `⏱️ 每${minutes}分钟`;
+                    return t('folders.everyMinutes', { minutes });
                 } else {
                     const hours = Math.floor(minutes / 60);
-                    return `⏱️ 每${hours}小时`;
+                    return t('folders.everyHours', { hours });
                 }
             } else if (scheduleType === 'daily') {
                 const time = folder.schedule_daily_time || '09:00';
-                return `⏰ 每天 ${time}`;
+                return `${t('folders.everyDay')} ${time}`;
             } else if (scheduleType === 'weekly') {
                 const day = folder.schedule_weekly_day || 1;
                 const time = folder.schedule_weekly_time || '09:00';
-                const dayNames = ['周日', '周一', '周二', '周三', '周四', '周五', '周六'];
-                return `📅 每${dayNames[day]} ${time}`;
+                const dayNames = [
+                    t('folders.sunday'), 
+                    t('folders.monday'), 
+                    t('folders.tuesday'), 
+                    t('folders.wednesday'), 
+                    t('folders.thursday'), 
+                    t('folders.friday'), 
+                    t('folders.saturday')
+                ];
+                return `${dayNames[day]} ${time}`;
             }
-            return '⏱️ 定时执行';
+            return t('folders.triggerScheduled');
         default:
-            return '✋ 手动确认';
+            return t('folders.triggerManual');
     }
 }
 
@@ -1646,13 +2091,13 @@ function renderRules() {
         if (rule.conditions && rule.conditions.length > 0) {
             fullConditionTooltip = rule.conditions.map((c, i) => `${i + 1}. ${formatCondition(c)}`).join('\n');
         } else {
-            fullConditionTooltip = '无条件';
+            fullConditionTooltip = t('rules.noCondition');
         }
         
         if (condition) {
             conditionText = formatCondition(condition);
         } else {
-            conditionText = '无条件';
+            conditionText = t('rules.noCondition');
         }
         
         // 如果有多个条件，添加提示
@@ -1691,7 +2136,7 @@ function renderRules() {
                     <div class="rule-name">${rule.name}</div>
                 </div>
                 <div class="rule-condition-col" title="${fullConditionTooltip}">
-                    <div class="rule-condition-label">条件</div>
+                    <div class="rule-condition-label">${t('rules.condition')}</div>
                     <div class="rule-condition-value">${conditionText}</div>
                 </div>
                 <div class="rule-destination-col">
@@ -1829,7 +2274,7 @@ function renderSplitView() {
                              onclick="selectFolderInSplit('${destination.replace(/\\/g, '\\\\').replace(/'/g, "\\'")}', event)">
                             <div class="split-folder-info" title="${destination}">
                                 <div class="split-folder-name" style="color: ${iconColor};">${displayPath}</div>
-                                <div class="split-folder-count">${group.rules.length} 个规则</div>
+                                <div class="split-folder-count">${group.rules.length} ${t('rules.rulesCount')}</div>
                             </div>
                             <div class="split-folder-actions">
                                 <button class="btn-icon btn-sm split-apply-rule" onclick="applyRulesToFolder('${destination.replace(/\\/g, '\\\\').replace(/'/g, "\\'")}', event)" title="应用规则到监控文件夹">
@@ -1885,21 +2330,21 @@ function renderSplitView() {
                                     ${displayPath}
                                 </span>
                                 <span style="font-size: 12px; color: #9ca3af; margin-left: 8px;">
-                                    ${groupRules.length} 个规则
+                                    ${groupRules.length} ${t('rules.rulesCount')}
                                 </span>
                             `;
                         })()}
                     </div>
                     <button class="btn-primary btn-sm" onclick="addRuleToSplitFolder('${selectedGroup ? selectedGroup.destination.replace(/\\/g, '\\\\').replace(/'/g, "\\'") : ''}', event)">
-                        + 添加规则
+                        + ${t('rules.add')}
                     </button>
                 </div>
                 <div class="split-view-body">
                     ${groupRules.length === 0 ? `
                         <div class="split-empty-state">
                             <span style="font-size: 48px;">📋</span>
-                            <p style="margin-top: 16px; font-size: 14px;">该目标文件夹暂无规则</p>
-                            <p style="font-size: 12px; margin-top: 8px;">点击"添加规则"为此文件夹创建规则</p>
+                            <p style="margin-top: 16px; font-size: 14px;">${t('rules.noRulesForFolder')}</p>
+                            <p style="font-size: 12px; margin-top: 8px;">${t('rules.clickToAddRule')}</p>
                         </div>
                     ` : groupRules.map((rule, index) => {
                     const condition = rule.conditions && rule.conditions.length > 0 ? rule.conditions[0] : null;
@@ -1935,13 +2380,13 @@ function renderSplitView() {
                     if (rule.conditions && rule.conditions.length > 0) {
                         fullConditionTooltip = rule.conditions.map((c, i) => `${i + 1}. ${formatCondition(c)}`).join('\n');
                     } else {
-                        fullConditionTooltip = '无条件';
+                        fullConditionTooltip = t('rules.noCondition');
                     }
                     
                     if (condition) {
                         conditionText = formatCondition(condition);
                     } else {
-                        conditionText = '无条件';
+                        conditionText = t('rules.noCondition');
                     }
                     
                     // 如果有多个条件，添加提示
@@ -1959,7 +2404,7 @@ function renderSplitView() {
                                 <div class="rule-name">${rule.name}</div>
                             </div>
                             <div class="rule-condition-col" title="${fullConditionTooltip}">
-                                <div class="rule-condition-label">条件</div>
+                                <div class="rule-condition-label">${t('rules.condition')}</div>
                                 <div class="rule-condition-value">${conditionText}</div>
                             </div>
                             <div class="rule-usage" title="${usedByFolders.map(f => f.name).join('、') || '暂未被任何文件夹使用'}">
@@ -2407,6 +2852,64 @@ async function openFolderModal(folderId = null) {
     const title = document.getElementById('folderModalTitle');
     const form = document.getElementById('folderForm');
     
+    // 更新模态框标题
+    title.textContent = folderId ? t('folders.edit') : t('folders.add');
+    
+    // 更新所有表单标签
+    const folderPathLabel = document.getElementById('folderPathLabel');
+    if (folderPathLabel) folderPathLabel.innerHTML = t('folders.path') + ' <span class="required">*</span>';
+    
+    const folderNameLabel = document.getElementById('folderNameLabel');
+    if (folderNameLabel) folderNameLabel.innerHTML = t('common.name') + ' <span class="required">*</span>';
+    
+    const folderRulesLabel = document.getElementById('folderRulesLabel');
+    if (folderRulesLabel) folderRulesLabel.textContent = t('folders.associatedRules');
+    
+    const triggerModeLabel = document.getElementById('triggerModeLabel');
+    if (triggerModeLabel) triggerModeLabel.textContent = t('folders.triggerMode');
+    
+    // 更新触发模式选项
+    const triggerImmediateLabel = document.getElementById('triggerImmediateLabel');
+    if (triggerImmediateLabel) triggerImmediateLabel.textContent = '🚀 ' + t('folders.triggerImmediate');
+    
+    const triggerImmediateDesc = document.getElementById('triggerImmediateDesc');
+    if (triggerImmediateDesc) triggerImmediateDesc.textContent = t('folders.triggerImmediateDesc');
+    
+    const triggerManualLabel = document.getElementById('triggerManualLabel');
+    if (triggerManualLabel) triggerManualLabel.textContent = '✋ ' + t('folders.triggerManual');
+    
+    const triggerManualDesc = document.getElementById('triggerManualDesc');
+    if (triggerManualDesc) triggerManualDesc.textContent = t('folders.triggerManualDesc');
+    
+    const triggerStartupLabel = document.getElementById('triggerStartupLabel');
+    if (triggerStartupLabel) triggerStartupLabel.textContent = '🔄 ' + t('folders.triggerStartup');
+    
+    const triggerStartupDesc = document.getElementById('triggerStartupDesc');
+    if (triggerStartupDesc) triggerStartupDesc.textContent = t('folders.triggerStartupDesc');
+    
+    const triggerScheduledLabel = document.getElementById('triggerScheduledLabel');
+    if (triggerScheduledLabel) triggerScheduledLabel.textContent = '⏱️ ' + t('folders.triggerScheduled');
+    
+    const triggerScheduledDesc = document.getElementById('triggerScheduledDesc');
+    if (triggerScheduledDesc) triggerScheduledDesc.textContent = t('folders.triggerScheduledDesc');
+    
+    const folderEnabledLabel = document.getElementById('folderEnabledLabel');
+    if (folderEnabledLabel) folderEnabledLabel.textContent = t('folders.enableMonitoring');
+    
+    // 更新按钮
+    const saveFolderBtn = document.getElementById('saveFolderBtn');
+    if (saveFolderBtn) saveFolderBtn.textContent = t('common.save');
+    
+    const cancelFolderBtn = document.getElementById('cancelFolderBtn');
+    if (cancelFolderBtn) cancelFolderBtn.textContent = t('common.cancel');
+    
+    const browseFolderBtn = document.getElementById('browseFolderBtn');
+    if (browseFolderBtn) browseFolderBtn.textContent = t('common.select');
+    
+    // 更新输入框 placeholder
+    const folderNameInput = document.getElementById('folderName');
+    if (folderNameInput) folderNameInput.placeholder = t('folders.namePlaceholder');
+    
     form.reset();
     
     // 加载规则列表用于关联
@@ -2471,7 +2974,7 @@ async function openFolderModal(folderId = null) {
         const folder = appState.folders.find(f => f.id === folderId);
         if (!folder) return;
         
-        title.textContent = '✏️ 编辑文件夹';
+        // title.textContent 已经在函数开头设置为翻译后的文本
         document.getElementById('folderPath').value = folder.path;
         document.getElementById('folderName').value = folder.name;
         document.getElementById('folderEnabled').checked = folder.enabled;
@@ -2510,7 +3013,7 @@ async function openFolderModal(folderId = null) {
         }
     } else {
         // 新增模式
-        title.textContent = '📁 添加文件夹';
+        // title.textContent 已经在函数开头设置为翻译后的文本
         document.querySelector('input[name="triggerMode"][value="manual"]').checked = true;
         document.getElementById('scheduledConfig').style.display = 'none';
     }
@@ -3189,7 +3692,7 @@ function toggleExtensionState() {
     
     enableExtensionsBtn.setAttribute('data-enabled', newState);
     // 按钮文字与状态相反：启用时显示"禁用"，禁用时显示"启用"
-    enableExtensionsBtn.textContent = newState ? '禁用' : '启用';
+    enableExtensionsBtn.textContent = newState ? t('rules.disableExtensions') : t('rules.enableExtensions');
     
     if (newState) {
         extensionContainer.classList.remove('disabled');
@@ -3226,7 +3729,7 @@ function updateExtensionAvailability() {
     // 如果只勾选了文件夹（没有勾选文件），则禁用扩展名功能
     if (!applyToFiles.checked && applyToFolders.checked) {
         enableExtensionsBtn.setAttribute('data-enabled', 'false');
-        enableExtensionsBtn.textContent = '启用'; // 禁用状态显示"启用"按钮
+        enableExtensionsBtn.textContent = t('rules.enableExtensions'); // 禁用状态显示"启用"按钮
         enableExtensionsBtn.disabled = true;
         extensionContainer.classList.add('disabled');
     } else {
@@ -3302,8 +3805,92 @@ async function openRuleModal(ruleId = null) {
     
     form.reset();
     
-    // 重置添加按钮文字
-    document.getElementById('addConditionBtn').textContent = '添加条件';
+    // 更新模态框标题和按钮文本（使用当前语言）
+    title.textContent = ruleId ? t('rules.edit') : t('rules.add');
+    document.getElementById('addConditionBtn').textContent = t('rules.addCondition');
+    
+    // 更新所有表单标签
+    const ruleNameLabel = document.getElementById('ruleNameLabel');
+    if (ruleNameLabel) ruleNameLabel.innerHTML = t('rules.name') + ' <span class="required">*</span>';
+    
+    const fileScopeLabel = document.getElementById('fileScopeLabel');
+    if (fileScopeLabel) fileScopeLabel.textContent = t('rules.fileScope');
+    
+    const applyToFilesLabel = document.getElementById('applyToFilesLabel');
+    if (applyToFilesLabel) applyToFilesLabel.textContent = t('rules.fileTypeFile');
+    
+    const applyToFoldersLabel = document.getElementById('applyToFoldersLabel');
+    if (applyToFoldersLabel) applyToFoldersLabel.textContent = t('rules.fileTypeFolder');
+    
+    const fileExtensionsLabel = document.getElementById('fileExtensionsLabel');
+    if (fileExtensionsLabel) fileExtensionsLabel.textContent = t('rules.fileExtensions');
+    
+    const otherConditionsLabel = document.getElementById('otherConditionsLabel');
+    if (otherConditionsLabel) otherConditionsLabel.textContent = t('rules.otherConditions');
+    
+    const targetFolderLabel = document.getElementById('targetFolderLabel');
+    if (targetFolderLabel) targetFolderLabel.innerHTML = t('rules.targetFolder') + ' <span class="required">*</span>';
+    
+    const conflictStrategyLabel = document.getElementById('conflictStrategyLabel');
+    if (conflictStrategyLabel) conflictStrategyLabel.textContent = t('rules.conflictHandling');
+    
+    // 更新占位符标签
+    const filePropsLabel = document.getElementById('filePropsLabel');
+    if (filePropsLabel) filePropsLabel.textContent = t('rules.fileProperties');
+    
+    const dateTimeLabel = document.getElementById('dateTimeLabel');
+    if (dateTimeLabel) dateTimeLabel.textContent = t('rules.dateTime');
+    
+    const regexCaptureLabel = document.getElementById('regexCaptureLabel');
+    if (regexCaptureLabel) regexCaptureLabel.textContent = t('rules.regexCapture');
+    
+    const systemPathLabel = document.getElementById('systemPathLabel');
+    if (systemPathLabel) systemPathLabel.textContent = t('rules.systemPath');
+    
+    const specialActionLabel = document.getElementById('specialActionLabel');
+    if (specialActionLabel) specialActionLabel.textContent = t('rules.specialAction');
+    
+    // 更新按钮
+    const saveRuleBtn = document.getElementById('saveRuleBtn');
+    if (saveRuleBtn) saveRuleBtn.textContent = t('common.save');
+    
+    const cancelRuleBtn = document.getElementById('cancelRuleBtn');
+    if (cancelRuleBtn) cancelRuleBtn.textContent = t('common.cancel');
+    
+    // 更新输入框 placeholder
+    const ruleNameInput = document.getElementById('ruleName');
+    if (ruleNameInput) ruleNameInput.placeholder = t('rules.namePlaceholder');
+    
+    const extensionInput = document.getElementById('extensionInput');
+    if (extensionInput) extensionInput.placeholder = t('rules.extensionPlaceholder');
+    
+    const targetFolderInput = document.getElementById('targetFolder');
+    if (targetFolderInput) targetFolderInput.placeholder = t('rules.targetFolderPlaceholder');
+    
+    // 更新启用/禁用扩展名按钮
+    const enableExtensionsBtn = document.getElementById('enableExtensionsBtn');
+    if (enableExtensionsBtn) {
+        const isEnabled = enableExtensionsBtn.dataset.enabled === 'true';
+        enableExtensionsBtn.textContent = isEnabled ? t('rules.disableExtensions') : t('rules.enableExtensions');
+    }
+    
+    // 更新冲突策略选项
+    const conflictStrategySelect = document.getElementById('conflictStrategy');
+    if (conflictStrategySelect) {
+        conflictStrategySelect.options[0].textContent = t('rules.conflictSkip');
+        conflictStrategySelect.options[1].textContent = t('rules.conflictReplace');
+        conflictStrategySelect.options[2].textContent = t('rules.conflictRename');
+    }
+    
+    // 更新条件类型选项
+    const conditionTypeSelect = document.getElementById('conditionType');
+    if (conditionTypeSelect) {
+        conditionTypeSelect.options[0].textContent = t('rules.conditionNameContains');
+        conditionTypeSelect.options[1].textContent = t('rules.conditionRegex');
+        conditionTypeSelect.options[2].textContent = t('rules.conditionSize');
+        conditionTypeSelect.options[3].textContent = t('rules.conditionCreated');
+        conditionTypeSelect.options[4].textContent = t('rules.conditionModified');
+    }
     
     // 重置复选框为默认状态（仅文件）
     document.getElementById('applyToFiles').checked = true;
@@ -3313,8 +3900,6 @@ async function openRuleModal(ruleId = null) {
         // 编辑模式
         const rule = appState.rules.find(r => r.id === ruleId);
         if (!rule) return;
-        
-        title.textContent = '✏️ 编辑规则';
         document.getElementById('ruleName').value = rule.name;
         document.getElementById('targetFolder').value = rule.action.destination;
         
@@ -3374,18 +3959,18 @@ async function openRuleModal(ruleId = null) {
             const enableExtensionsBtn = document.getElementById('enableExtensionsBtn');
             if (enableExtensionsBtn) {
                 enableExtensionsBtn.setAttribute('data-enabled', 'true');
-                enableExtensionsBtn.textContent = '禁用'; // 启用状态显示"禁用"按钮
+                enableExtensionsBtn.textContent = t('rules.disableExtensions'); // 启用状态显示"禁用"按钮
             }
         } else {
             const enableExtensionsBtn = document.getElementById('enableExtensionsBtn');
             if (enableExtensionsBtn) {
                 enableExtensionsBtn.setAttribute('data-enabled', 'false');
-                enableExtensionsBtn.textContent = '启用'; // 禁用状态显示"启用"按钮
+                enableExtensionsBtn.textContent = t('rules.enableExtensions'); // 禁用状态显示"启用"按钮
             }
         }
     } else {
         // 新增模式
-        title.textContent = '📝 创建规则';
+        // title.textContent 已经在函数开头设置为翻译后的文本
         
         // 如果有预设的目标文件夹，填充到目标文件夹输入框
         if (appState.presetDestination) {
@@ -3972,7 +4557,7 @@ function showNotification(message, type = 'info') {
     
     // 3秒后恢复默认状态
     statusTimeout = setTimeout(() => {
-        statusMessage.textContent = '就绪';
+        statusMessage.textContent = t('activity.ready');
         statusIcon.textContent = 'ℹ️';
         statusBar.classList.remove('status-success', 'status-error', 'status-info');
         statusBar.classList.add('status-default');
