@@ -1,16 +1,5 @@
 // FloatSort V2 - 主应用逻辑
 
-// ========== 图标库 ==========
-const BOOTSTRAP_ICONS = [
-    'file-earmark', 'file-earmark-text', 'file-earmark-pdf', 'file-earmark-image', 'file-earmark-music',
-    'file-earmark-video', 'file-earmark-zip', 'file-earmark-code', 'folder', 'folder-fill',
-    'image', 'music-note', 'film', 'file-zip', 'code', 'file-word', 'file-excel', 'file-ppt',
-    'camera', 'download', 'upload', 'cloud', 'archive', 'book', 'bookmark', 'calendar',
-    'clock', 'star', 'heart', 'tag', 'tags', 'paperclip', 'pin', 'flag',
-    'trash', 'recycle', 'box', 'inbox', 'send', 'save', 'printer', 'clipboard',
-    'scissors', 'filter', 'funnel', 'search', 'grid', 'list', 'layout-text-sidebar', 'diagram-3'
-];
-
 // ========== 全局状态 ==========
 const appState = {
     folders: [],
@@ -19,9 +8,6 @@ const appState = {
     filesProcessed: 0,
     editingFolderId: null,
     editingRuleId: null,
-    selectedIcon: 'bi bi-file-earmark',  // 当前选中的图标类
-    selectedIconSvg: null,  // 自定义SVG代码
-    selectedColor: '#667eea',  // 当前选中的颜色
     pendingBatch: [],  // 待整理文件队列
     batchThreshold: 1,  // 批量确认阈值（从配置读取）
     currentConditions: [],  // 当前规则的条件列表
@@ -59,22 +45,68 @@ function getRuleLabel(index) {
 }
 
 // 更新视图图标
-function updateViewIcon(viewMode) {
-    const groupIcon = document.getElementById('view-icon-group');
-    const listIcon = document.getElementById('view-icon-list');
-    const splitIcon = document.getElementById('view-icon-split');
-    
-    if (groupIcon) groupIcon.style.display = 'none';
-    if (listIcon) listIcon.style.display = 'none';
-    if (splitIcon) splitIcon.style.display = 'none';
-    
-    if (viewMode === 'grouped') {
-        if (groupIcon) groupIcon.style.display = 'block';
-    } else if (viewMode === 'list') {
-        if (listIcon) listIcon.style.display = 'block';
-    } else if (viewMode === 'split') {
-        if (splitIcon) splitIcon.style.display = 'block';
+// 切换视图下拉菜单
+window.toggleViewDropdown = function() {
+    const viewSwitcher = document.querySelector('.view-switcher');
+    if (viewSwitcher) {
+        viewSwitcher.classList.toggle('active');
     }
+}
+
+// 选择视图模式
+window.selectViewMode = function(mode) {
+    appState.viewMode = mode;
+    updateViewDisplay(mode);
+    renderRules();
+    
+    // 关闭下拉菜单
+    const viewSwitcher = document.querySelector('.view-switcher');
+    if (viewSwitcher) {
+        viewSwitcher.classList.remove('active');
+    }
+    
+    const modeNames = {
+        'grouped': '分组视图',
+        'list': '列表视图',
+        'split': '分栏视图'
+    };
+    console.log('[视图切换] 切换到:', modeNames[mode]);
+}
+
+// 更新视图显示（图标、标签、选中状态）
+function updateViewDisplay(viewMode) {
+    const iconPaths = {
+        'grouped': 'M2 3h5v5H2V3zm7 0h5v5H9V3zM2 10h5v5H2v-5zm7 0h5v5H9v-5z',
+        'list': 'M2 3h12v2H2V3zm0 4h12v2H2V7zm0 4h12v2H2v-2z',
+        'split': 'M2 2h5v12H2V2zM9 2h5v12H9V2z'
+    };
+    
+    const modeNames = {
+        'grouped': '分组视图',
+        'list': '列表视图',
+        'split': '分栏视图'
+    };
+    
+    // 更新按钮图标
+    const currentIcon = document.getElementById('view-icon-current');
+    if (currentIcon) {
+        currentIcon.setAttribute('d', iconPaths[viewMode]);
+    }
+    
+    // 更新按钮标签
+    const label = document.getElementById('viewModeLabel');
+    if (label) {
+        label.textContent = modeNames[viewMode];
+    }
+    
+    // 更新下拉菜单选中状态
+    document.querySelectorAll('.view-option').forEach(option => {
+        if (option.dataset.value === viewMode) {
+            option.classList.add('active');
+        } else {
+            option.classList.remove('active');
+        }
+    });
 }
 
 // ========== Tauri API ==========
@@ -329,18 +361,16 @@ function setupEventListeners() {
         });
     });
     
-    // 视图模式切换
-    const viewModeSelect = document.getElementById('viewModeSelect');
-    if (viewModeSelect) {
-        viewModeSelect.addEventListener('change', (e) => {
-            appState.viewMode = e.target.value;
-            updateViewIcon(e.target.value);
-            renderRules();
-            console.log('[视图切换] 切换到:', e.target.value === 'grouped' ? '分组视图' : '列表视图');
-        });
-        // 初始化图标
-        updateViewIcon(appState.viewMode);
-    }
+    // 视图模式初始化
+    updateViewDisplay(appState.viewMode);
+    
+    // 点击页面其他区域关闭下拉菜单
+    document.addEventListener('click', (e) => {
+        const viewSwitcher = document.querySelector('.view-switcher');
+        if (viewSwitcher && !viewSwitcher.contains(e.target)) {
+            viewSwitcher.classList.remove('active');
+        }
+    });
     
     // 规则管理
     document.getElementById('addRuleBtn').addEventListener('click', () => openRuleModal());
@@ -742,6 +772,9 @@ function setupRuleSelection() {
                 } else {
                     showNotification('已取消选中规则', 'info');
                 }
+                
+                // 更新分栏视图中文件夹的选中状态
+                updateSplitFolderSelectionState();
             } else {
                 // 如果没有按 Ctrl，取消其他规则的选中状态（单选）
                 if (!isCtrlPressed) {
@@ -755,12 +788,23 @@ function setupRuleSelection() {
                 const ruleName = appState.rules.find(r => r.id === ruleId)?.name || '';
                 console.log('[规则选择] 选中规则:', ruleId, ruleName);
                 
-                const selectedCount = document.querySelectorAll('.rule-card.selected').length;
+                const selectedCards = document.querySelectorAll('.rule-card.selected');
+                const selectedCount = selectedCards.length;
                 if (selectedCount > 1) {
-                    showNotification(`已选中 ${selectedCount} 个规则 (按住 Ctrl 多选)`, 'success');
+                    // 获取前2个规则名称
+                    const ruleNames = Array.from(selectedCards).slice(0, 2).map(card => {
+                        const nameEl = card.querySelector('.rule-name');
+                        return nameEl ? nameEl.textContent : '';
+                    }).filter(name => name);
+                    
+                    const displayText = ruleNames.join('，');
+                    showNotification(`已应用规则 ${displayText} ${selectedCount} 个规则`, 'success');
                 } else {
-                    showNotification(`已选中规则: ${ruleName}`, 'success');
+                    showNotification(`已应用规则 ${ruleName}`, 'success');
                 }
+                
+                // 更新分栏视图中文件夹的选中状态
+                updateSplitFolderSelectionState();
             }
         });
     });
@@ -1615,7 +1659,6 @@ function renderRules() {
         return `
             <div class="rule-card compact ${!rule.enabled ? 'disabled' : ''}" data-rule-id="${rule.id}" data-index="${index}" title="${fullConditionTooltip}">
                 <span class="rule-order-number">${index + 1}</span>
-                ${renderRuleIcon(rule)}
                 <div class="rule-name-col">
                     <div class="rule-name">${rule.name}</div>
                 </div>
@@ -1746,9 +1789,16 @@ function renderSplitView() {
                         }
                     }
                     
+                    // 检查该组所有规则是否都被选中
+                    const groupRuleIds = group.rules.map(r => r.id);
+                    const allSelected = groupRuleIds.length > 0 && groupRuleIds.every(id => 
+                        document.querySelector(`.rule-card[data-rule-id="${id}"]`)?.classList.contains('selected')
+                    );
+                    
                     return `
-                        <div class="split-folder-item ${destination === appState.selectedFolderId ? 'active' : ''}"
-                             onclick="selectFolderInSplit('${destination.replace(/\\/g, '\\\\').replace(/'/g, "\\'")}')">
+                        <div class="split-folder-item ${destination === appState.selectedFolderId ? 'active' : ''} ${allSelected ? 'selected' : ''}"
+                             data-destination="${destination}"
+                             onclick="selectFolderInSplit('${destination.replace(/\\/g, '\\\\').replace(/'/g, "\\'")}', event)">
                             <div class="split-folder-info" title="${destination}">
                                 <div class="split-folder-name" style="color: ${iconColor};">${displayPath}</div>
                                 <div class="split-folder-count">${group.rules.length} 个规则</div>
@@ -1771,13 +1821,59 @@ function renderSplitView() {
             </div>
             <div class="split-view-resizer"></div>
             <div class="split-view-content">
-                ${groupRules.length === 0 ? `
-                    <div class="split-empty-state">
-                        <span style="font-size: 48px;">📋</span>
-                        <p style="margin-top: 16px; font-size: 14px;">该目标文件夹暂无规则</p>
-                        <p style="font-size: 12px; margin-top: 8px;">点击"添加规则"为此文件夹创建规则</p>
+                <div class="split-view-header">
+                    <div class="split-view-title">
+                        ${(() => {
+                            if (!selectedGroup) return '<span style="font-size: 14px; color: #9ca3af;">未选择</span>';
+                            
+                            const destination = selectedGroup.destination;
+                            const isRecycleBin = destination === '{recycle}';
+                            const isAbsolutePath = /^[A-Z]:\\/i.test(destination);
+                            let displayPath = destination;
+                            let iconColor = '#667eea';
+                            
+                            if (isRecycleBin) {
+                                iconColor = '#ef4444';
+                                displayPath = '🗑️ 回收站';
+                            } else if (isAbsolutePath) {
+                                iconColor = '#f97316';
+                                const parts = destination.split(/[\\/]/);
+                                const drive = parts[0];
+                                const lastName = parts[parts.length - 1];
+                                if (parts.length > 2) {
+                                    displayPath = `${drive}\\...\\${lastName}`;
+                                }
+                            } else if (destination && destination !== '(未设置)') {
+                                const parts = destination.split(/[\\/]/);
+                                if (parts.length > 1) {
+                                    displayPath = `..\\${destination}`;
+                                } else {
+                                    displayPath = `...\\${destination}`;
+                                }
+                            }
+                            
+                            return `
+                                <span style="font-size: 14px; font-weight: 600; color: ${iconColor};" title="${destination}">
+                                    ${displayPath}
+                                </span>
+                                <span style="font-size: 12px; color: #9ca3af; margin-left: 8px;">
+                                    ${groupRules.length} 个规则
+                                </span>
+                            `;
+                        })()}
                     </div>
-                ` : groupRules.map((rule, index) => {
+                    <button class="btn-primary btn-sm" onclick="addRuleToSplitFolder('${selectedGroup ? selectedGroup.destination.replace(/\\/g, '\\\\').replace(/'/g, "\\'") : ''}', event)">
+                        + 添加规则
+                    </button>
+                </div>
+                <div class="split-view-body">
+                    ${groupRules.length === 0 ? `
+                        <div class="split-empty-state">
+                            <span style="font-size: 48px;">📋</span>
+                            <p style="margin-top: 16px; font-size: 14px;">该目标文件夹暂无规则</p>
+                            <p style="font-size: 12px; margin-top: 8px;">点击"添加规则"为此文件夹创建规则</p>
+                        </div>
+                    ` : groupRules.map((rule, index) => {
                     const condition = rule.conditions && rule.conditions.length > 0 ? rule.conditions[0] : null;
                     let conditionText = '';
                     
@@ -1831,7 +1927,6 @@ function renderSplitView() {
                     return `
                         <div class="rule-card compact ${!rule.enabled ? 'disabled' : ''}" data-rule-id="${rule.id}" data-index="${globalIndex}" title="${fullConditionTooltip}">
                             <span class="rule-order-number">${globalIndex + 1}</span>
-                            ${renderRuleIcon(rule)}
                             <div class="rule-name-col">
                                 <div class="rule-name">${rule.name}</div>
                             </div>
@@ -1877,12 +1972,16 @@ function renderSplitView() {
                         </div>
                     `;
                 }).join('')}
+                </div>
             </div>
         </div>
     `;
     
     // 初始化拖拽调整功能
     initSplitViewResizer();
+    
+    // 为规则卡片添加点击选择事件监听
+    setupRuleSelection();
 }
 
 // 初始化分栏视图拖拽调整功能
@@ -1940,10 +2039,86 @@ function initSplitViewResizer() {
     });
 }
 
+// 更新分栏视图中文件夹的选中状态
+function updateSplitFolderSelectionState() {
+    if (appState.viewMode !== 'split') return;
+    
+    // 遍历所有文件夹项
+    document.querySelectorAll('.split-folder-item').forEach(folderItem => {
+        // 获取该文件夹对应的目标路径
+        const destination = folderItem.getAttribute('data-destination');
+        if (!destination) return;
+        
+        // 获取该组的所有规则
+        const groupRules = appState.rules.filter(r => (r.action.destination || '(未设置)') === destination);
+        const groupRuleIds = groupRules.map(r => r.id);
+        
+        // 检查是否所有规则都被选中
+        const allSelected = groupRuleIds.length > 0 && groupRuleIds.every(id => 
+            document.querySelector(`.rule-card[data-rule-id="${id}"]`)?.classList.contains('selected')
+        );
+        
+        // 更新文件夹项的选中状态
+        if (allSelected) {
+            folderItem.classList.add('selected');
+        } else {
+            folderItem.classList.remove('selected');
+        }
+    });
+}
+
 // 选择分栏视图中的文件夹
-window.selectFolderInSplit = function(folderId) {
-    appState.selectedFolderId = folderId;
-    renderRules();
+window.selectFolderInSplit = function(destination, event) {
+    // 如果点击的是操作按钮区域，不处理
+    if (event && (event.target.closest('.split-folder-actions') || event.target.closest('button'))) {
+        return;
+    }
+    
+    // 切换显示的目标文件夹
+    const previousFolder = appState.selectedFolderId;
+    appState.selectedFolderId = destination;
+    
+    // 获取该组的所有规则ID
+    const groupRules = appState.rules.filter(r => (r.action.destination || '(未设置)') === destination);
+    const groupRuleIds = groupRules.map(r => r.id);
+    
+    if (event && event.ctrlKey) {
+        // Ctrl + 点击：切换该组所有规则的选中状态
+        const allSelected = groupRuleIds.every(id => 
+            document.querySelector(`.rule-card[data-rule-id="${id}"]`)?.classList.contains('selected')
+        );
+        
+        if (allSelected) {
+            // 如果已全选，则取消选中
+            groupRuleIds.forEach(ruleId => {
+                const card = document.querySelector(`.rule-card[data-rule-id="${ruleId}"]`);
+                if (card) card.classList.remove('selected');
+            });
+        } else {
+            // 否则选中该组所有规则
+            groupRuleIds.forEach(ruleId => {
+                const card = document.querySelector(`.rule-card[data-rule-id="${ruleId}"]`);
+                if (card) card.classList.add('selected');
+            });
+        }
+        
+        const selectedCount = document.querySelectorAll('.rule-card.selected').length;
+        if (selectedCount > 0) {
+            showNotification(`已选中 ${selectedCount} 个规则`, 'success');
+        }
+        
+        // 更新左侧文件夹选中状态
+        updateSplitFolderSelectionState();
+    } else {
+        // 普通点击：切换文件夹视图
+        if (previousFolder !== destination) {
+            // 切换到不同文件夹时，清除所有选中状态
+            document.querySelectorAll('.rule-card.selected').forEach(card => {
+                card.classList.remove('selected');
+            });
+        }
+        renderRules();
+    }
 }
 
 // 为分栏视图的文件夹添加规则
@@ -3088,9 +3263,6 @@ async function openRuleModal(ruleId = null) {
         document.getElementById('ruleName').value = rule.name;
         document.getElementById('targetFolder').value = rule.action.destination;
         
-        // 加载图标和颜色
-        loadRuleIconAndColor(rule);
-        
         // 设置文件冲突处理策略
         const conflictStrategy = rule.conflict_strategy || 'skip';
         document.getElementById('conflictStrategy').value = conflictStrategy;
@@ -3151,9 +3323,6 @@ async function openRuleModal(ruleId = null) {
     } else {
         // 新增模式
         title.textContent = '📝 创建规则';
-        
-        // 加载默认图标和颜色
-        loadRuleIconAndColor(null);
         
         // 如果有预设的目标文件夹，填充到目标文件夹输入框
         if (appState.presetDestination) {
@@ -3237,9 +3406,6 @@ async function saveRule() {
     // 获取文件冲突处理策略
     const conflictStrategy = document.getElementById('conflictStrategy').value || 'skip';
     
-    // 获取图标和颜色信息
-    const iconData = getRuleIconData();
-    
     const rule = {
         id: appState.editingRuleId || `rule_${Date.now()}`,
         name,
@@ -3249,9 +3415,6 @@ async function saveRule() {
         action: { type: 'MoveTo', destination: target },
         priority: 0,
         conflict_strategy: conflictStrategy,
-        icon: iconData.icon,
-        icon_svg: iconData.icon_svg,
-        color: iconData.color,
     };
     
     try {

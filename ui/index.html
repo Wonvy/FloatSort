@@ -8,7 +8,6 @@
     <meta http-equiv="Expires" content="0">
     <title>FloatSort - V2</title>
     <link rel="stylesheet" href="styles_minimal.css">
-    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
 </head>
 <body>
     <!-- SVG图标库 -->
@@ -97,16 +96,35 @@
                     <h2>整理规则</h2>
                     <div class="header-actions">
                         <div class="view-switcher">
-                            <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
-                                <path id="view-icon-group" d="M2 3h5v5H2V3zm7 0h5v5H9V3zM2 10h5v5H2v-5zm7 0h5v5H9v-5z"/>
-                                <path id="view-icon-list" d="M2 3h12v2H2V3zm0 4h12v2H2V7zm0 4h12v2H2v-2z" style="display:none;"/>
-                                <path id="view-icon-split" d="M2 2h5v12H2V2zm7 0h5v12H9V2z" style="display:none;"/>
-                            </svg>
-                            <select id="viewModeSelect">
-                                <option value="grouped">分组视图</option>
-                                <option value="list">列表视图</option>
-                                <option value="split">分栏视图</option>
-                            </select>
+                            <button class="view-switcher-btn" id="viewSwitcherBtn" onclick="toggleViewDropdown()">
+                                <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor" class="view-icon">
+                                    <path id="view-icon-current" d="M2 3h5v5H2V3zm7 0h5v5H9V3zM2 10h5v5H2v-5zm7 0h5v5H9v-5z"/>
+                                </svg>
+                                <span id="viewModeLabel">分组视图</span>
+                                <svg width="12" height="12" viewBox="0 0 16 16" fill="currentColor" class="dropdown-arrow">
+                                    <path d="M4 6L8 10L12 6" stroke="currentColor" stroke-width="1.5" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+                                </svg>
+                            </button>
+                            <div class="view-dropdown" id="viewDropdown">
+                                <div class="view-option" data-value="grouped" onclick="selectViewMode('grouped')">
+                                    <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
+                                        <path d="M2 3h5v5H2V3zm7 0h5v5H9V3zM2 10h5v5H2v-5zm7 0h5v5H9v-5z"/>
+                                    </svg>
+                                    <span>分组视图</span>
+                                </div>
+                                <div class="view-option" data-value="list" onclick="selectViewMode('list')">
+                                    <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
+                                        <path d="M2 3h12v2H2V3zm0 4h12v2H2V7zm0 4h12v2H2v-2z"/>
+                                    </svg>
+                                    <span>列表视图</span>
+                                </div>
+                                <div class="view-option" data-value="split" onclick="selectViewMode('split')">
+                                    <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
+                                        <path d="M2 2h5v12H2V2zM9 2h5v12H9V2z"/>
+                                    </svg>
+                                    <span>分栏视图</span>
+                                </div>
+                            </div>
                         </div>
                         <button class="btn-primary" id="addRuleBtn">
                             + 添加规则
@@ -407,17 +425,10 @@
             </div>
             <div class="modal-body">
                 <form id="ruleForm">
-                <div class="form-group">
-                    <label for="ruleName">规则名称 <span class="required">*</span></label>
-                    <div class="rule-name-with-icon">
-                        <div class="rule-icon-selector" id="ruleIconSelector" title="左键选择图标 | 右键更多选项 | 鼠标悬停后 Ctrl+V 粘贴SVG">
-                            <i class="bi bi-file-earmark" id="ruleIconPreview" style="color: #667eea;"></i>
-                        </div>
-                        <input type="color" id="ruleColorPicker" value="#667eea" title="选择颜色">
+                    <div class="form-group">
+                        <label for="ruleName">规则名称 <span class="required">*</span></label>
                         <input type="text" id="ruleName" placeholder="例如：图片文件归类" required>
                     </div>
-                    <p class="hint">💡 图标操作：<strong>左键</strong> 选择图标 | <strong>右键</strong> 菜单 | <strong>鼠标悬停</strong>后 <strong>Ctrl+V</strong> 直接粘贴SVG</p>
-                </div>
                     
                     <div class="form-group">
                         <label>应用范围</label>
@@ -581,20 +592,6 @@
         </div>
     </div>
 
-    <!-- 图标选择器模态框 -->
-    <div id="iconPickerModal" class="modal" style="display: none;">
-        <div class="modal-content" style="max-width: 600px;">
-            <div class="modal-header">
-                <h3>选择图标</h3>
-                <button class="btn-close" onclick="closeIconPicker()">✕</button>
-            </div>
-            <div class="modal-body">
-                <input type="text" id="iconSearchInput" placeholder="搜索图标..." class="icon-search-input">
-                <div class="icon-grid" id="iconGrid"></div>
-            </div>
-        </div>
-    </div>
-
     <!-- 删除确认模态框 -->
     <div class="modal" id="deleteConfirmModal" style="display: none;">
         <div class="modal-content" style="max-width: 450px;">
@@ -645,7 +642,6 @@
     </div>
 
     <script src="rule_groups.js"></script>
-    <script src="rule_icons.js"></script>
     <script src="app_v2.js"></script>
 </body>
 </html>

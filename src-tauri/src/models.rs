@@ -113,15 +113,6 @@ pub struct Rule {
     /// 文件冲突处理策略（默认为跳过）
     #[serde(default)]
     pub conflict_strategy: ConflictStrategy,
-    /// 规则图标（Bootstrap Icons类名，如 "bi bi-file-earmark"）
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub icon: Option<String>,
-    /// 自定义SVG图标代码
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub icon_svg: Option<String>,
-    /// 图标颜色（十六进制颜色值）
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub color: Option<String>,
 }
 
 fn default_logic() -> String {

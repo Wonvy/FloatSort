@@ -208,7 +208,6 @@ function renderRuleInGroup(rule, ruleIndexInGroup, totalInGroup, groupDestinatio
     return `
         <div class="rule-card compact in-group ${!rule.enabled ? 'disabled' : ''}" data-rule-id="${rule.id}" data-index="${globalIndex}" title="${fullConditionTooltip}">
             <span class="rule-order-number">${globalIndex + 1}</span>
-            ${renderRuleIcon(rule)}
             <div class="rule-name-col">
                 <div class="rule-name">${rule.name}</div>
             </div>
