@@ -1664,51 +1664,90 @@ function renderRules() {
 function renderSplitView() {
     const rulesList = document.getElementById('rulesList');
     
-    if (appState.folders.length === 0) {
+    if (appState.rules.length === 0) {
         rulesList.innerHTML = `
             <div class="empty-state">
-                <span class="empty-icon">📁</span>
-                <p>暂无文件夹</p>
-                <p class="empty-hint">请先添加监控文件夹</p>
+                <span class="empty-icon">📋</span>
+                <p>暂无规则</p>
+                <p class="empty-hint">创建规则来自动整理文件</p>
             </div>
         `;
         return;
     }
     
-    // 如果没有选中文件夹，默认选中第一个
-    if (!appState.selectedFolderId && appState.folders.length > 0) {
-        appState.selectedFolderId = appState.folders[0].id;
+    // 按目标文件夹分组规则
+    const groups = new Map();
+    appState.rules.forEach(rule => {
+        const dest = rule.action.destination || '(未设置)';
+        if (!groups.has(dest)) {
+            groups.set(dest, []);
+        }
+        groups.get(dest).push(rule);
+    });
+    
+    const groupArray = Array.from(groups.entries()).map(([dest, rules]) => ({
+        destination: dest,
+        rules: rules
+    }));
+    
+    // 如果没有选中目标文件夹，默认选中第一个
+    if (!appState.selectedFolderId && groupArray.length > 0) {
+        appState.selectedFolderId = groupArray[0].destination;
     }
     
-    const selectedFolder = appState.folders.find(f => f.id === appState.selectedFolderId);
-    const folderRules = selectedFolder ? appState.rules.filter(r => selectedFolder.rule_ids.includes(r.id)) : [];
+    const selectedGroup = groupArray.find(g => g.destination === appState.selectedFolderId);
+    const groupRules = selectedGroup ? selectedGroup.rules : [];
     
     rulesList.innerHTML = `
         <div class="split-view-container">
             <div class="split-view-sidebar">
-                ${appState.folders.map(folder => {
-                    const ruleCount = appState.rules.filter(r => folder.rule_ids.includes(r.id)).length;
+                ${groupArray.map(group => {
+                    const destination = group.destination;
+                    const isRecycleBin = destination === '{recycle}';
+                    const isAbsolutePath = /^[A-Z]:\\/i.test(destination);
+                    let displayPath = destination;
+                    let iconColor = '#667eea';
+                    
+                    if (isRecycleBin) {
+                        iconColor = '#ef4444';
+                        displayPath = '🗑️ 回收站';
+                    } else if (isAbsolutePath) {
+                        iconColor = '#f97316';
+                        const parts = destination.split(/[\\/]/);
+                        const drive = parts[0];
+                        const lastName = parts[parts.length - 1];
+                        if (parts.length > 2) {
+                            displayPath = `${drive}\\...\\${lastName}`;
+                        }
+                    } else if (destination && destination !== '(未设置)') {
+                        const parts = destination.split(/[\\/]/);
+                        if (parts.length > 1) {
+                            displayPath = `..\\${destination}`;
+                        } else {
+                            displayPath = `...\\${destination}`;
+                        }
+                    }
+                    
                     return `
-                        <div class="split-folder-item ${folder.id === appState.selectedFolderId ? 'active' : ''}"
-                             onclick="selectFolderInSplit('${folder.id}')">
-                            <div class="split-folder-name">${folder.name}</div>
-                            <div class="split-folder-path">${folder.path}</div>
+                        <div class="split-folder-item ${destination === appState.selectedFolderId ? 'active' : ''}"
+                             onclick="selectFolderInSplit('${destination.replace(/\\/g, '\\\\').replace(/'/g, "\\'")}')">
+                            <div class="split-folder-name" style="color: ${iconColor};">${displayPath}</div>
+                            <div class="split-folder-path" title="${destination}">${destination}</div>
                             <div class="split-folder-stats">
-                                <span>📋 ${ruleCount} 个规则</span>
-                                <span>${folder.enabled ? '✅ 已启用' : '❌ 已禁用'}</span>
+                                <span>📋 ${group.rules.length} 个规则</span>
                             </div>
                         </div>
                     `;
                 }).join('')}
             </div>
             <div class="split-view-content">
-                ${folderRules.length === 0 ? `
+                ${groupRules.length === 0 ? `
                     <div class="split-empty-state">
                         <span style="font-size: 48px;">📋</span>
-                        <p style="margin-top: 16px; font-size: 14px;">该文件夹暂无关联规则</p>
+                        <p style="margin-top: 16px; font-size: 14px;">该目标文件夹暂无规则</p>
                         <p style="font-size: 12px; margin-top: 8px;">点击"添加规则"为此文件夹创建规则</p>
                     </div>
-                ` : folderRules.map((rule, index) => {
+                ` : groupRules.map((rule, index) => {
                     const condition = rule.conditions && rule.conditions.length > 0 ? rule.conditions[0] : null;
                     let conditionText = '';
                     
@@ -1756,14 +1795,8 @@ function renderSplitView() {
                         conditionText += ` (+${rule.conditions.length - 1})`;
                     }
                     
-                    const destination = rule.action.destination;
-                    const isRecycleBin = destination === '{recycle}';
-                    let displayPath = destination;
-                    if (isRecycleBin) {
-                        displayPath = '回收站';
-                    }
-                    
                     const globalIndex = appState.rules.findIndex(r => r.id === rule.id);
+                    const usedByFolders = appState.folders.filter(f => f.rule_ids.includes(rule.id));
                     
                     return `
                         <div class="rule-card compact ${!rule.enabled ? 'disabled' : ''}" data-rule-id="${rule.id}" data-index="${globalIndex}" title="${fullConditionTooltip}">
@@ -1775,12 +1808,8 @@ function renderSplitView() {
                                 <div class="rule-condition-label">条件</div>
                                 <div class="rule-condition-value">${conditionText}</div>
                             </div>
-                            <div class="rule-destination-col">
-                                <div class="rule-destination-label">移动到</div>
-                                <div class="rule-destination-value">${displayPath}</div>
-                            </div>
-                            <div class="rule-usage">
-                                <span class="usage-badge">1</span>
+                            <div class="rule-usage" title="${usedByFolders.map(f => f.name).join('、') || '暂未被任何文件夹使用'}">
+                                <span class="usage-badge">${usedByFolders.length}</span>
                                 <span class="usage-text">个文件夹</span>
                             </div>
                             <div class="rule-order-controls">
@@ -1789,7 +1818,7 @@ function renderSplitView() {
                                         <path d="M4 10L8 6L12 10" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
                                     </svg>
                                 </button>
-                                <button class="order-btn order-right" onclick="moveRuleSplitDown(${index})" ${index === folderRules.length - 1 ? 'disabled' : ''} title="下移">
+                                <button class="order-btn order-right" onclick="moveRuleSplitDown(${index})" ${index === groupRules.length - 1 ? 'disabled' : ''} title="下移">
                                     <svg width="12" height="12" viewBox="0 0 16 16" fill="none">
                                         <path d="M4 6L8 10L12 6" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
                                     </svg>
@@ -1830,15 +1859,22 @@ window.selectFolderInSplit = function(folderId) {
 
 // 分栏视图中的规则排序
 window.moveRuleSplitUp = async function(index) {
-    const selectedFolder = appState.folders.find(f => f.id === appState.selectedFolderId);
-    if (!selectedFolder) return;
+    // 按目标文件夹分组
+    const groups = new Map();
+    appState.rules.forEach(rule => {
+        const dest = rule.action.destination || '(未设置)';
+        if (!groups.has(dest)) {
+            groups.set(dest, []);
+        }
+        groups.get(dest).push(rule);
+    });
     
-    const folderRules = appState.rules.filter(r => selectedFolder.rule_ids.includes(r.id));
-    if (index <= 0 || index >= folderRules.length) return;
+    const groupRules = groups.get(appState.selectedFolderId);
+    if (!groupRules || index <= 0 || index >= groupRules.length) return;
     
     // 在全局规则列表中交换
-    const rule1 = folderRules[index];
-    const rule2 = folderRules[index - 1];
+    const rule1 = groupRules[index];
+    const rule2 = groupRules[index - 1];
     const globalIdx1 = appState.rules.findIndex(r => r.id === rule1.id);
     const globalIdx2 = appState.rules.findIndex(r => r.id === rule2.id);
     
@@ -1851,15 +1887,22 @@ window.moveRuleSplitUp = async function(index) {
 }
 
 window.moveRuleSplitDown = async function(index) {
-    const selectedFolder = appState.folders.find(f => f.id === appState.selectedFolderId);
-    if (!selectedFolder) return;
+    // 按目标文件夹分组
+    const groups = new Map();
+    appState.rules.forEach(rule => {
+        const dest = rule.action.destination || '(未设置)';
+        if (!groups.has(dest)) {
+            groups.set(dest, []);
+        }
+        groups.get(dest).push(rule);
+    });
     
-    const folderRules = appState.rules.filter(r => selectedFolder.rule_ids.includes(r.id));
-    if (index < 0 || index >= folderRules.length - 1) return;
+    const groupRules = groups.get(appState.selectedFolderId);
+    if (!groupRules || index < 0 || index >= groupRules.length - 1) return;
     
     // 在全局规则列表中交换
-    const rule1 = folderRules[index];
-    const rule2 = folderRules[index + 1];
+    const rule1 = groupRules[index];
+    const rule2 = groupRules[index + 1];
     const globalIdx1 = appState.rules.findIndex(r => r.id === rule1.id);
     const globalIdx2 = appState.rules.findIndex(r => r.id === rule2.id);
     

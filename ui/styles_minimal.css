@@ -314,6 +314,15 @@ body {
     color: #9ca3af;
 }
 
+/* 分栏视图中的规则卡片 - 不显示目标路径列 */
+.split-view-content .rule-card.compact {
+    grid-template-columns: 24px minmax(60px, 1fr) minmax(100px, 2fr) minmax(40px, 55px) 55px 65px 32px; /* 移除目标路径列 */
+}
+
+.split-view-content .rule-card .rule-destination-col {
+    display: none;
+}
+
 /* ========== 按钮 ========== */
 .btn-primary,
 .btn-secondary {
