@@ -59,13 +59,14 @@ function renderRulesGrouped() {
                 displayPath = `${destination}`;
             }
         } else if (destination) {
-            // 相对路径：显示为 ...\最后一部分
+            // 相对路径处理
             const parts = destination.split(/[\\/]/);
             if (parts.length > 1) {
-                const lastName = parts[parts.length - 1];
-                displayPath = `...\\${lastName}`;
+                // 多层相对路径：显示为 ..\完整路径（如 ..\文档\数据）
+                displayPath = `..\\${destination}`;
             } else {
-                displayPath = `${destination}`;
+                // 单层相对路径：显示为 ...\名称（如 ...\图片）
+                displayPath = `...\\${destination}`;
             }
         }
         
