@@ -22,8 +22,8 @@ enum Edge {
     Right,
 }
 
-const SNAP_THRESHOLD: i32 = 20; // 距离屏幕边缘多少像素时触发标记线
-const COLLAPSED_VISIBLE_SIZE: i32 = 3; // 折叠后可见的像素数
+const SNAP_THRESHOLD: i32 = 10; // 距离屏幕边缘多少像素时触发标记线
+const COLLAPSED_VISIBLE_SIZE: i32 = 1; // 折叠后可见的像素数
 
 impl WindowSnapManager {
     pub fn new(window: Window) -> Self {

@@ -7,6 +7,8 @@ const appState = {
     windowDragging: false, // 窗口是否正在被拖动
     snapEdge: null, // 当前准备折叠的边缘 ('top', 'left', 'right')
     collapsed: false, // 窗口是否已折叠
+    lastCollapsedEdge: 'Top', // 上次折叠的边缘，默认为顶部
+    tempExpanded: false, // 临时展开状态（鼠标靠近边缘自动展开）
     monitoring: false,
     filesProcessed: 0,
     editingFolderId: null,
@@ -383,7 +385,7 @@ function setupEventListeners() {
     // 扩展名标签管理
     const extensionInput = document.getElementById('extensionInput');
     const addExtensionBtn = document.getElementById('addExtensionBtn');
-    const enableExtensions = document.getElementById('enableExtensions');
+    const enableExtensionsBtn = document.getElementById('enableExtensionsBtn');
     
     if (extensionInput) {
         // 回车键添加扩展名
@@ -399,9 +401,9 @@ function setupEventListeners() {
         addExtensionBtn.addEventListener('click', addExtension);
     }
     
-    // 监听扩展名启用/禁用复选框
-    if (enableExtensions) {
-        enableExtensions.addEventListener('change', updateExtensionState);
+    // 监听扩展名启用/禁用按钮
+    if (enableExtensionsBtn) {
+        enableExtensionsBtn.addEventListener('click', toggleExtensionState);
     }
     
     // 监听应用范围复选框，自动禁用/启用扩展名
@@ -3144,14 +3146,37 @@ function getConditionTypeLabel(type) {
 
 // ========== 扩展名标签管理 ==========
 
-// 更新扩展名区域的启用/禁用状态
-function updateExtensionState() {
-    const enableExtensions = document.getElementById('enableExtensions');
+// 切换扩展名启用/禁用状态
+function toggleExtensionState() {
+    const enableExtensionsBtn = document.getElementById('enableExtensionsBtn');
     const extensionContainer = document.getElementById('extensionContainer');
     
-    if (!enableExtensions || !extensionContainer) return;
+    if (!enableExtensionsBtn || !extensionContainer) return;
     
-    if (enableExtensions.checked) {
+    const isEnabled = enableExtensionsBtn.getAttribute('data-enabled') === 'true';
+    const newState = !isEnabled;
+    
+    enableExtensionsBtn.setAttribute('data-enabled', newState);
+    // 按钮文字与状态相反：启用时显示"禁用"，禁用时显示"启用"
+    enableExtensionsBtn.textContent = newState ? '禁用' : '启用';
+    
+    if (newState) {
+        extensionContainer.classList.remove('disabled');
+    } else {
+        extensionContainer.classList.add('disabled');
+    }
+}
+
+// 更新扩展名区域的启用/禁用状态
+function updateExtensionState() {
+    const enableExtensionsBtn = document.getElementById('enableExtensionsBtn');
+    const extensionContainer = document.getElementById('extensionContainer');
+    
+    if (!enableExtensionsBtn || !extensionContainer) return;
+    
+    const isEnabled = enableExtensionsBtn.getAttribute('data-enabled') === 'true';
+    
+    if (isEnabled) {
         extensionContainer.classList.remove('disabled');
     } else {
         extensionContainer.classList.add('disabled');
@@ -3162,19 +3187,20 @@ function updateExtensionState() {
 function updateExtensionAvailability() {
     const applyToFiles = document.getElementById('applyToFiles');
     const applyToFolders = document.getElementById('applyToFolders');
-    const enableExtensions = document.getElementById('enableExtensions');
+    const enableExtensionsBtn = document.getElementById('enableExtensionsBtn');
     const extensionContainer = document.getElementById('extensionContainer');
     
-    if (!applyToFiles || !applyToFolders || !enableExtensions || !extensionContainer) return;
+    if (!applyToFiles || !applyToFolders || !enableExtensionsBtn || !extensionContainer) return;
     
     // 如果只勾选了文件夹（没有勾选文件），则禁用扩展名功能
     if (!applyToFiles.checked && applyToFolders.checked) {
-        enableExtensions.checked = false;
-        enableExtensions.disabled = true;
+        enableExtensionsBtn.setAttribute('data-enabled', 'false');
+        enableExtensionsBtn.textContent = '启用'; // 禁用状态显示"启用"按钮
+        enableExtensionsBtn.disabled = true;
         extensionContainer.classList.add('disabled');
     } else {
         // 如果勾选了文件，则允许启用扩展名
-        enableExtensions.disabled = false;
+        enableExtensionsBtn.disabled = false;
         updateExtensionState();
     }
 }
@@ -3314,9 +3340,17 @@ async function openRuleModal(ruleId = null) {
         const extensionCondition = rule.conditions.find(c => c.type === 'Extension');
         if (extensionCondition && extensionCondition.values) {
             appState.currentExtensions = [...extensionCondition.values];
-            document.getElementById('enableExtensions').checked = true;
+            const enableExtensionsBtn = document.getElementById('enableExtensionsBtn');
+            if (enableExtensionsBtn) {
+                enableExtensionsBtn.setAttribute('data-enabled', 'true');
+                enableExtensionsBtn.textContent = '禁用'; // 启用状态显示"禁用"按钮
+            }
         } else {
-            document.getElementById('enableExtensions').checked = false;
+            const enableExtensionsBtn = document.getElementById('enableExtensionsBtn');
+            if (enableExtensionsBtn) {
+                enableExtensionsBtn.setAttribute('data-enabled', 'false');
+                enableExtensionsBtn.textContent = '启用'; // 禁用状态显示"启用"按钮
+            }
         }
     } else {
         // 新增模式
@@ -3378,8 +3412,9 @@ async function saveRule() {
     });
     
     // 如果扩展名功能已启用且有扩展名，添加 Extension 条件
-    const enableExtensions = document.getElementById('enableExtensions');
-    if (enableExtensions && enableExtensions.checked && appState.currentExtensions.length > 0) {
+    const enableExtensionsBtn = document.getElementById('enableExtensionsBtn');
+    const isExtensionEnabled = enableExtensionsBtn && enableExtensionsBtn.getAttribute('data-enabled') === 'true';
+    if (isExtensionEnabled && appState.currentExtensions.length > 0) {
         conditions.push({
             type: 'Extension',
             values: [...appState.currentExtensions]
@@ -4977,18 +5012,73 @@ function setupWindowSnap() {
     
     let checkInterval = null;
     let mouseDown = false;
+    let isDraggingWindow = false;
+    let dragStartPos = { x: 0, y: 0 };
+    let windowStartPos = { x: 0, y: 0 };
+    let tempExpandedTimer = null;
     
     // 直接在标题栏上监听鼠标按下事件
-    appHeader.addEventListener('mousedown', (e) => {
+    appHeader.addEventListener('mousedown', async (e) => {
         // 忽略按钮点击
         if (e.target.closest('button')) {
             return;
         }
         console.log('[窗口折叠] 检测到拖动标题栏');
+        
+        // 如果窗口处于折叠状态，理论上用户无法点击标题栏（因为太小了）
+        // 但如果真的点到了，直接返回不处理
+        if (appState.collapsed) {
+            console.log('[窗口折叠] 窗口当前是折叠状态，无法拖拽');
+            return;
+        }
+        
         mouseDown = true;
         appState.windowDragging = true;
         appState.isDragging = true; // 保持与其他拖动逻辑一致
+        
+        // 清除临时展开状态（如果有）
+        // 当用户开始拖拽时，说明他想正常使用窗口，不是只是快速查看
+        if (appState.tempExpanded) {
+            console.log('[窗口折叠] 用户开始拖拽，清除临时展开状态，窗口变为正常状态');
+            appState.tempExpanded = false;
+            // 清除临时展开定时器
+            if (tempExpandedTimer) {
+                clearTimeout(tempExpandedTimer);
+                tempExpandedTimer = null;
+            }
+        }
+        
+        // 记录鼠标和窗口的初始位置
+        dragStartPos = { x: e.screenX, y: e.screenY };
+        
+        try {
+            const { appWindow } = window.__TAURI__.window;
+            const position = await appWindow.outerPosition();
+            windowStartPos = { x: position.x, y: position.y };
+            isDraggingWindow = true;
+        } catch (error) {
+            console.error('[窗口折叠] 获取窗口位置失败:', error);
+        }
+        
         startSnapCheck();
+    });
+    
+    // 监听鼠标移动事件来拖动窗口
+    document.addEventListener('mousemove', async (e) => {
+        if (!isDraggingWindow || !mouseDown) return;
+        
+        try {
+            const { appWindow } = window.__TAURI__.window;
+            const deltaX = e.screenX - dragStartPos.x;
+            const deltaY = e.screenY - dragStartPos.y;
+            
+            await appWindow.setPosition(new window.__TAURI__.window.PhysicalPosition(
+                windowStartPos.x + deltaX,
+                windowStartPos.y + deltaY
+            ));
+        } catch (error) {
+            // 忽略拖拽过程中的错误
+        }
     });
     
     // 监听全局鼠标松开事件
@@ -4997,6 +5087,7 @@ function setupWindowSnap() {
         
         console.log('[窗口折叠] 鼠标松开, snapEdge:', appState.snapEdge);
         mouseDown = false;
+        isDraggingWindow = false;
         appState.windowDragging = false;
         appState.isDragging = false; // 重置拖动状态
         stopSnapCheck();
@@ -5007,6 +5098,8 @@ function setupWindowSnap() {
                 console.log('[窗口折叠] 调用 trigger_window_snap:', appState.snapEdge);
                 await invoke('trigger_window_snap', { edge: appState.snapEdge });
                 appState.collapsed = true;
+                appState.tempExpanded = false; // 手动折叠后清除临时展开状态
+                appState.lastCollapsedEdge = appState.snapEdge; // 记住折叠的边缘
                 console.log(`[窗口折叠] 窗口已折叠到${appState.snapEdge}边缘`);
             } catch (error) {
                 console.error('[窗口折叠] 折叠窗口失败:', error);
@@ -5043,20 +5136,21 @@ function setupWindowSnap() {
                 indicatorRight.classList.remove('active');
                 appState.snapEdge = null;
                 
-                // 根据结果显示对应的标记线
-                if (result === 'Top') {
-                    console.log('[窗口折叠] 显示顶部标记线');
-                    indicatorTop.classList.add('active');
-                    appState.snapEdge = 'Top';
-                } else if (result === 'Left') {
-                    console.log('[窗口折叠] 显示左侧标记线');
-                    indicatorLeft.classList.add('active');
-                    appState.snapEdge = 'Left';
-                } else if (result === 'Right') {
-                    console.log('[窗口折叠] 显示右侧标记线');
-                    indicatorRight.classList.add('active');
-                    appState.snapEdge = 'Right';
-                }
+                    // 根据结果显示对应的标记线
+                    if (result === 'Top') {
+                        console.log('[窗口折叠] 显示顶部标记线，设置 snapEdge = Top');
+                        indicatorTop.classList.add('active');
+                        appState.snapEdge = 'Top';
+                    } else if (result === 'Left') {
+                        console.log('[窗口折叠] 显示左侧标记线，设置 snapEdge = Left');
+                        indicatorLeft.classList.add('active');
+                        appState.snapEdge = 'Left';
+                    } else if (result === 'Right') {
+                        console.log('[窗口折叠] 显示右侧标记线，设置 snapEdge = Right');
+                        indicatorRight.classList.add('active');
+                        appState.snapEdge = 'Right';
+                    }
+                    console.log('[窗口折叠] 当前 snapEdge 状态:', appState.snapEdge);
             } catch (error) {
                 console.error('[窗口折叠] check_window_near_edge 错误:', error);
             }
@@ -5074,44 +5168,57 @@ function setupWindowSnap() {
     // 监听展开事件（鼠标移到边缘时后端会触发）
     listen('window_expand', async () => {
         appState.collapsed = false;
-        console.log('[窗口折叠] 窗口已展开');
+        appState.tempExpanded = true; // 标记为临时展开
+        console.log('[窗口折叠] 窗口已自动展开（临时状态）');
     });
     
-    // 鼠标离开窗口自动折叠功能
-    let leaveTimer = null;
-    const AUTO_COLLAPSE_DELAY = 1000; // 1秒后自动折叠
+    // 鼠标进入窗口时，延迟清除临时展开状态
+    // 如果用户只是快速查看（1秒内离开），窗口会自动折叠
+    // 如果用户停留超过1秒，则认为是正常使用，不再自动折叠
+    document.addEventListener('mouseenter', () => {
+        if (appState.tempExpanded) {
+            console.log('[窗口折叠] 鼠标进入窗口，1秒后清除临时展开状态');
+            // 清除之前的定时器
+            if (tempExpandedTimer) {
+                clearTimeout(tempExpandedTimer);
+            }
+            // 1秒后清除临时展开状态
+            tempExpandedTimer = setTimeout(() => {
+                appState.tempExpanded = false;
+                console.log('[窗口折叠] 停留超过1秒，清除临时展开状态，窗口变为正常状态');
+            }, 1000);
+        }
+    });
     
-    document.addEventListener('mouseleave', () => {
-        // 如果窗口已经折叠，或正在拖动，不处理
-        if (appState.collapsed || appState.windowDragging) {
+    // 鼠标离开窗口自动折叠功能：只在临时展开状态时触发
+    document.addEventListener('mouseleave', async () => {
+        // 清除临时展开定时器
+        if (tempExpandedTimer) {
+            clearTimeout(tempExpandedTimer);
+            tempExpandedTimer = null;
+        }
+        
+        // 只有在临时展开状态下，鼠标离开才自动折叠
+        if (!appState.tempExpanded) {
+            console.log('[窗口折叠] 窗口不是临时展开状态，不自动折叠');
             return;
         }
         
-        console.log('[窗口折叠] 鼠标离开窗口，1秒后自动折叠');
-        
-        // 清除之前的计时器
-        if (leaveTimer) {
-            clearTimeout(leaveTimer);
+        // 如果窗口已经折叠或正在拖动，不处理
+        if (appState.collapsed || appState.windowDragging) {
+            console.log('[窗口折叠] 跳过自动折叠:', { collapsed: appState.collapsed, dragging: appState.windowDragging });
+            return;
         }
         
-        // 1秒后自动折叠到顶部
-        leaveTimer = setTimeout(async () => {
-            try {
-                console.log('[窗口折叠] 执行自动折叠到顶部');
-                await invoke('trigger_window_snap', { edge: 'Top' });
-                appState.collapsed = true;
-            } catch (error) {
-                console.error('[窗口折叠] 自动折叠失败:', error);
-            }
-        }, AUTO_COLLAPSE_DELAY);
-    });
-    
-    document.addEventListener('mouseenter', () => {
-        // 鼠标重新进入窗口，取消自动折叠
-        if (leaveTimer) {
-            console.log('[窗口折叠] 鼠标重新进入窗口，取消自动折叠');
-            clearTimeout(leaveTimer);
-            leaveTimer = null;
+        // 立即折叠到上次折叠的边缘
+        try {
+            const edge = appState.lastCollapsedEdge || 'Top';
+            console.log(`[窗口折叠] 临时展开窗口，鼠标离开，立即折叠到${edge}边缘`);
+            await invoke('trigger_window_snap', { edge: edge });
+            appState.collapsed = true;
+            appState.tempExpanded = false; // 重置临时展开状态
+        } catch (error) {
+            console.error('[窗口折叠] 自动折叠失败:', error);
         }
     });
 }
