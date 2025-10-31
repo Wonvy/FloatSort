@@ -94,9 +94,21 @@
             <section class="tab-pane active" id="rules-pane">
                 <div class="pane-header">
                     <h2>整理规则</h2>
-                    <button class="btn-primary" id="addRuleBtn">
-                        + 添加规则
-                    </button>
+                    <div class="header-actions">
+                        <div class="view-switcher">
+                            <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
+                                <path id="view-icon-group" d="M2 3h5v5H2V3zm7 0h5v5H9V3zM2 10h5v5H2v-5zm7 0h5v5H9v-5z"/>
+                                <path id="view-icon-list" d="M2 3h12v2H2V3zm0 4h12v2H2V7zm0 4h12v2H2v-2z" style="display:none;"/>
+                            </svg>
+                            <select id="viewModeSelect">
+                                <option value="grouped">分组视图</option>
+                                <option value="list">列表视图</option>
+                            </select>
+                        </div>
+                        <button class="btn-primary" id="addRuleBtn">
+                            + 添加规则
+                        </button>
+                    </div>
                 </div>
                 <div class="rules-list" id="rulesList">
                     <div class="empty-state">

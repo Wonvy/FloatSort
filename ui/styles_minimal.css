@@ -198,6 +198,50 @@ body {
     color: #000;
 }
 
+/* 头部操作区域 */
+.header-actions {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+/* 视图切换器 */
+.view-switcher {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 12px;
+    background: #f9fafb;
+    border: 1px solid #e5e7eb;
+    border-radius: 6px;
+    transition: all 0.2s;
+}
+
+.view-switcher:hover {
+    border-color: #d1d5db;
+    background: #f3f4f6;
+}
+
+.view-switcher svg {
+    color: #6b7280;
+    flex-shrink: 0;
+}
+
+.view-switcher select {
+    border: none;
+    background: transparent;
+    font-size: 13px;
+    color: #374151;
+    font-weight: 500;
+    cursor: pointer;
+    outline: none;
+    padding: 2px 4px;
+}
+
+.view-switcher select:hover {
+    color: #667eea;
+}
+
 /* ========== 按钮 ========== */
 .btn-primary,
 .btn-secondary {

@@ -34,11 +34,26 @@ const appState = {
     pendingDeleteItem: null,  // 待删除的项目 { type: 'rule'|'folder', id: string, name: string }
     pendingFilesByFolder: {},  // 按文件夹分组的待处理文件队列 { folderId: [{ path, name }, ...] }
     collapsedGroups: new Set(),  // 折叠的规则组（存储目标路径）
+    viewMode: 'grouped',  // 规则列表视图模式：'grouped' 分组视图 | 'list' 列表视图
 };
 
 // 为规则生成字母编号
 function getRuleLabel(index) {
     return String.fromCharCode(65 + index); // A, B, C, ...
+}
+
+// 更新视图图标
+function updateViewIcon(viewMode) {
+    const groupIcon = document.getElementById('view-icon-group');
+    const listIcon = document.getElementById('view-icon-list');
+    
+    if (viewMode === 'grouped') {
+        if (groupIcon) groupIcon.style.display = 'block';
+        if (listIcon) listIcon.style.display = 'none';
+    } else {
+        if (groupIcon) groupIcon.style.display = 'none';
+        if (listIcon) listIcon.style.display = 'block';
+    }
 }
 
 // ========== Tauri API ==========
@@ -292,6 +307,19 @@ function setupEventListeners() {
             }
         });
     });
+    
+    // 视图模式切换
+    const viewModeSelect = document.getElementById('viewModeSelect');
+    if (viewModeSelect) {
+        viewModeSelect.addEventListener('change', (e) => {
+            appState.viewMode = e.target.value;
+            updateViewIcon(e.target.value);
+            renderRules();
+            console.log('[视图切换] 切换到:', e.target.value === 'grouped' ? '分组视图' : '列表视图');
+        });
+        // 初始化图标
+        updateViewIcon(appState.viewMode);
+    }
     
     // 规则管理
     document.getElementById('addRuleBtn').addEventListener('click', () => openRuleModal());
@@ -1448,13 +1476,13 @@ async function showFolderPendingFiles(folderId) {
 
 // ========== 渲染规则列表 ==========
 function renderRules() {
-    // 使用分组渲染功能（在rule_groups.js中定义）
-    if (typeof renderRulesGrouped === 'function') {
+    // 根据视图模式选择渲染方式
+    if (appState.viewMode === 'grouped' && typeof renderRulesGrouped === 'function') {
         renderRulesGrouped();
         return;
     }
     
-    // 备份：如果分组模块未加载，使用原始渲染
+    // 列表视图渲染
     const rulesList = document.getElementById('rulesList');
     
     if (appState.rules.length === 0) {
