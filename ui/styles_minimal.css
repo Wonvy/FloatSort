@@ -2681,7 +2681,7 @@ input[readonly] {
 
 /* ========== 规则分组样式 ========== */
 .rule-group {
-    margin-bottom: 16px;
+    margin-bottom: 12px;
     border: 1px solid #e5e7eb;
     border-radius: 8px;
     overflow: hidden;
@@ -2690,10 +2690,10 @@ input[readonly] {
 
 .rule-group-header {
     display: grid;
-    grid-template-columns: 24px 1fr auto auto 38px;
+    grid-template-columns: 20px 1fr auto auto 38px;
     align-items: center;
-    gap: 12px;
-    padding: 12px 16px;
+    gap: 8px;
+    padding: 8px 12px;
     background: linear-gradient(135deg, #f9fafb 0%, #f3f4f6 100%);
     border-bottom: 1px solid #e5e7eb;
     cursor: pointer;
@@ -2709,8 +2709,8 @@ input[readonly] {
 }
 
 .group-collapse-btn {
-    width: 24px;
-    height: 24px;
+    width: 20px;
+    height: 20px;
     display: flex;
     align-items: center;
     justify-content: center;
@@ -2737,21 +2737,21 @@ input[readonly] {
 .group-info {
     display: flex;
     align-items: center;
-    gap: 12px;
+    gap: 8px;
 }
 
 .group-destination {
-    font-size: 14px;
+    font-size: 13px;
     font-weight: 600;
-    letter-spacing: 0.3px;
+    letter-spacing: 0.2px;
 }
 
 .group-count {
-    font-size: 12px;
+    font-size: 11px;
     color: #9ca3af;
-    padding: 2px 8px;
+    padding: 2px 6px;
     background: #fff;
-    border-radius: 12px;
+    border-radius: 10px;
     font-weight: 500;
 }
 
@@ -2759,11 +2759,23 @@ input[readonly] {
     display: flex;
     gap: 4px;
     align-items: center;
+    opacity: 0;
+    transition: opacity 0.2s;
+}
+
+.rule-group-header:hover .group-order-controls {
+    opacity: 1;
 }
 
 .group-actions {
     display: flex;
     gap: 4px;
+    opacity: 0;
+    transition: opacity 0.2s;
+}
+
+.rule-group-header:hover .group-actions {
+    opacity: 1;
 }
 
 .rule-group-content {

@@ -54,12 +54,12 @@ function renderRulesGrouped() {
             const drive = parts[0];
             const lastName = parts[parts.length - 1];
             if (parts.length > 2) {
-                displayPath = `📁 ${drive}\\...\\${lastName}`;
+                displayPath = `${drive}\\...\\${lastName}`;
             } else {
-                displayPath = `📁 ${destination}`;
+                displayPath = `${destination}`;
             }
         } else if (destination) {
-            displayPath = `📁 ${destination}`;
+            displayPath = `${destination}`;
         }
         
         // 渲染组头
