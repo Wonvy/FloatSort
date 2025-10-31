@@ -2796,6 +2796,28 @@ input[readonly] {
     border-bottom: 1px solid #f3f4f6;
     margin: 0;
     padding: 8px 12px; /* 覆盖默认的 12px 16px */
+    /* 调整布局使开关与分组头部对齐：序号、名称、条件、顺序、操作、开关 */
+    grid-template-columns: 24px minmax(60px, 1fr) minmax(100px, 3fr) 55px 65px 32px;
+}
+
+.rule-card.in-group .rule-order-number {
+    /* 序号调整为18px以对齐分组折叠按钮 */
+    width: 18px;
+    height: 18px;
+    line-height: 18px;
+    font-size: 11px;
+    /* 使用margin实现视觉居中 */
+    margin-left: 3px;
+}
+
+.rule-card.in-group .rule-usage {
+    /* 在分组内隐藏引用列以简化视觉 */
+    display: none;
+}
+
+.rule-card.in-group .rule-actions .btn-icon:nth-child(2) {
+    /* 在分组内只保留编辑按钮，隐藏删除按钮 */
+    display: none;
 }
 
 .rule-card.in-group:last-child {
