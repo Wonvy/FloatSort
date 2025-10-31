@@ -245,18 +245,61 @@ body {
 /* ========== 分栏视图 ========== */
 .split-view-container {
     display: flex;
-    gap: 12px;
+    gap: 0;
     height: calc(100vh - 180px);
     overflow: hidden;
 }
 
 .split-view-sidebar {
-    width: 280px;
+    min-width: 200px;
+    max-width: 600px;
     flex-shrink: 0;
     border: 1px solid #e5e7eb;
     border-radius: 8px;
     overflow-y: auto;
     background: #fafbfc;
+}
+
+.split-view-resizer {
+    width: 8px;
+    cursor: ew-resize;
+    background: transparent;
+    position: relative;
+    flex-shrink: 0;
+    transition: background 0.2s;
+    margin: 0 2px;
+}
+
+.split-view-resizer::before {
+    content: '';
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    transform: translate(-50%, -50%);
+    width: 1px;
+    height: 40px;
+    background: #d1d5db;
+    border-radius: 2px;
+}
+
+.split-view-resizer:hover {
+    background: #f3f4f6;
+}
+
+.split-view-resizer:hover::before {
+    background: #667eea;
+    width: 2px;
+    height: 60px;
+}
+
+.split-view-resizer.resizing {
+    background: #e5e7eb;
+}
+
+.split-view-resizer.resizing::before {
+    background: #667eea;
+    width: 2px;
+    height: 80px;
 }
 
 .split-view-content {
@@ -266,6 +309,7 @@ body {
     overflow-y: auto;
     background: #fff;
     padding: 12px;
+    min-width: 300px;
 }
 
 .split-folder-item {

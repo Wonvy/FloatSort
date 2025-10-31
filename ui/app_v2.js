@@ -1698,9 +1698,12 @@ function renderSplitView() {
     const selectedGroup = groupArray.find(g => g.destination === appState.selectedFolderId);
     const groupRules = selectedGroup ? selectedGroup.rules : [];
     
+    // 从localStorage读取分栏宽度
+    const savedSidebarWidth = localStorage.getItem('splitSidebarWidth') || '280';
+    
     rulesList.innerHTML = `
         <div class="split-view-container">
-            <div class="split-view-sidebar">
+            <div class="split-view-sidebar" style="width: ${savedSidebarWidth}px;">
                 ${groupArray.map(group => {
                     const destination = group.destination;
                     const isRecycleBin = destination === '{recycle}';
@@ -1751,6 +1754,7 @@ function renderSplitView() {
                     `;
                 }).join('')}
             </div>
+            <div class="split-view-resizer"></div>
             <div class="split-view-content">
                 ${groupRules.length === 0 ? `
                     <div class="split-empty-state">
@@ -1860,6 +1864,64 @@ function renderSplitView() {
             </div>
         </div>
     `;
+    
+    // 初始化拖拽调整功能
+    initSplitViewResizer();
+}
+
+// 初始化分栏视图拖拽调整功能
+function initSplitViewResizer() {
+    const resizer = document.querySelector('.split-view-resizer');
+    const sidebar = document.querySelector('.split-view-sidebar');
+    const container = document.querySelector('.split-view-container');
+    
+    if (!resizer || !sidebar || !container) return;
+    
+    let isResizing = false;
+    let startX = 0;
+    let startWidth = 0;
+    
+    resizer.addEventListener('mousedown', (e) => {
+        isResizing = true;
+        startX = e.clientX;
+        startWidth = sidebar.offsetWidth;
+        
+        // 添加拖拽状态样式
+        document.body.style.cursor = 'ew-resize';
+        document.body.style.userSelect = 'none';
+        resizer.classList.add('resizing');
+        
+        e.preventDefault();
+    });
+    
+    document.addEventListener('mousemove', (e) => {
+        if (!isResizing) return;
+        
+        const deltaX = e.clientX - startX;
+        const newWidth = startWidth + deltaX;
+        
+        // 限制最小和最大宽度
+        const minWidth = 200;
+        const maxWidth = container.offsetWidth - 300; // 至少留300px给右侧
+        const clampedWidth = Math.max(minWidth, Math.min(newWidth, maxWidth));
+        
+        sidebar.style.width = clampedWidth + 'px';
+    });
+    
+    document.addEventListener('mouseup', () => {
+        if (!isResizing) return;
+        
+        isResizing = false;
+        document.body.style.cursor = '';
+        document.body.style.userSelect = '';
+        resizer.classList.remove('resizing');
+        
+        // 保存宽度到localStorage
+        const currentWidth = sidebar.offsetWidth;
+        localStorage.setItem('splitSidebarWidth', currentWidth.toString());
+        
+        console.log(`[分栏视图] 侧边栏宽度已保存: ${currentWidth}px`);
+    });
 }
 
 // 选择分栏视图中的文件夹
