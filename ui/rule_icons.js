@@ -1,36 +1,51 @@
 // 规则图标管理功能
 
 // 初始化图标选择器
-function initIconPicker() {
+window.initIconPicker = function() {
     const iconSelector = document.getElementById('ruleIconSelector');
     const colorPicker = document.getElementById('ruleColorPicker');
     const iconPreview = document.getElementById('ruleIconPreview');
     
-    if (!iconSelector || !colorPicker || !iconPreview) return;
+    if (!iconSelector || !colorPicker || !iconPreview) {
+        console.warn('[图标选择器] 元素未找到，跳过初始化');
+        return;
+    }
+    
+    console.log('[图标选择器] 开始初始化事件监听器');
+    
+    // 移除旧的事件监听器（通过克隆节点）
+    const newIconSelector = iconSelector.cloneNode(true);
+    iconSelector.parentNode.replaceChild(newIconSelector, iconSelector);
+    const iconSelectorFresh = document.getElementById('ruleIconSelector');
+    
+    // 让div可以获得焦点以接收paste事件
+    iconSelectorFresh.setAttribute('tabindex', '0');
+    iconSelectorFresh.style.outline = 'none';
     
     // 左键点击图标选择器打开图标选择窗口
-    iconSelector.addEventListener('click', (e) => {
-        if (e.button === 0) {  // 左键
-            openIconPicker();
-        }
+    iconSelectorFresh.addEventListener('click', (e) => {
+        console.log('[图标选择器] 点击事件触发');
+        openIconPicker();
+        iconSelectorFresh.focus();  // 聚焦以便接收粘贴
     });
     
     // 颜色选择器变化
     colorPicker.addEventListener('change', (e) => {
         appState.selectedColor = e.target.value;
-        iconPreview.style.color = e.target.value;
+        const preview = document.getElementById('ruleIconPreview');
+        if (preview) {
+            preview.style.color = e.target.value;
+        }
     });
     
-    // 让div可以获得焦点以接收paste事件
-    iconSelector.setAttribute('tabindex', '0');
-    iconSelector.setAttribute('contenteditable', 'false');
-    
     // Ctrl+V 粘贴SVG
-    iconSelector.addEventListener('paste', (e) => {
+    iconSelectorFresh.addEventListener('paste', (e) => {
+        console.log('[图标选择器] 粘贴事件触发');
         e.preventDefault();
         e.stopPropagation();
         
         const pastedText = e.clipboardData.getData('text');
+        console.log('[图标选择器] 粘贴内容:', pastedText.substring(0, 50));
         
         // 检查是否是SVG代码
         if (pastedText.trim().startsWith('<svg')) {
@@ -49,11 +64,22 @@ function initIconPicker() {
         }
     });
     
+    // 键盘事件支持 Ctrl+V
+    iconSelectorFresh.addEventListener('keydown', (e) => {
+        if ((e.ctrlKey || e.metaKey) && e.key === 'v') {
+            console.log('[图标选择器] Ctrl+V 按键检测');
+        }
+    });
+    
     // 右键菜单
-    iconSelector.addEventListener('contextmenu', (e) => {
+    iconSelectorFresh.addEventListener('contextmenu', (e) => {
+        console.log('[图标选择器] 右键菜单触发');
         e.preventDefault();
+        e.stopPropagation();
         showIconContextMenu(e.clientX, e.clientY);
     });
+    
+    console.log('[图标选择器] 初始化完成');
 }
 
 // 打开图标选择器
@@ -142,6 +168,11 @@ window.loadRuleIconAndColor = function(rule) {
             iconPreview.outerHTML = `<i class="${appState.selectedIcon}" id="ruleIconPreview" style="color: ${appState.selectedColor};"></i>`;
         }
     }
+    
+    // 重新初始化图标选择器（重新绑定事件）
+    setTimeout(() => {
+        initIconPicker();
+    }, 100);
 }
 
 // 获取当前图标和颜色信息
@@ -169,6 +200,8 @@ window.renderRuleIcon = function(rule) {
 
 // 显示图标右键菜单
 function showIconContextMenu(x, y) {
+    console.log('[右键菜单] 显示菜单在位置:', x, y);
+    
     // 移除已存在的菜单
     const existingMenu = document.getElementById('iconContextMenu');
     if (existingMenu) {
@@ -183,21 +216,21 @@ function showIconContextMenu(x, y) {
     menu.style.top = y + 'px';
     
     menu.innerHTML = `
-        <div class="context-menu-item" onclick="pasteFromClipboard()">
+        <div class="context-menu-item" onclick="pasteFromClipboard(); event.stopPropagation();">
             <svg width="14" height="14" viewBox="0 0 16 16" fill="none">
                 <path d="M5.5 2A1.5 1.5 0 0 0 4 3.5v9A1.5 1.5 0 0 0 5.5 14h5a1.5 1.5 0 0 0 1.5-1.5v-9A1.5 1.5 0 0 0 10.5 2h-5z" stroke="currentColor" stroke-width="1.5"/>
                 <path d="M6 1h4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
             </svg>
             粘贴 SVG (Ctrl+V)
         </div>
-        <div class="context-menu-item" onclick="openIconPicker(); closeIconContextMenu();">
+        <div class="context-menu-item" onclick="openIconPicker(); closeIconContextMenu(); event.stopPropagation();">
             <svg width="14" height="14" viewBox="0 0 16 16" fill="none">
                 <circle cx="8" cy="8" r="6" stroke="currentColor" stroke-width="1.5" fill="none"/>
                 <path d="M8 5v3M8 11h.01" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
             </svg>
             从图标库选择
         </div>
-        <div class="context-menu-item" onclick="resetToDefaultIcon(); closeIconContextMenu();">
+        <div class="context-menu-item" onclick="resetToDefaultIcon(); closeIconContextMenu(); event.stopPropagation();">
             <svg width="14" height="14" viewBox="0 0 16 16" fill="none">
                 <path d="M8 2a6 6 0 0 0-6 6h2a4 4 0 0 1 4-4V2z" fill="currentColor"/>
                 <path d="M2 8a6 6 0 0 0 6 6v-2a4 4 0 0 1-4-4H2z" fill="currentColor"/>
@@ -207,6 +240,7 @@ function showIconContextMenu(x, y) {
     `;
     
     document.body.appendChild(menu);
+    console.log('[右键菜单] 菜单已添加到页面');
     
     // 点击其他地方关闭菜单
     setTimeout(() => {
@@ -219,16 +253,19 @@ function closeIconContextMenu() {
     const menu = document.getElementById('iconContextMenu');
     if (menu) {
         menu.remove();
+        console.log('[右键菜单] 菜单已关闭');
     }
     document.removeEventListener('click', closeIconContextMenu);
 }
 
 // 从剪贴板粘贴
 window.pasteFromClipboard = async function() {
+    console.log('[粘贴功能] 开始从剪贴板读取');
     closeIconContextMenu();
     
     try {
         const text = await navigator.clipboard.readText();
+        console.log('[粘贴功能] 读取到文本:', text.substring(0, 100));
         
         if (text.trim().startsWith('<svg')) {
             appState.selectedIconSvg = text;
@@ -240,10 +277,13 @@ window.pasteFromClipboard = async function() {
             }
             
             showNotification('✅ SVG图标已设置', 'success');
+            console.log('[粘贴功能] SVG图标设置成功');
         } else {
             showNotification('❌ 剪贴板中不是有效的SVG代码', 'error');
+            console.warn('[粘贴功能] 无效的SVG代码');
         }
     } catch (error) {
+        console.error('[粘贴功能] 读取剪贴板失败:', error);
         showNotification('❌ 无法读取剪贴板: ' + error.message, 'error');
     }
 }
