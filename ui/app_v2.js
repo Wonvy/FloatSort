@@ -38,6 +38,7 @@ const appState = {
     selectedRuleIds: null,  // 选中的多个规则IDs（用于拖拽文件到多个规则）
     pendingDeleteItem: null,  // 待删除的项目 { type: 'rule'|'folder', id: string, name: string }
     pendingFilesByFolder: {},  // 按文件夹分组的待处理文件队列 { folderId: [{ path, name }, ...] }
+    currentBatchFolderId: null,  // 当前批量管理窗口显示的文件夹ID
     collapsedGroups: new Set(),  // 折叠的规则组（存储目标路径）
     viewMode: 'grouped',  // 规则列表视图模式：'grouped' 分组视图 | 'list' 列表视图 | 'split' 分栏视图
     selectedFolderId: null,  // 分栏视图中选中的文件夹ID
@@ -633,6 +634,14 @@ function setupBackendListeners() {
             
             // 更新文件夹列表显示
             renderFolders();
+            
+            // 如果批量管理窗口已经打开，且显示的是当前文件夹的待处理文件，则刷新窗口
+            const batchModal = document.getElementById('batchConfirmModal');
+            if (batchModal && batchModal.style.display === 'flex' && appState.currentBatchFolderId === folder.id) {
+                console.log('[文件检测] 批量管理窗口已打开，刷新窗口内容');
+                // 重新显示该文件夹的待处理文件
+                await showFolderPendingFiles(folder.id);
+            }
         }
     });
     
@@ -1540,6 +1549,9 @@ async function showFolderPendingFiles(folderId) {
     
     // 使用批量确认窗口显示待处理文件
     appState.pendingBatch = [...pendingFiles];
+    
+    // 记录当前批量窗口显示的文件夹ID
+    appState.currentBatchFolderId = folderId;
     
     // 如果文件夹关联了规则，使用这些规则；否则使用所有规则
     if (folder.rule_ids && folder.rule_ids.length > 0) {
@@ -4083,6 +4095,7 @@ function closeBatchModal() {
     appState.pendingBatch = [];
     appState.selectedRuleId = null;
     appState.selectedRuleIds = null;
+    appState.currentBatchFolderId = null;
     addActivity(`[取消] 已取消批量整理`);
 }
 
@@ -4247,6 +4260,7 @@ async function confirmBatch() {
     // 清除选中的规则ID(s)
     appState.selectedRuleId = null;
     appState.selectedRuleIds = null;
+    appState.currentBatchFolderId = null;
     
     // 清除已处理文件对应的待处理队列
     for (const folderId in appState.pendingFilesByFolder) {
