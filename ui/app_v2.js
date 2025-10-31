@@ -550,7 +550,7 @@ async function initializeApp() {
     // setInterval(loadActivityLogs, 10000);
     
     // 添加启动日志
-    addActivity('🚀 <strong>FloatSort 已启动</strong>', 'info');
+    addActivity(`🚀 <strong>${t('activity.appReady')}</strong>`, 'info');
     
     console.log('✓ FloatSort V2 已就绪');
 }
@@ -578,7 +578,7 @@ function setupTabs() {
                 }
             });
             
-            addActivity(`切换到: ${btn.textContent.trim()}`);
+            // 移除活动日志，切换tab不需要记录
         });
     });
 }
@@ -974,7 +974,7 @@ function setupBackendListeners() {
         const fileName = filePath.split('\\').pop() || filePath.split('/').pop();
         
         console.log('[文件检测] 检测到文件:', fileName);
-        addActivity(`📥 检测到文件: ${fileName}`);
+        addActivity(`📥 ${t('activity.fileDetected')}: ${fileName}`);
         
         // 找到文件所属的文件夹
         const folder = appState.folders.find(f => filePath.startsWith(f.path));
@@ -1001,16 +1001,16 @@ function setupBackendListeners() {
                     updateStats();
                 } else {
                     console.log('[文件检测] 文件未匹配任何规则');
-                    addActivity(`⚠️ 未匹配规则: ${fileName}`);
+                    addActivity(`⚠️ ${t('activity.fileNotMatched')}: ${fileName}`);
                 }
             } catch (error) {
                 console.error('[文件检测] 处理文件失败:', error);
-                addActivity(`❌ ${fileName} 处理失败: ${error}`, 'error');
+                addActivity(`❌ ${fileName} ${t('activity.fileFailed')}: ${error}`, 'error');
             }
         } else {
             // 手动处理模式：添加到待处理队列
             console.log('[文件检测] 手动处理模式，加入待处理队列');
-            addActivity(`⏳ <strong>${fileName}</strong> 已加入待处理队列（${folder.name}）`, 'info');
+            addActivity(`⏳ <strong>${fileName}</strong> ${t('activity.fileAddedToQueue')}（${folder.name}）`, 'info');
             
             if (!appState.pendingFilesByFolder[folder.id]) {
                 appState.pendingFilesByFolder[folder.id] = [];
@@ -1073,7 +1073,7 @@ function setupBackendListeners() {
             }
             
             // 完整模式下的处理（没有选中规则，使用所有启用的规则）
-            addActivity(`📥 拖入 ${files.length} 个文件/文件夹`);
+            addActivity(`📥 ${t('activity.filesDropped')}: ${files.length}`);
             
             // 将拖入的文件添加到批量队列
             files.forEach(filePath => {
@@ -1099,7 +1099,7 @@ function setupBackendListeners() {
     // 监听窗口焦点事件（从托盘恢复时）
     listen('tauri://focus', async () => {
         console.log('[窗口] 窗口获得焦点');
-        addActivity('▶️ 窗口从托盘恢复', 'info');
+        addActivity(`▶️ ${t('activity.windowRestored')}`, 'info');
         
         // 如果窗口是折叠状态，自动展开
         if (appState.isCollapsed) {
@@ -1115,7 +1115,7 @@ async function processDraggedFiles(files) {
         const fileName = filePath.split('\\').pop() || filePath.split('/').pop();
         
         try {
-            addActivity(`🔄 开始处理: ${fileName}`);
+            addActivity(`🔄 ${t('activity.fileProcessing')}: ${fileName}`);
             const result = await invoke('process_file', { path: filePath });
             
             if (result) {
@@ -1130,12 +1130,12 @@ async function processDraggedFiles(files) {
                 // 从批量队列中移除
                 appState.pendingBatch = appState.pendingBatch.filter(f => f.path !== filePath);
             } else {
-                addActivity(`⚠️ 未匹配规则: ${fileName}`);
+                addActivity(`⚠️ ${t('activity.fileNotMatched')}: ${fileName}`);
                 appState.pendingBatch = appState.pendingBatch.filter(f => f.path !== filePath);
             }
         } catch (error) {
             console.error('处理文件失败:', error);
-            addActivity(`❌ ${fileName} 处理失败: ${error}`, 'error');
+            addActivity(`❌ ${fileName} ${t('activity.fileFailed')}: ${error}`, 'error');
             appState.pendingBatch = appState.pendingBatch.filter(f => f.path !== filePath);
         }
     }
@@ -1631,7 +1631,7 @@ async function processFilesWithRuleDirectly(files, ruleId) {
     }
     
     showNotification(`使用选中规则 [${rule.name}] 处理 ${files.length} 个文件`, 'info');
-    addActivity(`📋 使用选中规则 [${rule.name}] 处理 ${files.length} 个文件`);
+    addActivity(`📋 ${t('activity.usingRule')} [${rule.name}] ${t('activity.processingWithRule')} ${files.length}`);
     
     let successCount = 0;
     let skipCount = 0;
@@ -1654,12 +1654,12 @@ async function processFilesWithRuleDirectly(files, ruleId) {
                 successCount++;
                 appState.filesProcessed++;
             } else {
-                addActivity(`⊘ ${file.name} 不符合规则 [${rule.name}]`);
+                addActivity(`⊘ ${file.name} ${t('activity.fileNotMatched')} [${rule.name}]`);
                 skipCount++;
             }
         } catch (error) {
             console.error('处理文件失败:', error);
-            addActivity(`❌ ${file.name} 处理失败: ${error}`, 'error');
+            addActivity(`❌ ${file.name} ${t('activity.fileFailed')}: ${error}`, 'error');
             failCount++;
         }
     }
@@ -1679,7 +1679,7 @@ async function processFilesWithRuleDirectly(files, ruleId) {
         showNotification(`没有文件匹配规则 [${rule.name}]`, 'error');
     }
     
-    addActivity(`✓ 完成 - 成功:${successCount} 跳过:${skipCount} 失败:${failCount}`);
+    addActivity(`✓ ${t('activity.completed')} - ${t('activity.success')}:${successCount} ${t('activity.skipped')}:${skipCount} ${t('activity.failed')}:${failCount}`);
 }
 
 // ========== 加载数据 ==========
@@ -2706,7 +2706,7 @@ window.confirmApplyRules = async function(destination) {
         }
         
         showNotification(`已将 ${rules.length} 个规则应用到 ${selectedFolderIds.length} 个文件夹`, 'success');
-        addActivity(`✅ 应用了 ${destination} 的 ${rules.length} 个规则`);
+        addActivity(`✅ ${t('activity.ruleApplied')} ${destination} ${rules.length} ${t('rules.rulesCount')}`);
         
         closeApplyRulesModal();
         await loadFolders();
@@ -2789,7 +2789,7 @@ window.moveRuleUp = async function(index) {
     // 重新渲染
     renderRules();
     
-    addActivity(`↑ 规则 [${temp.name}] 已上移`);
+    addActivity(`↑ ${t('activity.ruleMovedUp')} [${temp.name}]`);
 };
 
 window.moveRuleDown = async function(index) {
@@ -2806,7 +2806,7 @@ window.moveRuleDown = async function(index) {
     // 重新渲染
     renderRules();
     
-    addActivity(`↓ 规则 [${temp.name}] 已下移`);
+    addActivity(`↓ ${t('activity.ruleMovedDown')} [${temp.name}]`);
 };
 
 // 从文件夹移除关联规则
@@ -2827,7 +2827,7 @@ window.removeFolderRule = async function(ruleId) {
         checkbox.checked = false;
     }
     
-    addActivity(`🔗 已将规则 [${rule.name}] 从文件夹关联中移除`, 'info');
+    addActivity(`🔗 ${t('activity.ruleUnlinked')} [${rule.name}]`, 'info');
     
     console.log(`[规则移除] 已取消关联规则: ${rule.name}`);
 };
@@ -3099,11 +3099,11 @@ async function saveFolder() {
         if (appState.editingFolderId) {
             await invoke('update_folder', { folderId: appState.editingFolderId, folder });
             showNotification(`文件夹 "${name}" 已更新`, 'success');
-            addActivity(`✏️ 更新文件夹: ${name}`);
+            addActivity(`✏️ ${t('activity.folderUpdated')}: ${name}`);
         } else {
             await invoke('add_folder', { folder });
             showNotification(`文件夹 "${name}" 已添加`, 'success');
-            addActivity(`➕ 添加文件夹: ${name}`);
+            addActivity(`➕ ${t('activity.folderAdded')}: ${name}`);
         }
         
         await loadFolders();
@@ -3148,7 +3148,7 @@ async function toggleFolderMonitoring(folderId) {
                 `文件夹 "${folder.name}" 监控${newState ? '已启用' : '已停用'}`,
                 newState ? 'success' : 'info'
             );
-            addActivity(`${newState ? '🟢' : '🔴'} ${folder.name} 监控${newState ? '启用' : '停用'}`);
+            addActivity(`${newState ? '🟢' : '🔴'} ${folder.name} ${t('activity.folderMonitoring')}${newState ? t('activity.enabled') : t('activity.disabled')}`);
             
             // 重新启动文件监控以应用更改
             await startFileMonitoring();
@@ -4070,11 +4070,11 @@ async function saveRule() {
         if (appState.editingRuleId) {
             await invoke('update_rule', { ruleId: appState.editingRuleId, rule });
             showNotification(`规则 "${name}" 已更新`, 'success');
-            addActivity(`✏️ 更新规则: ${name}`);
+            addActivity(`✏️ ${t('activity.ruleUpdated')}: ${name}`);
         } else {
             await invoke('add_rule', { rule });
             showNotification(`规则 "${name}" 已添加`, 'success');
-            addActivity(`➕ 添加规则: ${name}`);
+            addActivity(`➕ ${t('activity.ruleAdded')}: ${name}`);
         }
         
         await loadRules();
@@ -4168,14 +4168,14 @@ async function executeDelete() {
             // 删除规则
             await invoke('remove_rule', { ruleId: item.id });
             showNotification(`规则 "${item.name}" 已删除`, 'success');
-            addActivity(`🗑️ 删除规则: ${item.name}`);
+            addActivity(`🗑️ ${t('activity.ruleDeleted')}: ${item.name}`);
             await loadRules();
             await loadFolders(); // 重新加载文件夹以更新关联
         } else if (item.type === 'folder') {
             // 删除文件夹
             await invoke('remove_folder', { folderId: item.id });
             showNotification(`文件夹 "${item.name}" 已删除`, 'success');
-            addActivity(`🗑️ 删除文件夹: ${item.name}`);
+            addActivity(`🗑️ ${t('activity.folderDeleted')}: ${item.name}`);
             await loadFolders();
         } else if (item.type === 'group') {
             // 删除规则组（删除组内所有规则）
@@ -4190,7 +4190,7 @@ async function executeDelete() {
                 }
             }
             showNotification(`规则组 "${item.destination || '(未设置)'}" 已删除（${deletedCount} 个规则）`, 'success');
-            addActivity(`🗑️ 已删除组 [${item.destination || '(未设置)'}] 及其 ${deletedCount} 个规则`);
+            addActivity(`🗑️ ${t('activity.groupDeleted')} [${item.destination || '(未设置)'}] ${deletedCount} ${t('rules.rulesCount')}`);
             await loadRules();
             await loadFolders(); // 重新加载文件夹以更新关联
         } else if (item.type === 'condition') {
@@ -4226,7 +4226,7 @@ async function toggleRule(ruleId) {
         
         const status = rule.enabled ? '启用' : '禁用';
         showNotification(`规则 "${rule.name}" 已${status}`, 'success');
-        addActivity(`${rule.enabled ? '[启用]' : '[停用]'} ${status}规则: ${rule.name}`);
+        addActivity(`${rule.enabled ? '[' + t('activity.enabled') + ']' : '[' + t('activity.disabled') + ']'} ${t('activity.ruleStatusChanged')}: ${rule.name}`);
         
         // 重新渲染
         await loadRules();
@@ -4286,7 +4286,7 @@ async function exportConfig() {
             // 保存文件
             await invoke('save_file', { path: filePath, content: dataStr });
             showNotification('配置已导出', 'success');
-            addActivity(`📤 导出配置到: ${filePath}`);
+            addActivity(`📤 ${t('activity.configExported')}: ${filePath}`);
         }
     } catch (error) {
         console.error('导出配置失败:', error);
@@ -4317,7 +4317,7 @@ async function importConfig() {
             await invoke('import_config', { config });
             
             showNotification('配置已导入，正在重新加载...', 'success');
-            addActivity(`📥 导入配置从: ${selected}`);
+            addActivity(`📥 ${t('activity.configImported')}: ${selected}`);
             
             // 重新加载所有数据
             setTimeout(async () => {
@@ -4441,7 +4441,7 @@ async function clearActivity() {
         console.log('[活动日志] 日志已清空');
         
         // 添加一条清空记录
-        addActivity('🗑️ 活动日志已清空', 'info');
+        addActivity(`🗑️ ${t('activity.logCleared')}`, 'info');
     } catch (error) {
         console.error('[活动日志] 清空失败:', error);
         showNotification('清空日志失败: ' + error, 'error');
@@ -4462,7 +4462,7 @@ async function clearProcessedFiles() {
         await invoke('clear_processed_files');
         console.log('✓ 已处理文件记录已清空');
         showNotification('已处理文件记录已清除', 'success');
-        addActivity(`🔄 清除已处理文件记录`);
+        addActivity(`🔄 ${t('activity.recordsCleared')}`);
     } catch (error) {
         console.error('清空已处理文件记录失败:', error);
         showNotification('清除失败', 'error');
@@ -4533,8 +4533,8 @@ function showNotification(message, type = 'info') {
     const iconMap = {
         'success': '✓',
         'error': '✗',
-        'info': 'ℹ️',
-        'default': 'ℹ️'
+        'info': '',
+        'default': ''
     };
     statusIcon.textContent = iconMap[type] || iconMap['default'];
     
@@ -4558,7 +4558,7 @@ function showNotification(message, type = 'info') {
     // 3秒后恢复默认状态
     statusTimeout = setTimeout(() => {
         statusMessage.textContent = t('activity.ready');
-        statusIcon.textContent = 'ℹ️';
+        statusIcon.textContent = '';
         statusBar.classList.remove('status-success', 'status-error', 'status-info');
         statusBar.classList.add('status-default');
     }, 3000);
@@ -4681,7 +4681,7 @@ function closeBatchModal() {
     appState.selectedRuleId = null;
     appState.selectedRuleIds = null;
     appState.currentBatchFolderId = null;
-    addActivity(`[取消] 已取消批量整理`);
+    addActivity(`[${t('common.cancel')}] ${t('activity.cancelled')}`);
 }
 
 // 切换批量确认部分的折叠状态
@@ -4817,7 +4817,7 @@ async function confirmBatch() {
             }
         } catch (error) {
             console.error(`处理文件失败: ${file.name}`, error);
-            addActivity(`❌ ${file.name} 处理失败: ${error}`, 'error');
+            addActivity(`❌ ${file.name} ${t('activity.fileFailed')}: ${error}`, 'error');
             failCount++;
             if (statusEl) {
                 statusEl.innerHTML = '<span style="color: #F44336;" title="处理失败">✗</span>';
@@ -4840,7 +4840,7 @@ async function confirmBatch() {
     cancelBtn.disabled = false;
     cancelBtn.textContent = '关闭';
     
-    addActivity(`[批量] 批量整理完成 - 成功:${successCount} 跳过:${skipCount} 失败:${failCount}`);
+    addActivity(`[${t('batch.title')}] ${t('activity.batchComplete')} - ${t('activity.success')}:${successCount} ${t('activity.skipped')}:${skipCount} ${t('activity.failed')}:${failCount}`);
     
     // 清除已处理的文件批次
     appState.pendingBatch = [];
@@ -4873,7 +4873,7 @@ async function confirmBatch() {
 async function minimizeToTray() {
     try {
         await invoke('hide_to_tray');
-        addActivity('⏸️ 窗口已最小化到系统托盘', 'info');
+        addActivity(`⏸️ ${t('activity.windowMinimized')}`, 'info');
         showNotification('已最小化到托盘', 'info');
     } catch (error) {
         console.error('最小化到托盘失败:', error);
@@ -5397,7 +5397,7 @@ async function enterMiniMode() {
     // 继续位置监听（mini模式也支持折叠）
     // 位置监听器会检查 isMiniMode 并相应处理
     
-    addActivity('[Mini] 进入Mini模式');
+    addActivity(`[${t('activity.miniMode')}] ${t('activity.enterMini')}`);
 }
 
 // 退出Mini模式
@@ -5447,7 +5447,7 @@ async function exitMiniMode() {
     // 重新启动位置监听
     startPositionMonitoring();
     
-    addActivity('[Mini] 退出Mini模式');
+    addActivity(`[${t('activity.miniMode')}] ${t('activity.exitMini')}`);
 }
 
 // 处理Mini窗口点击（直接退出）
