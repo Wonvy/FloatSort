@@ -273,7 +273,7 @@ body {
     display: flex;
     align-items: center;
     justify-content: space-between;
-    padding: 12px 16px;
+    padding: 8px 12px;
     cursor: pointer;
     transition: all 0.2s;
     border-bottom: 1px solid #f3f4f6;
@@ -291,42 +291,70 @@ body {
 .split-folder-info {
     flex: 1;
     min-width: 0; /* 允许文本截断 */
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
 }
 
 .split-folder-name {
-    font-size: 14px;
+    font-size: 13px;
     font-weight: 500;
     color: #1f2937;
-    margin-bottom: 4px;
-}
-
-.split-folder-path {
-    font-size: 12px;
-    color: #6b7280;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
+    flex: 1;
 }
 
-.split-folder-stats {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    margin-top: 6px;
+.split-folder-count {
     font-size: 11px;
     color: #9ca3af;
+    white-space: nowrap;
+    flex-shrink: 0;
 }
 
-/* 分栏视图添加规则按钮 */
-.split-add-rule {
+/* 分栏视图操作按钮 */
+.split-folder-actions {
+    display: flex;
+    align-items: center;
+    gap: 4px;
     opacity: 0;
     transition: opacity 0.2s;
     flex-shrink: 0;
     margin-left: 8px;
 }
 
-.split-folder-item:hover .split-add-rule {
+.split-folder-item:hover .split-folder-actions {
     opacity: 1;
+}
+
+.split-apply-rule,
+.split-add-rule {
+    flex-shrink: 0;
+}
+
+/* 复选框列表项 */
+.checkbox-item {
+    padding: 10px 12px;
+    background: #f9fafb;
+    border: 1px solid #e5e7eb;
+    border-radius: 6px;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.checkbox-item:hover {
+    background: #f3f4f6;
+    border-color: #d1d5db;
+}
+
+.checkbox-item input[type="checkbox"] {
+    width: 16px;
+    height: 16px;
+    cursor: pointer;
+    accent-color: #667eea;
+    flex-shrink: 0;
 }
 
 .split-empty-state {

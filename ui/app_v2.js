@@ -1731,18 +1731,22 @@ function renderSplitView() {
                     return `
                         <div class="split-folder-item ${destination === appState.selectedFolderId ? 'active' : ''}"
                              onclick="selectFolderInSplit('${destination.replace(/\\/g, '\\\\').replace(/'/g, "\\'")}')">
-                            <div class="split-folder-info">
+                            <div class="split-folder-info" title="${destination}">
                                 <div class="split-folder-name" style="color: ${iconColor};">${displayPath}</div>
-                                <div class="split-folder-path" title="${destination}">${destination}</div>
-                                <div class="split-folder-stats">
-                                    <span>📋 ${group.rules.length} 个规则</span>
-                                </div>
+                                <div class="split-folder-count">${group.rules.length} 个规则</div>
                             </div>
-                            <button class="btn-icon btn-sm split-add-rule" onclick="addRuleToSplitFolder('${destination.replace(/\\/g, '\\\\').replace(/'/g, "\\'")}', event)" title="添加规则到此文件夹">
-                                <svg width="14" height="14" viewBox="0 0 16 16" fill="none">
-                                    <path d="M8 3V13M3 8H13" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
-                                </svg>
-                            </button>
+                            <div class="split-folder-actions">
+                                <button class="btn-icon btn-sm split-apply-rule" onclick="applyRulesToFolder('${destination.replace(/\\/g, '\\\\').replace(/'/g, "\\'")}', event)" title="应用规则到监控文件夹">
+                                    <svg width="14" height="14" viewBox="0 0 16 16" fill="none">
+                                        <path d="M13 3L6 10L3 7" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+                                    </svg>
+                                </button>
+                                <button class="btn-icon btn-sm split-add-rule" onclick="addRuleToSplitFolder('${destination.replace(/\\/g, '\\\\').replace(/'/g, "\\'")}', event)" title="添加规则到此文件夹">
+                                    <svg width="14" height="14" viewBox="0 0 16 16" fill="none">
+                                        <path d="M8 3V13M3 8H13" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+                                    </svg>
+                                </button>
+                            </div>
                         </div>
                     `;
                 }).join('')}
@@ -1876,6 +1880,115 @@ window.addRuleToSplitFolder = function(destination, event) {
     
     // 打开规则模态框
     openRuleModal();
+}
+
+// 应用规则到监控文件夹
+window.applyRulesToFolder = function(destination, event) {
+    // 阻止事件冒泡，防止触发文件夹选择
+    if (event) {
+        event.stopPropagation();
+    }
+    
+    // 获取该目标文件夹的所有规则
+    const rules = appState.rules.filter(r => (r.action.destination || '(未设置)') === destination);
+    
+    if (rules.length === 0) {
+        showNotification('该文件夹没有规则', 'warning');
+        return;
+    }
+    
+    // 生成监控文件夹选择对话框
+    const modal = document.createElement('div');
+    modal.className = 'modal';
+    modal.id = 'applyRulesModal';
+    modal.style.display = 'flex';
+    
+    const folderCheckboxes = appState.folders.map(folder => `
+        <label class="checkbox-item">
+            <div style="display: flex; align-items: center; gap: 8px;">
+                <input type="checkbox" value="${folder.id}" ${folder.rule_ids.some(id => rules.find(r => r.id === id)) ? 'checked' : ''}>
+                <div style="flex: 1;">
+                    <div style="font-size: 13px; font-weight: 500;">${folder.name}</div>
+                    <div style="font-size: 11px; color: #9ca3af;">${folder.path}</div>
+                </div>
+            </div>
+        </label>
+    `).join('');
+    
+    modal.innerHTML = `
+        <div class="modal-content" style="max-width: 500px;">
+            <div class="modal-header">
+                <h3>应用规则到监控文件夹</h3>
+                <button class="btn-close" onclick="closeApplyRulesModal()">✕</button>
+            </div>
+            <div class="modal-body">
+                <p style="margin-bottom: 16px; color: #6b7280;">
+                    将 <strong style="color: #667eea;">${destination}</strong> 的 <strong>${rules.length}</strong> 个规则应用到以下监控文件夹：
+                </p>
+                <div style="max-height: 300px; overflow-y: auto; display: flex; flex-direction: column; gap: 8px;">
+                    ${folderCheckboxes}
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn-secondary" onclick="closeApplyRulesModal()">取消</button>
+                <button class="btn-primary" onclick="confirmApplyRules('${destination.replace(/\\/g, '\\\\').replace(/'/g, "\\'")}')">应用</button>
+            </div>
+        </div>
+    `;
+    
+    document.body.appendChild(modal);
+}
+
+// 关闭应用规则模态框
+window.closeApplyRulesModal = function() {
+    const modal = document.getElementById('applyRulesModal');
+    if (modal) {
+        modal.remove();
+    }
+}
+
+// 确认应用规则
+window.confirmApplyRules = async function(destination) {
+    const modal = document.getElementById('applyRulesModal');
+    const checkboxes = modal.querySelectorAll('input[type="checkbox"]:checked');
+    
+    if (checkboxes.length === 0) {
+        showNotification('请至少选择一个监控文件夹', 'warning');
+        return;
+    }
+    
+    const selectedFolderIds = Array.from(checkboxes).map(cb => cb.value);
+    const rules = appState.rules.filter(r => (r.action.destination || '(未设置)') === destination);
+    const ruleIds = rules.map(r => r.id);
+    
+    try {
+        // 更新每个选中的监控文件夹
+        for (const folderId of selectedFolderIds) {
+            const folder = appState.folders.find(f => f.id === folderId);
+            if (!folder) continue;
+            
+            // 合并规则ID，去重
+            const newRuleIds = [...new Set([...folder.rule_ids, ...ruleIds])];
+            
+            await invoke('update_folder', {
+                folderId: folderId,
+                folderData: {
+                    ...folder,
+                    rule_ids: newRuleIds
+                }
+            });
+        }
+        
+        showNotification(`已将 ${rules.length} 个规则应用到 ${selectedFolderIds.length} 个文件夹`, 'success');
+        addActivity(`✅ 应用了 ${destination} 的 ${rules.length} 个规则`);
+        
+        closeApplyRulesModal();
+        await loadFolders();
+        
+    } catch (error) {
+        console.error('应用规则失败:', error);
+        showNotification(`应用规则失败: ${error}`, 'error');
+    }
 }
 
 // 分栏视图中的规则排序
