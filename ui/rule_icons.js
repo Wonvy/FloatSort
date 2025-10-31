@@ -8,8 +8,12 @@ function initIconPicker() {
     
     if (!iconSelector || !colorPicker || !iconPreview) return;
     
-    // 点击图标选择器打开图标选择窗口
-    iconSelector.addEventListener('click', openIconPicker);
+    // 左键点击图标选择器打开图标选择窗口
+    iconSelector.addEventListener('click', (e) => {
+        if (e.button === 0) {  // 左键
+            openIconPicker();
+        }
+    });
     
     // 颜色选择器变化
     colorPicker.addEventListener('change', (e) => {
@@ -17,9 +21,15 @@ function initIconPicker() {
         iconPreview.style.color = e.target.value;
     });
     
+    // 让div可以获得焦点以接收paste事件
+    iconSelector.setAttribute('tabindex', '0');
+    iconSelector.setAttribute('contenteditable', 'false');
+    
     // Ctrl+V 粘贴SVG
     iconSelector.addEventListener('paste', (e) => {
         e.preventDefault();
+        e.stopPropagation();
+        
         const pastedText = e.clipboardData.getData('text');
         
         // 检查是否是SVG代码
@@ -28,16 +38,22 @@ function initIconPicker() {
             appState.selectedIcon = null;  // 清除bootstrap图标类
             
             // 在预览中显示SVG
-            iconPreview.outerHTML = `<div id="ruleIconPreview" style="color: ${appState.selectedColor};">${pastedText}</div>`;
+            const preview = document.getElementById('ruleIconPreview');
+            if (preview) {
+                preview.outerHTML = `<div id="ruleIconPreview" style="color: ${appState.selectedColor};">${pastedText}</div>`;
+            }
             
-            showNotification('SVG图标已设置', 'success');
+            showNotification('✅ SVG图标已设置', 'success');
         } else {
-            showNotification('请粘贴有效的SVG代码', 'error');
+            showNotification('❌ 请粘贴有效的SVG代码（以<svg开头）', 'error');
         }
     });
     
-    // 让div可以获得焦点以接收paste事件
-    iconSelector.setAttribute('tabindex', '0');
+    // 右键菜单
+    iconSelector.addEventListener('contextmenu', (e) => {
+        e.preventDefault();
+        showIconContextMenu(e.clientX, e.clientY);
+    });
 }
 
 // 打开图标选择器
@@ -149,6 +165,100 @@ window.renderRuleIcon = function(rule) {
         const iconClass = rule.icon || 'bi bi-file-earmark';
         return `<div class="rule-icon-display" style="background: ${color}20;"><i class="${iconClass}" style="color: ${color};"></i></div>`;
     }
+}
+
+// 显示图标右键菜单
+function showIconContextMenu(x, y) {
+    // 移除已存在的菜单
+    const existingMenu = document.getElementById('iconContextMenu');
+    if (existingMenu) {
+        existingMenu.remove();
+    }
+    
+    // 创建菜单
+    const menu = document.createElement('div');
+    menu.id = 'iconContextMenu';
+    menu.className = 'context-menu';
+    menu.style.left = x + 'px';
+    menu.style.top = y + 'px';
+    
+    menu.innerHTML = `
+        <div class="context-menu-item" onclick="pasteFromClipboard()">
+            <svg width="14" height="14" viewBox="0 0 16 16" fill="none">
+                <path d="M5.5 2A1.5 1.5 0 0 0 4 3.5v9A1.5 1.5 0 0 0 5.5 14h5a1.5 1.5 0 0 0 1.5-1.5v-9A1.5 1.5 0 0 0 10.5 2h-5z" stroke="currentColor" stroke-width="1.5"/>
+                <path d="M6 1h4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+            </svg>
+            粘贴 SVG (Ctrl+V)
+        </div>
+        <div class="context-menu-item" onclick="openIconPicker(); closeIconContextMenu();">
+            <svg width="14" height="14" viewBox="0 0 16 16" fill="none">
+                <circle cx="8" cy="8" r="6" stroke="currentColor" stroke-width="1.5" fill="none"/>
+                <path d="M8 5v3M8 11h.01" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+            </svg>
+            从图标库选择
+        </div>
+        <div class="context-menu-item" onclick="resetToDefaultIcon(); closeIconContextMenu();">
+            <svg width="14" height="14" viewBox="0 0 16 16" fill="none">
+                <path d="M8 2a6 6 0 0 0-6 6h2a4 4 0 0 1 4-4V2z" fill="currentColor"/>
+                <path d="M2 8a6 6 0 0 0 6 6v-2a4 4 0 0 1-4-4H2z" fill="currentColor"/>
+            </svg>
+            恢复默认图标
+        </div>
+    `;
+    
+    document.body.appendChild(menu);
+    
+    // 点击其他地方关闭菜单
+    setTimeout(() => {
+        document.addEventListener('click', closeIconContextMenu);
+    }, 0);
+}
+
+// 关闭右键菜单
+function closeIconContextMenu() {
+    const menu = document.getElementById('iconContextMenu');
+    if (menu) {
+        menu.remove();
+    }
+    document.removeEventListener('click', closeIconContextMenu);
+}
+
+// 从剪贴板粘贴
+window.pasteFromClipboard = async function() {
+    closeIconContextMenu();
+    
+    try {
+        const text = await navigator.clipboard.readText();
+        
+        if (text.trim().startsWith('<svg')) {
+            appState.selectedIconSvg = text;
+            appState.selectedIcon = null;
+            
+            const preview = document.getElementById('ruleIconPreview');
+            if (preview) {
+                preview.outerHTML = `<div id="ruleIconPreview" style="color: ${appState.selectedColor};">${text}</div>`;
+            }
+            
+            showNotification('✅ SVG图标已设置', 'success');
+        } else {
+            showNotification('❌ 剪贴板中不是有效的SVG代码', 'error');
+        }
+    } catch (error) {
+        showNotification('❌ 无法读取剪贴板: ' + error.message, 'error');
+    }
+}
+
+// 恢复默认图标
+window.resetToDefaultIcon = function() {
+    appState.selectedIcon = 'bi bi-file-earmark';
+    appState.selectedIconSvg = null;
+    
+    const preview = document.getElementById('ruleIconPreview');
+    if (preview) {
+        preview.outerHTML = `<i class="bi bi-file-earmark" id="ruleIconPreview" style="color: ${appState.selectedColor};"></i>`;
+    }
+    
+    showNotification('✅ 已恢复默认图标', 'success');
 }
 
 // 页面加载时初始化
