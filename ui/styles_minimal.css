@@ -2643,6 +2643,7 @@ input[readonly] {
     border-radius: 4px;
     border-left: 3px solid #27ae60;
     transition: all 0.2s;
+    position: relative;
 }
 
 .batch-file-item-compact-two-line:hover {
@@ -2652,6 +2653,45 @@ input[readonly] {
 
 .batch-file-item-compact-two-line:last-child {
     margin-bottom: 0;
+}
+
+/* 文件处理状态图标 */
+.batch-file-status {
+    width: 24px;
+    min-width: 24px;
+    height: 24px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 16px;
+    font-weight: bold;
+    margin-right: 8px;
+}
+
+.batch-file-item-compact-two-line.file-success {
+    background: #f0f9f4;
+    border-left-color: #4CAF50;
+}
+
+.batch-file-item-compact-two-line.file-success .batch-file-to {
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.batch-file-item-compact-two-line.file-success .batch-file-to:hover {
+    text-decoration: underline;
+    color: #1e8e3e;
+}
+
+.batch-file-item-compact-two-line.file-skipped {
+    background: #fff8e1;
+    border-left-color: #FF9800;
+    opacity: 0.7;
+}
+
+.batch-file-item-compact-two-line.file-failed {
+    background: #ffebee;
+    border-left-color: #F44336;
 }
 
 /* 规则名称显示在左侧 */

@@ -234,6 +234,48 @@ fn open_folder(path: String) -> Result<(), String> {
     Ok(())
 }
 
+#[tauri::command]
+fn open_file_location(path: String) -> Result<(), String> {
+    use std::process::Command;
+    
+    info!("在文件管理器中打开文件: {}", path);
+    
+    #[cfg(target_os = "windows")]
+    {
+        // Windows: 使用 /select 参数在资源管理器中选中文件
+        Command::new("explorer")
+            .args(&["/select,", &path])
+            .spawn()
+            .map_err(|e| format!("无法打开文件位置: {}", e))?;
+    }
+    
+    #[cfg(target_os = "macos")]
+    {
+        // macOS: 使用 -R 参数在Finder中显示文件
+        Command::new("open")
+            .args(&["-R", &path])
+            .spawn()
+            .map_err(|e| format!("无法打开文件位置: {}", e))?;
+    }
+    
+    #[cfg(target_os = "linux")]
+    {
+        // Linux: 使用 dbus 调用文件管理器（如果支持）
+        // 否则打开文件所在的文件夹
+        use std::path::Path;
+        if let Some(parent) = Path::new(&path).parent() {
+            Command::new("xdg-open")
+                .arg(parent)
+                .spawn()
+                .map_err(|e| format!("无法打开文件位置: {}", e))?;
+        } else {
+            return Err("无法确定文件路径".to_string());
+        }
+    }
+    
+    Ok(())
+}
+
 // ============ 文件夹管理命令 ============
 
 // Tauri 命令：获取所有文件夹
@@ -778,6 +820,7 @@ fn main() {
             clear_processed_files,
             select_folder,
             open_folder,
+            open_file_location,
             get_folders,
             add_folder,
             update_folder,

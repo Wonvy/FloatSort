@@ -93,15 +93,28 @@ pub fn organize_single_file(file_path: &str, rules: &[Rule]) -> Result<String> {
     let path = Path::new(file_path);
     let file_info = get_file_info(path)?;
 
-    info!("正在检查文件是否匹配规则: {}", file_path);
+    // 记录日志时区分文件和文件夹
+    if file_info.is_directory {
+        info!("正在检查文件夹是否匹配规则: {}", file_path);
+    } else {
+        info!("正在检查文件是否匹配规则: {}", file_path);
+    }
     
     match organize_file(&file_info, rules)? {
         Some(new_path) => {
-            info!("✓ 文件已整理: {} -> {}", file_path, new_path);
+            if file_info.is_directory {
+                info!("✓ 文件夹已整理: {} -> {}", file_path, new_path);
+            } else {
+                info!("✓ 文件已整理: {} -> {}", file_path, new_path);
+            }
             Ok(new_path)
         },
         None => {
-            info!("⚠️ 文件未匹配任何规则，跳过: {}", file_path);
+            if file_info.is_directory {
+                info!("⚠️ 文件夹未匹配任何规则，跳过: {}", file_path);
+            } else {
+                info!("⚠️ 文件未匹配任何规则，跳过: {}", file_path);
+            }
             Ok("文件未匹配任何规则".to_string())
         },
     }
@@ -119,22 +132,24 @@ fn execute_action(action: &RuleAction, file_info: &FileInfo, engine: &RuleEngine
                 move_to_recycle_bin(source_path)?;
                 Ok(Some("已移动到回收站".to_string()))
             } else {
-                let dest_path = engine
+                let dest_dir = engine
                     .get_destination_path(action, file_info, base_path, regex_captures)
                     .context("无法获取目标路径")?;
                 
-                move_file_with_strategy(source_path, &dest_path, conflict_strategy)?;
-                Ok(Some(dest_path))
+                // move_file_with_strategy 返回实际的目标文件完整路径
+                let final_path = move_file_with_strategy(source_path, &dest_dir, conflict_strategy)?;
+                Ok(Some(final_path))
             }
         }
 
         RuleAction::CopyTo { destination: _ } => {
-            let dest_path = engine
+            let dest_dir = engine
                 .get_destination_path(action, file_info, base_path, regex_captures)
                 .context("无法获取目标路径")?;
             
-            copy_file_with_strategy(source_path, &dest_path, conflict_strategy)?;
-            Ok(Some(dest_path))
+            // copy_file_with_strategy 返回实际的目标文件完整路径
+            let final_path = copy_file_with_strategy(source_path, &dest_dir, conflict_strategy)?;
+            Ok(Some(final_path))
         }
 
         RuleAction::Rename { pattern: _ } => {
@@ -168,8 +183,30 @@ fn move_to_recycle_bin(source: &Path) -> Result<()> {
     Ok(())
 }
 
+/// 递归复制目录
+fn copy_dir_all(src: &Path, dst: &Path) -> Result<()> {
+    fs::create_dir_all(dst)
+        .with_context(|| format!("创建目标目录失败: {:?}", dst))?;
+    
+    for entry in fs::read_dir(src)
+        .with_context(|| format!("读取源目录失败: {:?}", src))? {
+        let entry = entry?;
+        let file_type = entry.file_type()?;
+        let src_path = entry.path();
+        let dst_path = dst.join(entry.file_name());
+        
+        if file_type.is_dir() {
+            copy_dir_all(&src_path, &dst_path)?;
+        } else {
+            fs::copy(&src_path, &dst_path)
+                .with_context(|| format!("复制文件失败: {:?} -> {:?}", src_path, dst_path))?;
+        }
+    }
+    Ok(())
+}
+
 /// 根据冲突策略移动文件
-fn move_file_with_strategy(source: &Path, dest_dir: &str, strategy: &ConflictStrategy) -> Result<()> {
+fn move_file_with_strategy(source: &Path, dest_dir: &str, strategy: &ConflictStrategy) -> Result<String> {
     let dest_path = PathBuf::from(dest_dir);
     
     // 创建目标目录
@@ -188,7 +225,7 @@ fn move_file_with_strategy(source: &Path, dest_dir: &str, strategy: &ConflictStr
         match strategy {
             ConflictStrategy::Skip => {
                 info!("目标文件已存在，跳过: {:?}", final_dest);
-                return Ok(());
+                return Ok(final_dest.to_string_lossy().to_string());
             }
             ConflictStrategy::Overwrite => {
                 info!("目标文件已存在，将覆盖: {:?}", final_dest);
@@ -202,22 +239,33 @@ fn move_file_with_strategy(source: &Path, dest_dir: &str, strategy: &ConflictStr
         }
     }
 
-    // 移动文件
+    // 移动文件或文件夹
     fs::rename(source, &final_dest)
         .or_else(|_| -> Result<()> {
             // 如果跨分区移动失败，则先复制再删除
-            fs::copy(source, &final_dest)?;
-            fs::remove_file(source)?;
+            if source.is_dir() {
+                // 对于目录，需要递归复制
+                copy_dir_all(source, &final_dest)?;
+                fs::remove_dir_all(source)?;
+            } else {
+                // 对于文件，直接复制
+                fs::copy(source, &final_dest)?;
+                fs::remove_file(source)?;
+            }
             Ok(())
         })
-        .with_context(|| format!("移动文件失败: {:?} -> {:?}", source, final_dest))?;
+        .with_context(|| format!("移动失败: {:?} -> {:?}", source, final_dest))?;
 
-    info!("文件已移动: {:?} -> {:?}", source, final_dest);
-    Ok(())
+    if source.is_dir() {
+        info!("文件夹已移动: {:?} -> {:?}", source, final_dest);
+    } else {
+        info!("文件已移动: {:?} -> {:?}", source, final_dest);
+    }
+    Ok(final_dest.to_string_lossy().to_string())
 }
 
 /// 根据冲突策略复制文件
-fn copy_file_with_strategy(source: &Path, dest_dir: &str, strategy: &ConflictStrategy) -> Result<()> {
+fn copy_file_with_strategy(source: &Path, dest_dir: &str, strategy: &ConflictStrategy) -> Result<String> {
     let dest_path = PathBuf::from(dest_dir);
     
     // 创建目标目录
@@ -236,7 +284,7 @@ fn copy_file_with_strategy(source: &Path, dest_dir: &str, strategy: &ConflictStr
         match strategy {
             ConflictStrategy::Skip => {
                 info!("目标文件已存在，跳过: {:?}", final_dest);
-                return Ok(());
+                return Ok(final_dest.to_string_lossy().to_string());
             }
             ConflictStrategy::Overwrite => {
                 info!("目标文件已存在，将覆盖: {:?}", final_dest);
@@ -255,7 +303,7 @@ fn copy_file_with_strategy(source: &Path, dest_dir: &str, strategy: &ConflictStr
         .with_context(|| format!("复制文件失败: {:?} -> {:?}", source, final_dest))?;
 
     info!("文件已复制: {:?} -> {:?}", source, final_dest);
-    Ok(())
+    Ok(final_dest.to_string_lossy().to_string())
 }
 
 /// 生成副本文件名（例如：file.txt -> file (副本).txt，file (副本).txt -> file (副本 2).txt）

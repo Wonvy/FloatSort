@@ -681,6 +681,8 @@ function setupBackendListeners() {
             
             // 如果达到批量阈值，显示确认窗口
             if (appState.pendingBatch.length >= appState.batchThreshold) {
+                // 清除选中的规则ID，使用所有规则
+                appState.selectedRuleIds = null;
                 showBatchConfirm();
             } else {
                 // 否则直接处理
@@ -1045,7 +1047,7 @@ async function showBatchConfirmWithRule(ruleId) {
                     <span class="section-count">${matchedFiles.length}</span>
                 </div>
                 <div class="batch-section-content">
-                    ${matchedFiles.map(file => {
+                    ${matchedFiles.map((file, index) => {
                         // 提取源文件名
                         const sourceFileName = file.path.split(/[\\/]/).pop();
                         const sourcePath = file.path.substring(0, file.path.lastIndexOf(sourceFileName));
@@ -1054,7 +1056,8 @@ async function showBatchConfirmWithRule(ruleId) {
                         const targetPath = file.targetPath.substring(0, file.targetPath.lastIndexOf(targetFileName));
                         
                         return `
-                        <div class="batch-file-item-compact-two-line">
+                        <div class="batch-file-item-compact-two-line" data-file-path="${file.path.replace(/"/g, '&quot;')}" data-file-index="${index}">
+                            <div class="batch-file-status"></div>
                             <div class="batch-file-rule">${file.ruleName || '规则'}</div>
                             <div class="batch-file-paths">
                                 <div class="batch-file-from">从: <span class="path-dir">${sourcePath}</span><span class="path-file">${sourceFileName}</span></div>
@@ -1180,7 +1183,7 @@ async function showBatchConfirmWithMultipleRules(ruleIds) {
                     <span class="section-count">${matchedFiles.length}</span>
                 </div>
                 <div class="batch-section-content">
-                    ${matchedFiles.map(file => {
+                    ${matchedFiles.map((file, index) => {
                         // 提取源文件名
                         const sourceFileName = file.path.split(/[\\/]/).pop();
                         const sourcePath = file.path.substring(0, file.path.lastIndexOf(sourceFileName));
@@ -1189,7 +1192,8 @@ async function showBatchConfirmWithMultipleRules(ruleIds) {
                         const targetPath = file.targetPath.substring(0, file.targetPath.lastIndexOf(targetFileName));
                         
                         return `
-                        <div class="batch-file-item-compact-two-line">
+                        <div class="batch-file-item-compact-two-line" data-file-path="${file.path.replace(/"/g, '&quot;')}" data-file-index="${index}">
+                            <div class="batch-file-status"></div>
                             <div class="batch-file-rule">${file.ruleName || '规则'}</div>
                             <div class="batch-file-paths">
                                 <div class="batch-file-from">从: <span class="path-dir">${sourcePath}</span><span class="path-file">${sourceFileName}</span></div>
@@ -1536,7 +1540,19 @@ async function showFolderPendingFiles(folderId) {
     
     // 使用批量确认窗口显示待处理文件
     appState.pendingBatch = [...pendingFiles];
-    showBatchConfirm();
+    
+    // 如果文件夹关联了规则，使用这些规则；否则使用所有规则
+    if (folder.rule_ids && folder.rule_ids.length > 0) {
+        console.log('[待处理文件] 使用文件夹关联的规则:', folder.rule_ids);
+        // 设置选中的规则ID，供 confirmBatch 使用
+        appState.selectedRuleIds = [...folder.rule_ids];
+        await showBatchConfirmWithMultipleRules(folder.rule_ids);
+    } else {
+        console.log('[待处理文件] 文件夹未关联规则，使用所有规则');
+        // 清除选中的规则ID，使用所有规则
+        appState.selectedRuleIds = null;
+        await showBatchConfirm();
+    }
 }
 
 // ========== 渲染规则列表 ==========
@@ -2401,11 +2417,13 @@ async function openFolderModal(folderId = null) {
             }
         }
         
-        rulesCheckboxes.innerHTML = orderedRules.map((rule, index) => `
+        rulesCheckboxes.innerHTML = orderedRules.map((rule, index) => {
+            const destPath = rule.action?.destination || '(未设置)';
+            return `
             <div class="rule-sort-item" data-rule-id="${rule.id}" data-index="${index}">
                 <label class="checkbox-label">
                     <input type="checkbox" value="${rule.id}" ${folderId && appState.folders.find(f => f.id === folderId)?.rule_ids.includes(rule.id) ? 'checked' : ''}>
-                    <span>${rule.name}</span>
+                    <span>${rule.name} <span style="color: #999; font-size: 0.9em;">→ ${destPath}</span></span>
                 </label>
                 <div class="rule-item-actions">
                     <div class="rule-sort-buttons">
@@ -2432,7 +2450,8 @@ async function openFolderModal(folderId = null) {
                     </button>
                 </div>
             </div>
-        `).join('');
+        `;
+        }).join('');
     }
     
     if (folderId) {
@@ -4026,7 +4045,7 @@ async function showBatchConfirm() {
                     <span class="section-count">${matchedFiles.length}</span>
                 </div>
                 <div class="batch-section-content">
-                    ${matchedFiles.map(file => {
+                    ${matchedFiles.map((file, index) => {
                         // 提取源文件名
                         const sourceFileName = file.path.split(/[\\/]/).pop();
                         const sourcePath = file.path.substring(0, file.path.lastIndexOf(sourceFileName));
@@ -4035,7 +4054,8 @@ async function showBatchConfirm() {
                         const targetPath = file.targetPath.substring(0, file.targetPath.lastIndexOf(targetFileName));
                         
                         return `
-                        <div class="batch-file-item-compact-two-line">
+                        <div class="batch-file-item-compact-two-line" data-file-path="${file.path.replace(/"/g, '&quot;')}" data-file-index="${index}">
+                            <div class="batch-file-status"></div>
                             <div class="batch-file-rule">${file.ruleName || '规则'}</div>
                             <div class="batch-file-paths">
                                 <div class="batch-file-from">从: <span class="path-dir">${sourcePath}</span><span class="path-file">${sourceFileName}</span></div>
@@ -4090,9 +4110,9 @@ window.toggleBatchSection = function(header) {
 async function confirmBatch() {
     const files = [...appState.pendingBatch];
     
-    // 隐藏文件列表，显示进度条
-    document.getElementById('batchFileList').style.display = 'none';
-    document.getElementById('batchProgress').style.display = 'block';
+    // 保持文件列表显示，隐藏进度条
+    document.getElementById('batchFileList').style.display = 'block';
+    document.getElementById('batchProgress').style.display = 'none';
     
     // 禁用按钮
     const confirmBtn = document.getElementById('confirmBatch');
@@ -4113,12 +4133,21 @@ async function confirmBatch() {
     // 逐个处理文件
     for (let i = 0; i < files.length; i++) {
         const file = files[i];
-        const progress = ((i + 1) / files.length) * 100;
         
-        // 更新进度显示
-        document.getElementById('progressBar').style.width = `${progress}%`;
-        document.getElementById('progressCount').textContent = `${i + 1} / ${files.length}`;
-        document.getElementById('progressText').textContent = `正在整理: ${file.name}`;
+        // 找到对应的文件项元素（需要转义CSS选择器中的特殊字符）
+        // 在CSS选择器中，反斜杠需要被转义为 \\
+        const escapedPath = file.path.replace(/\\/g, '\\\\').replace(/"/g, '\\"');
+        const fileItem = document.querySelector(`[data-file-path="${escapedPath}"]`);
+        const statusEl = fileItem?.querySelector('.batch-file-status');
+        
+        if (!fileItem) {
+            console.warn('[批量整理] 找不到文件项:', file.path);
+        }
+        
+        // 标记为正在处理
+        if (statusEl) {
+            statusEl.innerHTML = '<span style="color: #2196F3;">⏳</span>';
+        }
         
         try {
             let result;
@@ -4152,21 +4181,50 @@ async function confirmBatch() {
             if (result === '') {
                 // 文件被跳过（已处理过）
                 skipCount++;
-                document.getElementById('skipCount').textContent = skipCount;
+                if (statusEl) {
+                    statusEl.innerHTML = '<span style="color: #FF9800;" title="已处理过，跳过">⊘</span>';
+                    fileItem?.classList.add('file-skipped');
+                }
             } else if (result === '文件未匹配任何规则') {
-                // 文件未匹配任何规则，也算跳过
+                // 文件/文件夹未匹配任何规则，也算跳过
                 skipCount++;
-                document.getElementById('skipCount').textContent = skipCount;
+                if (statusEl) {
+                    statusEl.innerHTML = '<span style="color: #FF9800;" title="未匹配任何规则">⊘</span>';
+                    fileItem?.classList.add('file-skipped');
+                }
             } else {
                 // 成功处理（返回了新路径）
                 successCount++;
-                document.getElementById('successCount').textContent = successCount;
+                if (statusEl) {
+                    statusEl.innerHTML = '<span style="color: #4CAF50;" title="整理成功">✓</span>';
+                    fileItem?.classList.add('file-success');
+                    
+                    // 添加点击打开文件功能
+                    const toPathEl = fileItem?.querySelector('.batch-file-to');
+                    if (toPathEl && result) {
+                        toPathEl.setAttribute('data-target-path', result);
+                        toPathEl.style.cursor = 'pointer';
+                        toPathEl.title = '点击打开文件';
+                        toPathEl.addEventListener('click', async () => {
+                            try {
+                                await invoke('open_file_location', { path: result });
+                                console.log('[批量整理] 打开文件:', result);
+                            } catch (error) {
+                                console.error('[批量整理] 打开文件失败:', error);
+                                showNotification('打开文件失败: ' + error, 'error');
+                            }
+                        });
+                    }
+                }
             }
         } catch (error) {
             console.error(`处理文件失败: ${file.name}`, error);
             addActivity(`❌ ${file.name} 处理失败: ${error}`, 'error');
             failCount++;
-            document.getElementById('failCount').textContent = failCount;
+            if (statusEl) {
+                statusEl.innerHTML = '<span style="color: #F44336;" title="处理失败">✗</span>';
+                fileItem?.classList.add('file-failed');
+            }
         }
     }
     
