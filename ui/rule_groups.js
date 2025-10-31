@@ -59,7 +59,14 @@ function renderRulesGrouped() {
                 displayPath = `${destination}`;
             }
         } else if (destination) {
-            displayPath = `${destination}`;
+            // 相对路径：显示为 ...\最后一部分
+            const parts = destination.split(/[\\/]/);
+            if (parts.length > 1) {
+                const lastName = parts[parts.length - 1];
+                displayPath = `...\\${lastName}`;
+            } else {
+                displayPath = `${destination}`;
+            }
         }
         
         // 渲染组头
