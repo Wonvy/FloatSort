@@ -1,6 +1,6 @@
 [package]
 name = "floatsort"
-version = "0.1.0"
+version = "0.3.0"
 description = "智能悬浮文件整理器 - Smart Floating File Organizer"
 authors = ["FloatSort Contributors"]
 license = "MIT"
