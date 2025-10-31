@@ -2693,7 +2693,7 @@ input[readonly] {
     grid-template-columns: 20px 1fr auto auto 38px;
     align-items: center;
     gap: 8px;
-    padding: 8px 12px;
+    padding: 8px 16px;
     background: linear-gradient(135deg, #f9fafb 0%, #f3f4f6 100%);
     border-bottom: 1px solid #e5e7eb;
     cursor: pointer;
