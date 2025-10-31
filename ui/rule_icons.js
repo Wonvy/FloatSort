@@ -1,5 +1,9 @@
 // 规则图标管理功能
 
+// 存储事件处理函数引用，防止重复绑定
+let iconPickerInitialized = false;
+let iconSelectorHandlers = null;
+
 // 初始化图标选择器
 window.initIconPicker = function() {
     const iconSelector = document.getElementById('ruleIconSelector');
@@ -11,23 +15,93 @@ window.initIconPicker = function() {
         return;
     }
     
+    // 如果已经初始化过，先移除旧的事件监听器
+    if (iconSelectorHandlers) {
+        console.log('[图标选择器] 移除旧的事件监听器');
+        iconSelector.removeEventListener('mouseenter', iconSelectorHandlers.mouseenter);
+        iconSelector.removeEventListener('mouseleave', iconSelectorHandlers.mouseleave);
+        iconSelector.removeEventListener('click', iconSelectorHandlers.click);
+        iconSelector.removeEventListener('paste', iconSelectorHandlers.paste);
+        iconSelector.removeEventListener('contextmenu', iconSelectorHandlers.contextmenu);
+    }
+    
     console.log('[图标选择器] 开始初始化事件监听器');
     
-    // 移除旧的事件监听器（通过克隆节点）
-    const newIconSelector = iconSelector.cloneNode(true);
-    iconSelector.parentNode.replaceChild(newIconSelector, iconSelector);
-    const iconSelectorFresh = document.getElementById('ruleIconSelector');
-    
     // 让div可以获得焦点以接收paste事件
-    iconSelectorFresh.setAttribute('tabindex', '0');
-    iconSelectorFresh.style.outline = 'none';
+    iconSelector.setAttribute('tabindex', '0');
+    iconSelector.style.outline = 'none';
+    iconSelector.style.cursor = 'pointer';
     
-    // 左键点击图标选择器打开图标选择窗口
-    iconSelectorFresh.addEventListener('click', (e) => {
-        console.log('[图标选择器] 点击事件触发');
-        openIconPicker();
-        iconSelectorFresh.focus();  // 聚焦以便接收粘贴
-    });
+    // 定义事件处理函数
+    const handlers = {
+        // 鼠标悬停时自动聚焦，以便接收粘贴事件
+        mouseenter: (e) => {
+            console.log('[图标选择器] 鼠标悬停，自动聚焦');
+            iconSelector.focus();
+        },
+        
+        // 鼠标离开时失去焦点
+        mouseleave: (e) => {
+            if (document.activeElement === iconSelector) {
+                iconSelector.blur();
+            }
+        },
+        
+        // 左键点击图标选择器打开图标选择窗口
+        click: (e) => {
+            console.log('[图标选择器] 点击事件触发');
+            e.stopPropagation();
+            openIconPicker();
+        },
+        
+        // Ctrl+V 粘贴SVG
+        paste: (e) => {
+            console.log('[图标选择器] 粘贴事件触发');
+            e.preventDefault();
+            e.stopPropagation();
+            
+            const pastedText = e.clipboardData.getData('text');
+            console.log('[图标选择器] 粘贴内容:', pastedText.substring(0, 50));
+            
+            // 检查是否是SVG代码
+            if (pastedText.trim().startsWith('<svg')) {
+                appState.selectedIconSvg = pastedText;
+                appState.selectedIcon = null;  // 清除bootstrap图标类
+                
+                // 在预览中显示SVG
+                const preview = document.getElementById('ruleIconPreview');
+                if (preview) {
+                    preview.outerHTML = `<div id="ruleIconPreview" style="color: ${appState.selectedColor};">${pastedText}</div>`;
+                }
+                
+                showNotification('✅ SVG图标已设置', 'success');
+                
+                // 重新初始化（因为outerHTML会替换元素）
+                setTimeout(() => initIconPicker(), 50);
+            } else {
+                showNotification('❌ 请粘贴有效的SVG代码（以<svg开头）', 'error');
+            }
+        },
+        
+        // 右键菜单
+        contextmenu: (e) => {
+            console.log('[图标选择器] 右键菜单触发，位置:', e.clientX, e.clientY);
+            e.preventDefault();
+            e.stopPropagation();
+            showIconContextMenu(e.clientX, e.clientY);
+            return false;
+        }
+    };
+    
+    // 绑定事件
+    iconSelector.addEventListener('mouseenter', handlers.mouseenter);
+    iconSelector.addEventListener('mouseleave', handlers.mouseleave);
+    iconSelector.addEventListener('click', handlers.click);
+    iconSelector.addEventListener('paste', handlers.paste);
+    iconSelector.addEventListener('contextmenu', handlers.contextmenu);
+    
+    // 保存处理函数引用
+    iconSelectorHandlers = handlers;
     
     // 颜色选择器变化
     colorPicker.addEventListener('change', (e) => {
@@ -38,47 +112,7 @@ window.initIconPicker = function() {
         }
     });
     
-    // Ctrl+V 粘贴SVG
-    iconSelectorFresh.addEventListener('paste', (e) => {
-        console.log('[图标选择器] 粘贴事件触发');
-        e.preventDefault();
-        e.stopPropagation();
-        
-        const pastedText = e.clipboardData.getData('text');
-        console.log('[图标选择器] 粘贴内容:', pastedText.substring(0, 50));
-        
-        // 检查是否是SVG代码
-        if (pastedText.trim().startsWith('<svg')) {
-            appState.selectedIconSvg = pastedText;
-            appState.selectedIcon = null;  // 清除bootstrap图标类
-            
-            // 在预览中显示SVG
-            const preview = document.getElementById('ruleIconPreview');
-            if (preview) {
-                preview.outerHTML = `<div id="ruleIconPreview" style="color: ${appState.selectedColor};">${pastedText}</div>`;
-            }
-            
-            showNotification('✅ SVG图标已设置', 'success');
-        } else {
-            showNotification('❌ 请粘贴有效的SVG代码（以<svg开头）', 'error');
-        }
-    });
-    
-    // 键盘事件支持 Ctrl+V
-    iconSelectorFresh.addEventListener('keydown', (e) => {
-        if ((e.ctrlKey || e.metaKey) && e.key === 'v') {
-            console.log('[图标选择器] Ctrl+V 按键检测');
-        }
-    });
-    
-    // 右键菜单
-    iconSelectorFresh.addEventListener('contextmenu', (e) => {
-        console.log('[图标选择器] 右键菜单触发');
-        e.preventDefault();
-        e.stopPropagation();
-        showIconContextMenu(e.clientX, e.clientY);
-    });
-    
+    iconPickerInitialized = true;
     console.log('[图标选择器] 初始化完成');
 }
 
