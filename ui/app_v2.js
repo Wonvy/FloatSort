@@ -1,5 +1,16 @@
 // FloatSort V2 - 主应用逻辑
 
+// ========== 图标库 ==========
+const BOOTSTRAP_ICONS = [
+    'file-earmark', 'file-earmark-text', 'file-earmark-pdf', 'file-earmark-image', 'file-earmark-music',
+    'file-earmark-video', 'file-earmark-zip', 'file-earmark-code', 'folder', 'folder-fill',
+    'image', 'music-note', 'film', 'file-zip', 'code', 'file-word', 'file-excel', 'file-ppt',
+    'camera', 'download', 'upload', 'cloud', 'archive', 'book', 'bookmark', 'calendar',
+    'clock', 'star', 'heart', 'tag', 'tags', 'paperclip', 'pin', 'flag',
+    'trash', 'recycle', 'box', 'inbox', 'send', 'save', 'printer', 'clipboard',
+    'scissors', 'filter', 'funnel', 'search', 'grid', 'list', 'layout-text-sidebar', 'diagram-3'
+];
+
 // ========== 全局状态 ==========
 const appState = {
     folders: [],
@@ -8,6 +19,9 @@ const appState = {
     filesProcessed: 0,
     editingFolderId: null,
     editingRuleId: null,
+    selectedIcon: 'bi bi-file-earmark',  // 当前选中的图标类
+    selectedIconSvg: null,  // 自定义SVG代码
+    selectedColor: '#667eea',  // 当前选中的颜色
     pendingBatch: [],  // 待整理文件队列
     batchThreshold: 1,  // 批量确认阈值（从配置读取）
     currentConditions: [],  // 当前规则的条件列表
@@ -1601,6 +1615,7 @@ function renderRules() {
         return `
             <div class="rule-card compact ${!rule.enabled ? 'disabled' : ''}" data-rule-id="${rule.id}" data-index="${index}" title="${fullConditionTooltip}">
                 <span class="rule-order-number">${index + 1}</span>
+                ${renderRuleIcon(rule)}
                 <div class="rule-name-col">
                     <div class="rule-name">${rule.name}</div>
                 </div>
@@ -1816,6 +1831,7 @@ function renderSplitView() {
                     return `
                         <div class="rule-card compact ${!rule.enabled ? 'disabled' : ''}" data-rule-id="${rule.id}" data-index="${globalIndex}" title="${fullConditionTooltip}">
                             <span class="rule-order-number">${globalIndex + 1}</span>
+                            ${renderRuleIcon(rule)}
                             <div class="rule-name-col">
                                 <div class="rule-name">${rule.name}</div>
                             </div>
@@ -3072,6 +3088,9 @@ async function openRuleModal(ruleId = null) {
         document.getElementById('ruleName').value = rule.name;
         document.getElementById('targetFolder').value = rule.action.destination;
         
+        // 加载图标和颜色
+        loadRuleIconAndColor(rule);
+        
         // 设置文件冲突处理策略
         const conflictStrategy = rule.conflict_strategy || 'skip';
         document.getElementById('conflictStrategy').value = conflictStrategy;
@@ -3132,6 +3151,9 @@ async function openRuleModal(ruleId = null) {
     } else {
         // 新增模式
         title.textContent = '📝 创建规则';
+        
+        // 加载默认图标和颜色
+        loadRuleIconAndColor(null);
         
         // 如果有预设的目标文件夹，填充到目标文件夹输入框
         if (appState.presetDestination) {
@@ -3215,6 +3237,9 @@ async function saveRule() {
     // 获取文件冲突处理策略
     const conflictStrategy = document.getElementById('conflictStrategy').value || 'skip';
     
+    // 获取图标和颜色信息
+    const iconData = getRuleIconData();
+    
     const rule = {
         id: appState.editingRuleId || `rule_${Date.now()}`,
         name,
@@ -3224,6 +3249,9 @@ async function saveRule() {
         action: { type: 'MoveTo', destination: target },
         priority: 0,
         conflict_strategy: conflictStrategy,
+        icon: iconData.icon,
+        icon_svg: iconData.icon_svg,
+        color: iconData.color,
     };
     
     try {

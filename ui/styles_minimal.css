@@ -419,6 +419,122 @@ body {
     display: none;
 }
 
+/* ========== 规则图标选择器 ========== */
+.rule-name-with-icon {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.rule-icon-selector {
+    width: 40px;
+    height: 40px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border: 2px solid #e5e7eb;
+    border-radius: 8px;
+    cursor: pointer;
+    transition: all 0.2s;
+    background: white;
+    flex-shrink: 0;
+}
+
+.rule-icon-selector:hover {
+    border-color: #667eea;
+    transform: scale(1.05);
+}
+
+.rule-icon-selector i,
+.rule-icon-selector svg {
+    font-size: 20px;
+    width: 20px;
+    height: 20px;
+}
+
+#ruleColorPicker {
+    width: 40px;
+    height: 40px;
+    border: 2px solid #e5e7eb;
+    border-radius: 8px;
+    cursor: pointer;
+    flex-shrink: 0;
+}
+
+#ruleColorPicker::-webkit-color-swatch-wrapper {
+    padding: 0;
+}
+
+#ruleColorPicker::-webkit-color-swatch {
+    border: none;
+    border-radius: 6px;
+}
+
+#ruleName {
+    flex: 1;
+}
+
+/* 图标选择器网格 */
+.icon-search-input {
+    width: 100%;
+    padding: 10px 12px;
+    border: 1px solid #e5e7eb;
+    border-radius: 6px;
+    margin-bottom: 16px;
+    font-size: 14px;
+}
+
+.icon-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(50px, 1fr));
+    gap: 8px;
+    max-height: 400px;
+    overflow-y: auto;
+    padding: 8px;
+}
+
+.icon-grid-item {
+    width: 100%;
+    aspect-ratio: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border: 2px solid #e5e7eb;
+    border-radius: 8px;
+    cursor: pointer;
+    transition: all 0.2s;
+    background: white;
+}
+
+.icon-grid-item:hover {
+    border-color: #667eea;
+    background: #f8f9ff;
+    transform: scale(1.05);
+}
+
+.icon-grid-item i {
+    font-size: 24px;
+    color: #374151;
+}
+
+/* 规则列表中的图标显示 */
+.rule-icon-display {
+    width: 32px;
+    height: 32px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 6px;
+    flex-shrink: 0;
+}
+
+.rule-icon-display i,
+.rule-icon-display svg {
+    font-size: 16px;
+    width: 16px;
+    height: 16px;
+}
+
 /* ========== 按钮 ========== */
 .btn-primary,
 .btn-secondary {
