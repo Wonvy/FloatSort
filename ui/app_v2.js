@@ -34,7 +34,9 @@ const appState = {
     pendingDeleteItem: null,  // 待删除的项目 { type: 'rule'|'folder', id: string, name: string }
     pendingFilesByFolder: {},  // 按文件夹分组的待处理文件队列 { folderId: [{ path, name }, ...] }
     collapsedGroups: new Set(),  // 折叠的规则组（存储目标路径）
-    viewMode: 'grouped',  // 规则列表视图模式：'grouped' 分组视图 | 'list' 列表视图
+    viewMode: 'grouped',  // 规则列表视图模式：'grouped' 分组视图 | 'list' 列表视图 | 'split' 分栏视图
+    selectedFolderId: null,  // 分栏视图中选中的文件夹ID
+    presetDestination: null,  // 预设的目标文件夹路径（用于分组视图快速添加规则）
 };
 
 // 为规则生成字母编号
@@ -46,13 +48,18 @@ function getRuleLabel(index) {
 function updateViewIcon(viewMode) {
     const groupIcon = document.getElementById('view-icon-group');
     const listIcon = document.getElementById('view-icon-list');
+    const splitIcon = document.getElementById('view-icon-split');
+    
+    if (groupIcon) groupIcon.style.display = 'none';
+    if (listIcon) listIcon.style.display = 'none';
+    if (splitIcon) splitIcon.style.display = 'none';
     
     if (viewMode === 'grouped') {
         if (groupIcon) groupIcon.style.display = 'block';
-        if (listIcon) listIcon.style.display = 'none';
-    } else {
-        if (groupIcon) groupIcon.style.display = 'none';
+    } else if (viewMode === 'list') {
         if (listIcon) listIcon.style.display = 'block';
+    } else if (viewMode === 'split') {
+        if (splitIcon) splitIcon.style.display = 'block';
     }
 }
 
@@ -1482,6 +1489,11 @@ function renderRules() {
         return;
     }
     
+    if (appState.viewMode === 'split') {
+        renderSplitView();
+        return;
+    }
+    
     // 列表视图渲染
     const rulesList = document.getElementById('rulesList');
     
@@ -1646,6 +1658,217 @@ function renderRules() {
     
     // 为规则卡片添加点击选择事件监听
     setupRuleSelection();
+}
+
+// ========== 分栏视图渲染 ==========
+function renderSplitView() {
+    const rulesList = document.getElementById('rulesList');
+    
+    if (appState.folders.length === 0) {
+        rulesList.innerHTML = `
+            <div class="empty-state">
+                <span class="empty-icon">📁</span>
+                <p>暂无文件夹</p>
+                <p class="empty-hint">请先添加监控文件夹</p>
+            </div>
+        `;
+        return;
+    }
+    
+    // 如果没有选中文件夹，默认选中第一个
+    if (!appState.selectedFolderId && appState.folders.length > 0) {
+        appState.selectedFolderId = appState.folders[0].id;
+    }
+    
+    const selectedFolder = appState.folders.find(f => f.id === appState.selectedFolderId);
+    const folderRules = selectedFolder ? appState.rules.filter(r => selectedFolder.rule_ids.includes(r.id)) : [];
+    
+    rulesList.innerHTML = `
+        <div class="split-view-container">
+            <div class="split-view-sidebar">
+                ${appState.folders.map(folder => {
+                    const ruleCount = appState.rules.filter(r => folder.rule_ids.includes(r.id)).length;
+                    return `
+                        <div class="split-folder-item ${folder.id === appState.selectedFolderId ? 'active' : ''}"
+                             onclick="selectFolderInSplit('${folder.id}')">
+                            <div class="split-folder-name">${folder.name}</div>
+                            <div class="split-folder-path">${folder.path}</div>
+                            <div class="split-folder-stats">
+                                <span>📋 ${ruleCount} 个规则</span>
+                                <span>${folder.enabled ? '✅ 已启用' : '❌ 已禁用'}</span>
+                            </div>
+                        </div>
+                    `;
+                }).join('')}
+            </div>
+            <div class="split-view-content">
+                ${folderRules.length === 0 ? `
+                    <div class="split-empty-state">
+                        <span style="font-size: 48px;">📋</span>
+                        <p style="margin-top: 16px; font-size: 14px;">该文件夹暂无关联规则</p>
+                        <p style="font-size: 12px; margin-top: 8px;">点击"添加规则"为此文件夹创建规则</p>
+                    </div>
+                ` : folderRules.map((rule, index) => {
+                    const condition = rule.conditions && rule.conditions.length > 0 ? rule.conditions[0] : null;
+                    let conditionText = '';
+                    
+                    // 格式化条件
+                    const formatCondition = (cond) => {
+                        if (cond.type === 'Extension') {
+                            return `扩展名: ${cond.values.join(', ')}`;
+                        } else if (cond.type === 'NameContains') {
+                            return `包含: ${cond.pattern}`;
+                        } else if (cond.type === 'NameRegex') {
+                            return `正则: ${cond.pattern}`;
+                        } else if (cond.type === 'SizeRange') {
+                            const minMB = cond.min ? Math.round(cond.min / 1024 / 1024) : null;
+                            const maxMB = cond.max ? Math.round(cond.max / 1024 / 1024) : null;
+                            if (minMB && maxMB) {
+                                return `大小: ${minMB}-${maxMB}MB`;
+                            } else if (minMB) {
+                                return `大小: ≥${minMB}MB`;
+                            } else if (maxMB) {
+                                return `大小: ≤${maxMB}MB`;
+                            } else {
+                                return `大小: 不限`;
+                            }
+                        } else {
+                            return `条件: ${cond.type}`;
+                        }
+                    };
+                    
+                    // 生成完整条件提示文本
+                    let fullConditionTooltip = '';
+                    if (rule.conditions && rule.conditions.length > 0) {
+                        fullConditionTooltip = rule.conditions.map((c, i) => `${i + 1}. ${formatCondition(c)}`).join('\n');
+                    } else {
+                        fullConditionTooltip = '无条件';
+                    }
+                    
+                    if (condition) {
+                        conditionText = formatCondition(condition);
+                    } else {
+                        conditionText = '无条件';
+                    }
+                    
+                    // 如果有多个条件，添加提示
+                    if (rule.conditions && rule.conditions.length > 1) {
+                        conditionText += ` (+${rule.conditions.length - 1})`;
+                    }
+                    
+                    const destination = rule.action.destination;
+                    const isRecycleBin = destination === '{recycle}';
+                    let displayPath = destination;
+                    if (isRecycleBin) {
+                        displayPath = '回收站';
+                    }
+                    
+                    const globalIndex = appState.rules.findIndex(r => r.id === rule.id);
+                    
+                    return `
+                        <div class="rule-card compact ${!rule.enabled ? 'disabled' : ''}" data-rule-id="${rule.id}" data-index="${globalIndex}" title="${fullConditionTooltip}">
+                            <span class="rule-order-number">${globalIndex + 1}</span>
+                            <div class="rule-name-col">
+                                <div class="rule-name">${rule.name}</div>
+                            </div>
+                            <div class="rule-condition-col" title="${fullConditionTooltip}">
+                                <div class="rule-condition-label">条件</div>
+                                <div class="rule-condition-value">${conditionText}</div>
+                            </div>
+                            <div class="rule-destination-col">
+                                <div class="rule-destination-label">移动到</div>
+                                <div class="rule-destination-value">${displayPath}</div>
+                            </div>
+                            <div class="rule-usage">
+                                <span class="usage-badge">1</span>
+                                <span class="usage-text">个文件夹</span>
+                            </div>
+                            <div class="rule-order-controls">
+                                <button class="order-btn order-left" onclick="moveRuleSplitUp(${index})" ${index === 0 ? 'disabled' : ''} title="上移">
+                                    <svg width="12" height="12" viewBox="0 0 16 16" fill="none">
+                                        <path d="M4 10L8 6L12 10" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+                                    </svg>
+                                </button>
+                                <button class="order-btn order-right" onclick="moveRuleSplitDown(${index})" ${index === folderRules.length - 1 ? 'disabled' : ''} title="下移">
+                                    <svg width="12" height="12" viewBox="0 0 16 16" fill="none">
+                                        <path d="M4 6L8 10L12 6" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+                                    </svg>
+                                </button>
+                            </div>
+                            <div class="rule-actions">
+                                <button class="btn-icon btn-sm btn-always-visible" onclick="editRule('${rule.id}')" title="编辑">
+                                    <svg width="14" height="14" viewBox="0 0 16 16" fill="none">
+                                        <path d="M11.5 2L14 4.5L5.5 13H3V10.5L11.5 2Z" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+                                        <path d="M10 3.5L12.5 6" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+                                    </svg>
+                                </button>
+                                <button class="btn-icon btn-sm" onclick="deleteRule('${rule.id}')" title="删除">
+                                    <svg width="14" height="14" viewBox="0 0 16 16" fill="none">
+                                        <path d="M3 4H13" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+                                        <path d="M5 4V3C5 2.5 5.5 2 6 2H10C10.5 2 11 2.5 11 3V4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+                                        <path d="M5 4V13C5 13.5 5.5 14 6 14H10C10.5 14 11 13.5 11 13V4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+                                        <path d="M7 7V11M9 7V11" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+                                    </svg>
+                                </button>
+                            </div>
+                            <button class="rule-toggle ${rule.enabled ? 'active' : ''}" 
+                                    onclick="toggleRule('${rule.id}')" title="${rule.enabled ? '禁用' : '启用'}">
+                            </button>
+                        </div>
+                    `;
+                }).join('')}
+            </div>
+        </div>
+    `;
+}
+
+// 选择分栏视图中的文件夹
+window.selectFolderInSplit = function(folderId) {
+    appState.selectedFolderId = folderId;
+    renderRules();
+}
+
+// 分栏视图中的规则排序
+window.moveRuleSplitUp = async function(index) {
+    const selectedFolder = appState.folders.find(f => f.id === appState.selectedFolderId);
+    if (!selectedFolder) return;
+    
+    const folderRules = appState.rules.filter(r => selectedFolder.rule_ids.includes(r.id));
+    if (index <= 0 || index >= folderRules.length) return;
+    
+    // 在全局规则列表中交换
+    const rule1 = folderRules[index];
+    const rule2 = folderRules[index - 1];
+    const globalIdx1 = appState.rules.findIndex(r => r.id === rule1.id);
+    const globalIdx2 = appState.rules.findIndex(r => r.id === rule2.id);
+    
+    const temp = appState.rules[globalIdx1];
+    appState.rules[globalIdx1] = appState.rules[globalIdx2];
+    appState.rules[globalIdx2] = temp;
+    
+    await saveRulesOrder();
+    renderRules();
+}
+
+window.moveRuleSplitDown = async function(index) {
+    const selectedFolder = appState.folders.find(f => f.id === appState.selectedFolderId);
+    if (!selectedFolder) return;
+    
+    const folderRules = appState.rules.filter(r => selectedFolder.rule_ids.includes(r.id));
+    if (index < 0 || index >= folderRules.length - 1) return;
+    
+    // 在全局规则列表中交换
+    const rule1 = folderRules[index];
+    const rule2 = folderRules[index + 1];
+    const globalIdx1 = appState.rules.findIndex(r => r.id === rule1.id);
+    const globalIdx2 = appState.rules.findIndex(r => r.id === rule2.id);
+    
+    const temp = appState.rules[globalIdx1];
+    appState.rules[globalIdx1] = appState.rules[globalIdx2];
+    appState.rules[globalIdx2] = temp;
+    
+    await saveRulesOrder();
+    renderRules();
 }
 
 // ========== 规则排序功能 ==========
@@ -2670,6 +2893,12 @@ async function openRuleModal(ruleId = null) {
     } else {
         // 新增模式
         title.textContent = '📝 创建规则';
+        
+        // 如果有预设的目标文件夹，填充到目标文件夹输入框
+        if (appState.presetDestination) {
+            document.getElementById('targetFolder').value = appState.presetDestination;
+            appState.presetDestination = null; // 使用后清除
+        }
     }
     
     // 初始化条件构建器和扩展名标签

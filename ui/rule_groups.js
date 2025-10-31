@@ -83,6 +83,11 @@ function renderRulesGrouped() {
                         <span class="group-destination" style="color: ${iconColor};" title="${destination}">${displayPath}</span>
                         <span class="group-count">${group.rules.length} 个规则</span>
                     </div>
+                    <button class="btn-icon btn-sm group-add-rule" onclick="addRuleToGroup('${destination.replace(/\\/g, '\\\\').replace(/'/g, "\\'")}', event)" title="添加规则到此分组">
+                        <svg width="14" height="14" viewBox="0 0 16 16" fill="none">
+                            <path d="M8 3V13M3 8H13" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+                        </svg>
+                    </button>
                     <div class="group-order-controls">
                         <button class="order-btn order-left" onclick="moveGroupUp(${groupIndex})" ${groupIndex === 0 ? 'disabled' : ''} title="上移组">
                             <svg width="12" height="12" viewBox="0 0 16 16" fill="none">
@@ -410,5 +415,19 @@ function getGroupedRules() {
         groups.get(dest).rules.push(rule);
     });
     return Array.from(groups.values());
+}
+
+// 为分组添加规则
+window.addRuleToGroup = function(destination, event) {
+    // 阻止事件冒泡，防止触发折叠/展开
+    if (event) {
+        event.stopPropagation();
+    }
+    
+    // 设置预设目标路径
+    appState.presetDestination = destination;
+    
+    // 打开规则模态框
+    openRuleModal();
 }
 

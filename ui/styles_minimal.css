@@ -242,6 +242,78 @@ body {
     color: #667eea;
 }
 
+/* ========== 分栏视图 ========== */
+.split-view-container {
+    display: flex;
+    gap: 12px;
+    height: calc(100vh - 180px);
+    overflow: hidden;
+}
+
+.split-view-sidebar {
+    width: 280px;
+    flex-shrink: 0;
+    border: 1px solid #e5e7eb;
+    border-radius: 8px;
+    overflow-y: auto;
+    background: #fafbfc;
+}
+
+.split-view-content {
+    flex: 1;
+    border: 1px solid #e5e7eb;
+    border-radius: 8px;
+    overflow-y: auto;
+    background: #fff;
+    padding: 12px;
+}
+
+.split-folder-item {
+    padding: 12px 16px;
+    cursor: pointer;
+    transition: all 0.2s;
+    border-bottom: 1px solid #f3f4f6;
+}
+
+.split-folder-item:hover {
+    background: #f3f4f6;
+}
+
+.split-folder-item.active {
+    background: linear-gradient(135deg, #667eea15 0%, #764ba215 100%);
+    border-left: 3px solid #667eea;
+}
+
+.split-folder-name {
+    font-size: 14px;
+    font-weight: 500;
+    color: #1f2937;
+    margin-bottom: 4px;
+}
+
+.split-folder-path {
+    font-size: 12px;
+    color: #6b7280;
+}
+
+.split-folder-stats {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-top: 6px;
+    font-size: 11px;
+    color: #9ca3af;
+}
+
+.split-empty-state {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    height: 100%;
+    color: #9ca3af;
+}
+
 /* ========== 按钮 ========== */
 .btn-primary,
 .btn-secondary {
@@ -2734,7 +2806,7 @@ input[readonly] {
 
 .rule-group-header {
     display: grid;
-    grid-template-columns: 18px 1fr 55px 65px 32px; /* 缩小各列 */
+    grid-template-columns: 18px 1fr 22px 55px 65px 32px; /* 添加22px列用于"添加规则"按钮 */
     align-items: center;
     gap: 6px; /* 8px → 6px */
     padding: 6px 12px; /* 8px 16px → 6px 12px */
@@ -2797,6 +2869,15 @@ input[readonly] {
     background: #fff;
     border-radius: 8px; /* 10px → 8px */
     font-weight: 500;
+}
+
+.group-add-rule {
+    opacity: 0;
+    transition: opacity 0.2s;
+}
+
+.rule-group-header:hover .group-add-rule {
+    opacity: 1;
 }
 
 .group-order-controls {
