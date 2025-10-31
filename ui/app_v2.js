@@ -1681,13 +1681,13 @@ window.removeFolderRule = async function(ruleId) {
 // 保存规则顺序到后端
 async function saveRulesOrder() {
     try {
-        await invoke('reorder_rules', { 
-            ruleIds: appState.rules.map(r => r.id) 
-        });
+        const ruleIds = appState.rules.map(r => r.id);
+        console.log(`[保存顺序] 当前规则数量: ${ruleIds.length}, IDs:`, ruleIds);
+        await invoke('reorder_rules', { ruleIds });
         console.log('✓ 规则顺序已保存');
     } catch (error) {
-        console.error('保存规则顺序失败:', error);
-        showNotification('保存规则顺序失败', 'error');
+        console.error(`保存规则顺序失败 (当前 ${appState.rules.length} 个规则):`, error);
+        showNotification(`保存规则顺序失败: ${error}`, 'error');
     }
 }
 
@@ -2847,7 +2847,7 @@ async function executeDelete() {
             let deletedCount = 0;
             for (const rule of rulesInGroup) {
                 try {
-                    await invoke('delete_rule', { ruleId: rule.id });
+                    await invoke('remove_rule', { ruleId: rule.id });
                     deletedCount++;
                 } catch (error) {
                     console.error(`删除规则 ${rule.name} 失败:`, error);

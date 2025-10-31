@@ -222,7 +222,7 @@ function renderRuleInGroup(rule, ruleIndexInGroup, totalInGroup, groupDestinatio
                 <button class="btn-icon btn-sm btn-always-visible" onclick="editRule('${rule.id}')" title="编辑">
                     <svg width="14" height="14" viewBox="0 0 16 16" fill="none">
                         <path d="M11.5 2L14 4.5L5.5 13H3V10.5L11.5 2Z" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
-                        <path d="10 3.5L12.5 6" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+                        <path d="M10 3.5L12.5 6" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
                     </svg>
                 </button>
                 <button class="btn-icon btn-sm" onclick="deleteRule('${rule.id}')" title="删除">
@@ -271,7 +271,8 @@ window.toggleGroup = async function(destination) {
         }
     }
     
-    renderRulesGrouped();
+    // 重新加载规则以确保状态同步
+    await loadRules();
     addActivity(`${newState ? '✅ 启用' : '❌ 禁用'}组 [${destination || '(未设置)'}] 的所有规则`);
 };
 
