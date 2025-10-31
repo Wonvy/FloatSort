@@ -8,6 +8,7 @@ mod file_ops;
 mod models;
 mod activity_log;
 mod scheduler;
+mod window_snap;
 
 use config::{AppConfig, WatchFolder};
 use file_monitor::FileMonitor;
@@ -27,6 +28,7 @@ struct AppState {
     monitor: Arc<Mutex<Option<FileMonitor>>>,
     stats: Arc<Mutex<Statistics>>,
     processed_files: Arc<Mutex<HashSet<String>>>, // 记录已处理的文件路径
+    window_snap_running: Arc<Mutex<bool>>, // 窗口折叠功能是否运行中
 }
 
 // 统计信息
@@ -711,6 +713,7 @@ fn main() {
         monitor: Arc::new(Mutex::new(None)),
         stats: Arc::new(Mutex::new(Statistics::default())),
         processed_files: Arc::new(Mutex::new(HashSet::new())),
+        window_snap_running: Arc::new(Mutex::new(false)),
     };
 
     // 创建系统托盘菜单
@@ -797,10 +800,28 @@ fn main() {
             import_config,
             save_file,
             read_file,
-            exit_app
+            exit_app,
+            window_snap::start_window_snap,
+            window_snap::stop_window_snap,
+            window_snap::check_window_near_edge,
+            window_snap::trigger_window_snap
         ])
-        .setup(|_app| {
+        .setup(|app| {
             info!("FloatSort 初始化完成");
+            
+            // 自动启动窗口折叠功能
+            let window = app.get_window("main").unwrap();
+            let app_handle = app.handle();
+            
+            std::thread::spawn(move || {
+                std::thread::sleep(std::time::Duration::from_secs(1)); // 等待1秒后启动
+                if let Err(e) = window_snap::start_window_snap(window, app_handle) {
+                    info!("自动启动窗口折叠功能失败: {}", e);
+                } else {
+                    info!("窗口折叠功能已自动启动");
+                }
+            });
+            
             Ok(())
         })
         .run(tauri::generate_context!())

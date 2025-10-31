@@ -4,6 +4,9 @@
 const appState = {
     folders: [],
     rules: [],
+    windowDragging: false, // 窗口是否正在被拖动
+    snapEdge: null, // 当前准备折叠的边缘 ('top', 'left', 'right')
+    collapsed: false, // 窗口是否已折叠
     monitoring: false,
     filesProcessed: 0,
     editingFolderId: null,
@@ -142,8 +145,7 @@ function initializeApp() {
     setupEventListeners();
     setupBackendListeners();
     setupWindowListeners();
-    // setupCollapseExpand(); // 已禁用：不再需要窗口折叠功能
-    // startPositionMonitoring(); // 已禁用：不再需要窗口折叠功能
+    setupWindowSnap(); // 新的窗口折叠功能
     loadAppData();
     // loadActivityLogs();  // 已禁用：改为使用前端实时日志
     
@@ -225,13 +227,9 @@ function setupEventListeners() {
     document.getElementById('closeWindowBtn').addEventListener('click', exitProgram);
     
     // 拖拽区域监听（检测拖拽状态）
+    // 注释：拖动检测已移至 setupWindowSnap() 函数中
     const appHeader = document.querySelector('.app-header');
     if (appHeader) {
-        appHeader.addEventListener('mousedown', () => {
-            appState.isDragging = true;
-            console.log('[拖拽] 开始拖拽完整窗口');
-        });
-        
         // 双击标题栏全屏/还原
         appHeader.addEventListener('dblclick', async (e) => {
             // 如果双击的是按钮，不处理
@@ -4956,5 +4954,166 @@ window.editRule = editRule;
 window.deleteRule = deleteRule;
 window.toggleRule = toggleRule;
 window.selectRule = selectRule;
+
+// ========== 窗口折叠功能 ==========
+function setupWindowSnap() {
+    const indicatorTop = document.getElementById('snapIndicatorTop');
+    const indicatorLeft = document.getElementById('snapIndicatorLeft');
+    const indicatorRight = document.getElementById('snapIndicatorRight');
+    const appHeader = document.querySelector('.app-header');
+    
+    console.log('[窗口折叠] setupWindowSnap 已调用');
+    console.log('[窗口折叠] 标记线元素:', {
+        top: indicatorTop,
+        left: indicatorLeft,
+        right: indicatorRight,
+        header: appHeader
+    });
+    
+    if (!appHeader) {
+        console.error('[窗口折叠] 未找到 .app-header 元素');
+        return;
+    }
+    
+    let checkInterval = null;
+    let mouseDown = false;
+    
+    // 直接在标题栏上监听鼠标按下事件
+    appHeader.addEventListener('mousedown', (e) => {
+        // 忽略按钮点击
+        if (e.target.closest('button')) {
+            return;
+        }
+        console.log('[窗口折叠] 检测到拖动标题栏');
+        mouseDown = true;
+        appState.windowDragging = true;
+        appState.isDragging = true; // 保持与其他拖动逻辑一致
+        startSnapCheck();
+    });
+    
+    // 监听全局鼠标松开事件
+    document.addEventListener('mouseup', async () => {
+        if (!mouseDown) return; // 如果没有按下，不处理
+        
+        console.log('[窗口折叠] 鼠标松开, snapEdge:', appState.snapEdge);
+        mouseDown = false;
+        appState.windowDragging = false;
+        appState.isDragging = false; // 重置拖动状态
+        stopSnapCheck();
+        
+        // 如果有准备折叠的边缘，执行折叠
+        if (appState.snapEdge) {
+            try {
+                console.log('[窗口折叠] 调用 trigger_window_snap:', appState.snapEdge);
+                await invoke('trigger_window_snap', { edge: appState.snapEdge });
+                appState.collapsed = true;
+                console.log(`[窗口折叠] 窗口已折叠到${appState.snapEdge}边缘`);
+            } catch (error) {
+                console.error('[窗口折叠] 折叠窗口失败:', error);
+            }
+        }
+        
+        // 隐藏所有标记线
+        indicatorTop.classList.remove('active');
+        indicatorLeft.classList.remove('active');
+        indicatorRight.classList.remove('active');
+        appState.snapEdge = null;
+    });
+    
+    // 开始检查窗口位置
+    function startSnapCheck() {
+        if (checkInterval) return;
+        
+        console.log('[窗口折叠] startSnapCheck 已启动');
+        
+        checkInterval = setInterval(async () => {
+            if (!mouseDown) {
+                stopSnapCheck();
+                return;
+            }
+            
+            try {
+                // 询问后端窗口是否接近边缘
+                const result = await invoke('check_window_near_edge');
+                console.log('[窗口折叠] check_window_near_edge 返回:', result);
+                
+                // 隐藏所有标记线
+                indicatorTop.classList.remove('active');
+                indicatorLeft.classList.remove('active');
+                indicatorRight.classList.remove('active');
+                appState.snapEdge = null;
+                
+                // 根据结果显示对应的标记线
+                if (result === 'Top') {
+                    console.log('[窗口折叠] 显示顶部标记线');
+                    indicatorTop.classList.add('active');
+                    appState.snapEdge = 'Top';
+                } else if (result === 'Left') {
+                    console.log('[窗口折叠] 显示左侧标记线');
+                    indicatorLeft.classList.add('active');
+                    appState.snapEdge = 'Left';
+                } else if (result === 'Right') {
+                    console.log('[窗口折叠] 显示右侧标记线');
+                    indicatorRight.classList.add('active');
+                    appState.snapEdge = 'Right';
+                }
+            } catch (error) {
+                console.error('[窗口折叠] check_window_near_edge 错误:', error);
+            }
+        }, 50); // 每50ms检查一次
+    }
+    
+    // 停止检查
+    function stopSnapCheck() {
+        if (checkInterval) {
+            clearInterval(checkInterval);
+            checkInterval = null;
+        }
+    }
+    
+    // 监听展开事件（鼠标移到边缘时后端会触发）
+    listen('window_expand', async () => {
+        appState.collapsed = false;
+        console.log('[窗口折叠] 窗口已展开');
+    });
+    
+    // 鼠标离开窗口自动折叠功能
+    let leaveTimer = null;
+    const AUTO_COLLAPSE_DELAY = 1000; // 1秒后自动折叠
+    
+    document.addEventListener('mouseleave', () => {
+        // 如果窗口已经折叠，或正在拖动，不处理
+        if (appState.collapsed || appState.windowDragging) {
+            return;
+        }
+        
+        console.log('[窗口折叠] 鼠标离开窗口，1秒后自动折叠');
+        
+        // 清除之前的计时器
+        if (leaveTimer) {
+            clearTimeout(leaveTimer);
+        }
+        
+        // 1秒后自动折叠到顶部
+        leaveTimer = setTimeout(async () => {
+            try {
+                console.log('[窗口折叠] 执行自动折叠到顶部');
+                await invoke('trigger_window_snap', { edge: 'Top' });
+                appState.collapsed = true;
+            } catch (error) {
+                console.error('[窗口折叠] 自动折叠失败:', error);
+            }
+        }, AUTO_COLLAPSE_DELAY);
+    });
+    
+    document.addEventListener('mouseenter', () => {
+        // 鼠标重新进入窗口，取消自动折叠
+        if (leaveTimer) {
+            console.log('[窗口折叠] 鼠标重新进入窗口，取消自动折叠');
+            clearTimeout(leaveTimer);
+            leaveTimer = null;
+        }
+    });
+}
 
 

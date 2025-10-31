@@ -19,7 +19,19 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        platform: [macos-latest, windows-latest]
+        include:
+          # Windows
+          - platform: windows-latest
+            target: x86_64-pc-windows-msvc
+            name: windows-x64
+          # macOS Intel
+          - platform: macos-13
+            target: x86_64-apple-darwin
+            name: macos-intel
+          # macOS Apple Silicon
+          - platform: macos-14
+            target: aarch64-apple-darwin
+            name: macos-apple-silicon
 
     runs-on: ${{ matrix.platform }}
 
@@ -29,6 +41,8 @@ jobs:
 
       - name: Install Rust stable
         uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
 
       - name: Rust cache
         uses: swatinem/rust-cache@v2
@@ -42,31 +56,31 @@ jobs:
         if: matrix.platform == 'windows-latest'
         run: |
           cd src-tauri
-          cargo tauri build --bundles msi,nsis
+          cargo tauri build --bundles msi,nsis --target ${{ matrix.target }}
 
       - name: Build Tauri app (macOS)
-        if: matrix.platform == 'macos-latest'
+        if: startsWith(matrix.platform, 'macos-')
         run: |
           cd src-tauri
-          cargo tauri build --bundles dmg,app
+          cargo tauri build --bundles dmg,app --target ${{ matrix.target }}
 
       - name: Upload Windows artifacts
         if: matrix.platform == 'windows-latest'
         uses: actions/upload-artifact@v4
         with:
-          name: floatsort-windows
+          name: floatsort-${{ matrix.name }}
           path: |
-            target/release/bundle/msi/*.msi
-            target/release/bundle/nsis/*.exe
+            target/${{ matrix.target }}/release/bundle/msi/*.msi
+            target/${{ matrix.target }}/release/bundle/nsis/*.exe
 
       - name: Upload macOS artifacts
-        if: matrix.platform == 'macos-latest'
+        if: startsWith(matrix.platform, 'macos-')
         uses: actions/upload-artifact@v4
         with:
-          name: floatsort-macos
+          name: floatsort-${{ matrix.name }}
           path: |
-            target/release/bundle/dmg/*.dmg
-            target/release/bundle/macos/*.app
+            target/${{ matrix.target }}/release/bundle/dmg/*.dmg
+            target/${{ matrix.target }}/release/bundle/macos/*.app
 
   release:
     needs: build
@@ -91,8 +105,15 @@ jobs:
             智能文件自动整理工具
             
             ### 下载说明
-            - **Windows 用户**: 下载 `.exe` 或 `.msi` 文件
-            - **macOS 用户**: 下载 `.dmg` 文件
+            - **Windows 用户**: 下载 `floatsort-windows-x64` 中的 `.exe` 或 `.msi` 文件
+            - **macOS Intel 用户**: 下载 `floatsort-macos-intel` 中的 `.dmg` 文件
+            - **macOS Apple Silicon (M1/M2/M3) 用户**: 下载 `floatsort-macos-apple-silicon` 中的 `.dmg` 文件
+            
+            ### 如何确认您的 Mac 类型
+            - 点击 Apple 菜单 () > 关于本机
+            - 查看"芯片"或"处理器"信息：
+              - 如果显示 "Apple M1/M2/M3" → 下载 Apple Silicon 版本
+              - 如果显示 "Intel" → 下载 Intel 版本
             
             ### 更新内容
             请查看下方自动生成的更新日志

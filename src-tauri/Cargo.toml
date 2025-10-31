@@ -24,6 +24,9 @@ regex = "1.10"
 image = "0.24"
 trash = "3.0"
 
+[target.'cfg(windows)'.dependencies]
+winapi = { version = "0.3", features = ["winuser"] }
+
 [features]
 default = ["custom-protocol"]
 custom-protocol = ["tauri/custom-protocol"]
