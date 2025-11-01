@@ -20,7 +20,7 @@ impl Scheduler {
 
     /// 启动调度器 - 处理"启动时执行"的文件夹
     pub fn start(&self) {
-        info!("📅 调度器启动");
+        info!("调度器启动");
         
         // 处理"启动时执行"的文件夹
         self.process_on_startup_folders();
@@ -49,7 +49,7 @@ impl Scheduler {
             return;
         }
 
-        info!("🔄 发现 {} 个需要在启动时执行的文件夹", on_startup_folders.len());
+        info!("发现 {} 个需要在启动时执行的文件夹", on_startup_folders.len());
 
         // 在后台线程中执行，避免阻塞主线程
         let window = self.window.clone();
@@ -58,7 +58,7 @@ impl Scheduler {
             thread::sleep(Duration::from_secs(1));
             
             for folder in on_startup_folders {
-                info!("🔄 启动时执行: {} ({})", folder.name, folder.path);
+                info!("启动时执行: {} ({})", folder.name, folder.path);
                 Self::scan_and_emit_folder(&folder, &config, &window);
             }
         });
@@ -84,7 +84,7 @@ impl Scheduler {
             return;
         }
 
-        info!("⏱️ 发现 {} 个需要定时执行的文件夹", scheduled_folders.len());
+        info!("发现 {} 个需要定时执行的文件夹", scheduled_folders.len());
 
         // 为每个定时文件夹创建独立的监控线程
         for folder in scheduled_folders {
@@ -93,14 +93,14 @@ impl Scheduler {
             
             thread::spawn(move || {
                 let folder_name = folder.name.clone();
-                info!("⏱️ 启动定时任务: {}", folder_name);
+                info!("启动定时任务: {}", folder_name);
                 
                 loop {
                     // 计算下次执行时间
                     let wait_duration = match Self::calculate_next_execution(&folder) {
                         Some(duration) => duration,
                         None => {
-                            warn!("⚠️ 无法计算下次执行时间: {}", folder_name);
+                            warn!("无法计算下次执行时间: {}", folder_name);
                             thread::sleep(Duration::from_secs(60)); // 等待1分钟后重试
                             continue;
                         }
@@ -112,7 +112,7 @@ impl Scheduler {
                     thread::sleep(wait_duration);
                     
                     // 执行扫描
-                    info!("🚀 执行定时任务: {}", folder_name);
+                    info!("执行定时任务: {}", folder_name);
                     Self::scan_and_emit_folder(&folder, &config_clone, &window);
                 }
             });
@@ -181,7 +181,7 @@ impl Scheduler {
             }
             
             None => {
-                warn!("⚠️ 定时文件夹缺少调度类型配置");
+                warn!("定时文件夹缺少调度类型配置");
                 None
             }
         }
@@ -199,7 +199,7 @@ impl Scheduler {
         let path = PathBuf::from(&folder.path);
         
         if !path.exists() {
-            warn!("⚠️ 文件夹不存在: {} ({})", folder.name, folder.path);
+            warn!("文件夹不存在: {} ({})", folder.name, folder.path);
             return;
         }
 
@@ -207,7 +207,7 @@ impl Scheduler {
         let entries = match fs::read_dir(&path) {
             Ok(entries) => entries,
             Err(e) => {
-                error!("❌ 无法读取文件夹 {}: {}", folder.name, e);
+                error!("无法读取文件夹 {}: {}", folder.name, e);
                 return;
             }
         };
@@ -235,13 +235,13 @@ impl Scheduler {
 
             // 发送文件检测事件到前端
             if let Err(e) = window.emit("file-detected", file_path_str.clone()) {
-                error!("❌ 无法发送文件检测事件: {} - {}", file_path_str, e);
+                error!("无法发送文件检测事件: {} - {}", file_path_str, e);
             } else {
                 file_count += 1;
             }
         }
 
-        info!("✅ {} 扫描完成，发现 {} 个文件", folder.name, file_count);
+        info!("{} 扫描完成，发现 {} 个文件", folder.name, file_count);
     }
 
     /// 判断是否为临时文件

@@ -256,19 +256,45 @@ function updateUILanguage() {
         checksSelect.options[3].textContent = t('settings.checks5');
     }
     
+    // 6. 更新日志管理部分
+    const logManagementTitle = document.getElementById('logManagementTitle');
+    if (logManagementTitle) logManagementTitle.textContent = t('settings.logManagement');
+    
+    const logManagementDescription = document.getElementById('logManagementDescription');
+    if (logManagementDescription) logManagementDescription.textContent = t('settings.logManagementDescription');
+    
+    const logRetentionDaysLabel = document.getElementById('logRetentionDaysLabel');
+    if (logRetentionDaysLabel) logRetentionDaysLabel.textContent = t('settings.logRetentionDays');
+    
+    const logManagementHint = document.getElementById('logManagementHint');
+    if (logManagementHint) logManagementHint.textContent = t('settings.logManagementHint');
+    
+    const logRetentionSelect = document.getElementById('logRetentionDaysSelect');
+    if (logRetentionSelect) {
+        logRetentionSelect.options[0].textContent = t('settings.days7');
+        logRetentionSelect.options[1].textContent = t('settings.days15');
+        logRetentionSelect.options[2].textContent = t('settings.days30');
+        logRetentionSelect.options[3].textContent = t('settings.days60');
+        logRetentionSelect.options[4].textContent = t('settings.days90');
+        logRetentionSelect.options[5].textContent = t('settings.daysForever');
+    }
+    
     // 5. 更新活动日志面板
     const activityLogTitle = document.getElementById('activityLogTitle');
     if (activityLogTitle) activityLogTitle.textContent = t('activity.title');
     
     const clearActivityBtnText = document.getElementById('clearActivityBtnText');
-    if (clearActivityBtnText) clearActivityBtnText.textContent = '🗑️ ' + t('activity.clearLog');
+    if (clearActivityBtnText) clearActivityBtnText.textContent = t('activity.clearLog');
     
-    const clearProcessedBtnText = document.getElementById('clearProcessedBtnText');
-    if (clearProcessedBtnText) clearProcessedBtnText.textContent = '🔄 ' + t('activity.clearProcessed');
+    const openLogFolderBtnText = document.getElementById('openLogFolderBtnText');
+    if (openLogFolderBtnText) openLogFolderBtnText.textContent = t('activity.openLogFolder');
     
     // 更新按钮的 title 属性
-    const clearProcessedBtn = document.getElementById('clearProcessedBtn');
-    if (clearProcessedBtn) clearProcessedBtn.title = t('activity.clearProcessedHint');
+    const openLogFolderBtn = document.getElementById('openLogFolderBtn');
+    if (openLogFolderBtn) openLogFolderBtn.title = t('activity.openLogFolderHint');
+    
+    const todayBtnText = document.getElementById('todayBtnText');
+    if (todayBtnText) todayBtnText.textContent = t('activity.today');
     
     // 更新初始活动消息
     const initialActivityTime = document.getElementById('initialActivityTime');
@@ -424,6 +450,8 @@ const appState = {
     viewMode: 'grouped',  // 规则列表视图模式：'grouped' 分组视图 | 'list' 列表视图 | 'split' 分栏视图
     selectedFolderId: null,  // 分栏视图中选中的文件夹ID
     presetDestination: null,  // 预设的目标文件夹路径（用于分组视图快速添加规则）
+    currentLogDate: null,  // 当前查看的日志日期（null表示今天）
+    logRetentionDays: 30  // 日志保留天数
 };
 
 // 为规则生成字母编号
@@ -540,17 +568,20 @@ async function initializeApp() {
     setupWindowSnap(); // 新的窗口折叠功能
     
     // 4. 加载数据（会触发渲染，需要在语言加载后）
-    loadAppData();
-    // loadActivityLogs();  // 已禁用：改为使用前端实时日志
+    await loadAppData();
     
-    // 5. 更新界面语言（确保所有静态文本都被翻译）
+    // 5. 加载今天的日志
+    const today = formatDate(new Date());
+    await loadLogByDate(today);
+    
+    // 6. 更新界面语言（确保所有静态文本都被翻译）
     updateUILanguage();
     
     // ❌ 移除定时刷新：会覆盖前端添加的实时日志
     // setInterval(loadActivityLogs, 10000);
     
     // 添加启动日志
-    addActivity(`🚀 <strong>${t('activity.appReady')}</strong>`, 'info');
+    addActivity(`<strong>${t('activity.appReady')}</strong>`, 'info');
     
     console.log('✓ FloatSort V2 已就绪');
 }
@@ -709,13 +740,7 @@ function setupEventListeners() {
         });
     }
     
-    // 全局监听 mouseup（拖拽结束）
-    document.addEventListener('mouseup', () => {
-        if (appState.isDragging) {
-            appState.isDragging = false;
-            console.log('[拖拽] 拖拽结束');
-        }
-    });
+    // 注意：全局 mouseup 监听已移至 setupWindowSnap() 中统一处理
     
     // 文件夹管理
     document.getElementById('addFolderBtn').addEventListener('click', () => openFolderModal());
@@ -847,9 +872,14 @@ function setupEventListeners() {
         console.log(`[设置] 文件稳定性检查次数已更改为: ${e.target.value}次`);
     });
     
-    // 清空活动日志
+    // 日志相关
     document.getElementById('clearActivityBtn').addEventListener('click', clearActivity);
-    document.getElementById('clearProcessedBtn').addEventListener('click', clearProcessedFiles);
+    document.getElementById('openLogFolderBtn').addEventListener('click', openLogFolder);
+    document.getElementById('prevDayBtn').addEventListener('click', showPreviousDay);
+    document.getElementById('nextDayBtn').addEventListener('click', showNextDay);
+    document.getElementById('todayBtn').addEventListener('click', showToday);
+    document.getElementById('logDatePicker').addEventListener('change', onDatePickerChange);
+    document.getElementById('logRetentionDaysSelect').addEventListener('change', saveLogRetentionSetting);
     
     // 规则目标文件夹选择按钮
     document.getElementById('browseTargetFolderBtn').addEventListener('click', selectTargetFolder);
@@ -969,12 +999,26 @@ function setupWindowListeners() {
 
 // ========== 后端事件监听 ==========
 function setupBackendListeners() {
+    // 监听文件整理事件
+    listen('file-organized', event => {
+        const { from, to } = event.payload;
+        const fileName = from.split('\\').pop() || from.split('/').pop();
+        const toPath = to.split('\\').pop() || to.split('/').pop();
+        
+        console.log('[文件整理] 文件已整理:', from, '->', to);
+        addActivity(
+            `<strong>${fileName}</strong> → ${toPath}`,
+            'success',
+            `${t('activity.from')}: ${from}<br>${t('activity.to')}: ${to}`
+        );
+    });
+    
     listen('file-detected', async event => {
         const filePath = event.payload.file_path;
         const fileName = filePath.split('\\').pop() || filePath.split('/').pop();
         
         console.log('[文件检测] 检测到文件:', fileName);
-        addActivity(`📥 ${t('activity.fileDetected')}: ${fileName}`);
+        addActivity(`${t('activity.fileDetected')}: ${fileName}`);
         
         // 找到文件所属的文件夹
         const folder = appState.folders.find(f => filePath.startsWith(f.path));
@@ -990,27 +1034,21 @@ function setupBackendListeners() {
             console.log('[文件检测] 自动处理模式，立即整理');
             try {
                 const result = await invoke('process_file', { path: filePath });
-                if (result) {
-                    console.log('[文件检测] 文件整理成功:', result);
-                    addActivity(
-                        `✅ <strong>${fileName}</strong>`,
-                        'success',
-                        `从: ${filePath}<br>到: ${result}`
-                    );
-                    appState.filesProcessed++;
-                    updateStats();
-                } else {
+                if (!result) {
                     console.log('[文件检测] 文件未匹配任何规则');
-                    addActivity(`⚠️ ${t('activity.fileNotMatched')}: ${fileName}`);
+                    addActivity(`${t('activity.fileNotMatched')}: ${fileName}`);
                 }
+                // 成功的整理信息由 file-organized 事件处理
+                appState.filesProcessed++;
+                updateStats();
             } catch (error) {
                 console.error('[文件检测] 处理文件失败:', error);
-                addActivity(`❌ ${fileName} ${t('activity.fileFailed')}: ${error}`, 'error');
+                addActivity(`${fileName} ${t('activity.fileFailed')}: ${error}`, 'error');
             }
         } else {
             // 手动处理模式：添加到待处理队列
             console.log('[文件检测] 手动处理模式，加入待处理队列');
-            addActivity(`⏳ <strong>${fileName}</strong> ${t('activity.fileAddedToQueue')}（${folder.name}）`, 'info');
+            addActivity(`<strong>${fileName}</strong> ${t('activity.fileAddedToQueue')}（${folder.name}）`, 'info');
             
             if (!appState.pendingFilesByFolder[folder.id]) {
                 appState.pendingFilesByFolder[folder.id] = [];
@@ -1073,7 +1111,7 @@ function setupBackendListeners() {
             }
             
             // 完整模式下的处理（没有选中规则，使用所有启用的规则）
-            addActivity(`📥 ${t('activity.filesDropped')}: ${files.length}`);
+            addActivity(`${t('activity.filesDropped')}: ${files.length}`);
             
             // 将拖入的文件添加到批量队列
             files.forEach(filePath => {
@@ -1099,7 +1137,7 @@ function setupBackendListeners() {
     // 监听窗口焦点事件（从托盘恢复时）
     listen('tauri://focus', async () => {
         console.log('[窗口] 窗口获得焦点');
-        addActivity(`▶️ ${t('activity.windowRestored')}`, 'info');
+        addActivity(`${t('activity.windowRestored')}`, 'info');
         
         // 如果窗口是折叠状态，自动展开
         if (appState.isCollapsed) {
@@ -1115,7 +1153,7 @@ async function processDraggedFiles(files) {
         const fileName = filePath.split('\\').pop() || filePath.split('/').pop();
         
         try {
-            addActivity(`🔄 ${t('activity.fileProcessing')}: ${fileName}`);
+            addActivity(`${t('activity.fileProcessing')}: ${fileName}`);
             const result = await invoke('process_file', { path: filePath });
             
             if (result) {
@@ -1130,7 +1168,7 @@ async function processDraggedFiles(files) {
                 // 从批量队列中移除
                 appState.pendingBatch = appState.pendingBatch.filter(f => f.path !== filePath);
             } else {
-                addActivity(`⚠️ ${t('activity.fileNotMatched')}: ${fileName}`);
+                addActivity(`${t('activity.fileNotMatched')}: ${fileName}`);
                 appState.pendingBatch = appState.pendingBatch.filter(f => f.path !== filePath);
             }
         } catch (error) {
@@ -1314,7 +1352,7 @@ function renderUnmatchedFilesGrouped(unmatchedFiles) {
         html += `
             <div class="ext-group">
                 <div class="ext-group-header">
-                    <span class="ext-badge">📁 文件夹</span>
+                    <span class="ext-badge">文件夹</span>
                     <span class="ext-count">${folders.length} 个</span>
                 </div>
                 ${folders.map(folder => {
@@ -1631,7 +1669,7 @@ async function processFilesWithRuleDirectly(files, ruleId) {
     }
     
     showNotification(`使用选中规则 [${rule.name}] 处理 ${files.length} 个文件`, 'info');
-    addActivity(`📋 ${t('activity.usingRule')} [${rule.name}] ${t('activity.processingWithRule')} ${files.length}`);
+    addActivity(`${t('activity.usingRule')} [${rule.name}] ${t('activity.processingWithRule')} ${files.length}`);
     
     let successCount = 0;
     let skipCount = 0;
@@ -1744,11 +1782,15 @@ async function loadConfig() {
         appState.fileStabilityDelay = config.file_stability_delay || 3;
         appState.fileStabilityChecks = config.file_stability_checks || 2;
         
+        // 加载日志保留天数设置
+        appState.logRetentionDays = config.log_retention_days !== undefined ? config.log_retention_days : 30;
+        
         // 更新UI中的选项和国旗按钮
         const animationSelect = document.getElementById('animationSelect');
         const speedSelect = document.getElementById('animationSpeedSelect');
         const stabilityDelaySelect = document.getElementById('stabilityDelaySelect');
         const stabilityChecksSelect = document.getElementById('stabilityChecksSelect');
+        const logRetentionDaysSelect = document.getElementById('logRetentionDaysSelect');
         
         // 更新国旗按钮的active状态
         document.querySelectorAll('.flag-btn').forEach(btn => {
@@ -1763,9 +1805,15 @@ async function loadConfig() {
         if (speedSelect) speedSelect.value = appState.animationSpeed;
         if (stabilityDelaySelect) stabilityDelaySelect.value = appState.fileStabilityDelay.toString();
         if (stabilityChecksSelect) stabilityChecksSelect.value = appState.fileStabilityChecks.toString();
+        if (logRetentionDaysSelect) logRetentionDaysSelect.value = appState.logRetentionDays.toString();
+        
+        // 初始化日期选择器为今天
+        const logDatePicker = document.getElementById('logDatePicker');
+        if (logDatePicker) logDatePicker.value = formatDate(new Date());
         
         console.log(`✓ 动画设置: ${appState.animation} (${appState.animationSpeed})`);
         console.log(`✓ 文件稳定性检查: 延迟${appState.fileStabilityDelay}秒, ${appState.fileStabilityChecks}次检查`);
+        console.log(`✓ 日志保留天数: ${appState.logRetentionDays === -1 ? '永久保留' : appState.logRetentionDays + '天'}`);
         
         // 恢复窗口大小（仅在完整模式下）
         if (!appState.isMiniMode) {
@@ -1951,7 +1999,7 @@ function renderFolders() {
                 ${pendingCount > 0 ? `
                 <div class="folder-pending">
                     <button class="${badgeClass}" onclick="showFolderPendingFiles('${folder.id}')" title="点击查看待处理文件">
-                        ⏳ ${pendingCount}
+                        ${pendingCount}
                     </button>
                 </div>
                 ` : '<div class="folder-pending"></div>'}
@@ -2706,7 +2754,7 @@ window.confirmApplyRules = async function(destination) {
         }
         
         showNotification(`已将 ${rules.length} 个规则应用到 ${selectedFolderIds.length} 个文件夹`, 'success');
-        addActivity(`✅ ${t('activity.ruleApplied')} ${destination} ${rules.length} ${t('rules.rulesCount')}`);
+        addActivity(`${t('activity.ruleApplied')} ${destination} ${rules.length} ${t('rules.rulesCount')}`);
         
         closeApplyRulesModal();
         await loadFolders();
@@ -2789,7 +2837,7 @@ window.moveRuleUp = async function(index) {
     // 重新渲染
     renderRules();
     
-    addActivity(`↑ ${t('activity.ruleMovedUp')} [${temp.name}]`);
+    addActivity(`${t('activity.ruleMovedUp')} [${temp.name}]`);
 };
 
 window.moveRuleDown = async function(index) {
@@ -2806,7 +2854,7 @@ window.moveRuleDown = async function(index) {
     // 重新渲染
     renderRules();
     
-    addActivity(`↓ ${t('activity.ruleMovedDown')} [${temp.name}]`);
+    addActivity(`${t('activity.ruleMovedDown')} [${temp.name}]`);
 };
 
 // 从文件夹移除关联规则
@@ -2827,7 +2875,7 @@ window.removeFolderRule = async function(ruleId) {
         checkbox.checked = false;
     }
     
-    addActivity(`🔗 ${t('activity.ruleUnlinked')} [${rule.name}]`, 'info');
+    addActivity(`${t('activity.ruleUnlinked')} [${rule.name}]`, 'info');
     
     console.log(`[规则移除] 已取消关联规则: ${rule.name}`);
 };
@@ -2870,7 +2918,7 @@ async function openFolderModal(folderId = null) {
     
     // 更新触发模式选项
     const triggerImmediateLabel = document.getElementById('triggerImmediateLabel');
-    if (triggerImmediateLabel) triggerImmediateLabel.textContent = '🚀 ' + t('folders.triggerImmediate');
+    if (triggerImmediateLabel) triggerImmediateLabel.textContent = t('folders.triggerImmediate');
     
     const triggerImmediateDesc = document.getElementById('triggerImmediateDesc');
     if (triggerImmediateDesc) triggerImmediateDesc.textContent = t('folders.triggerImmediateDesc');
@@ -2882,13 +2930,13 @@ async function openFolderModal(folderId = null) {
     if (triggerManualDesc) triggerManualDesc.textContent = t('folders.triggerManualDesc');
     
     const triggerStartupLabel = document.getElementById('triggerStartupLabel');
-    if (triggerStartupLabel) triggerStartupLabel.textContent = '🔄 ' + t('folders.triggerStartup');
+    if (triggerStartupLabel) triggerStartupLabel.textContent = t('folders.triggerStartup');
     
     const triggerStartupDesc = document.getElementById('triggerStartupDesc');
     if (triggerStartupDesc) triggerStartupDesc.textContent = t('folders.triggerStartupDesc');
     
     const triggerScheduledLabel = document.getElementById('triggerScheduledLabel');
-    if (triggerScheduledLabel) triggerScheduledLabel.textContent = '⏱️ ' + t('folders.triggerScheduled');
+    if (triggerScheduledLabel) triggerScheduledLabel.textContent = t('folders.triggerScheduled');
     
     const triggerScheduledDesc = document.getElementById('triggerScheduledDesc');
     if (triggerScheduledDesc) triggerScheduledDesc.textContent = t('folders.triggerScheduledDesc');
@@ -3099,11 +3147,11 @@ async function saveFolder() {
         if (appState.editingFolderId) {
             await invoke('update_folder', { folderId: appState.editingFolderId, folder });
             showNotification(`文件夹 "${name}" 已更新`, 'success');
-            addActivity(`✏️ ${t('activity.folderUpdated')}: ${name}`);
+            addActivity(`${t('activity.folderUpdated')}: ${name}`);
         } else {
             await invoke('add_folder', { folder });
             showNotification(`文件夹 "${name}" 已添加`, 'success');
-            addActivity(`➕ ${t('activity.folderAdded')}: ${name}`);
+            addActivity(`${t('activity.folderAdded')}: ${name}`);
         }
         
         await loadFolders();
@@ -3148,7 +3196,7 @@ async function toggleFolderMonitoring(folderId) {
                 `文件夹 "${folder.name}" 监控${newState ? '已启用' : '已停用'}`,
                 newState ? 'success' : 'info'
             );
-            addActivity(`${newState ? '🟢' : '🔴'} ${folder.name} ${t('activity.folderMonitoring')}${newState ? t('activity.enabled') : t('activity.disabled')}`);
+            addActivity(`${folder.name} ${t('activity.folderMonitoring')}${newState ? t('activity.enabled') : t('activity.disabled')}`);
             
             // 重新启动文件监控以应用更改
             await startFileMonitoring();
@@ -3257,10 +3305,10 @@ function updateConditionInputs() {
                     </div>
                     
                     <p class="hint" style="margin: 0; font-size: 12px; color: #666;">
-                        📅 <strong>相对时间</strong>示例：<br>
+                        <strong>相对时间</strong>示例：<br>
                         • "最近7天 + 在此之后" = 最近7天内的文件<br>
                         • "30天 + 在此之前" = 30天前或更早的文件<br><br>
-                        📆 <strong>绝对时间</strong>示例：<br>
+                        <strong>绝对时间</strong>示例：<br>
                         • "2024-01-01 + 在此之后" = 2024年1月1日之后的文件<br>
                         • "2023-12-31 23:59 + 在此之前" = 2023年及之前的文件
                     </p>
@@ -3668,14 +3716,14 @@ function updateConditionTypeOptions() {
 // 获取条件类型标签
 function getConditionTypeLabel(type) {
     const labels = {
-        'Extension': '📦',
-        'NameContains': '🔤',
-        'NameRegex': '🔎',
-        'SizeRange': '📏',
-        'CreatedDaysAgo': '📅',
-        'ModifiedDaysAgo': '🕒'
+        'Extension': '',
+        'NameContains': '',
+        'NameRegex': '',
+        'SizeRange': '',
+        'CreatedDaysAgo': '',
+        'ModifiedDaysAgo': ''
     };
-    return labels[type] || '⚙️';
+    return labels[type] || '';
 }
 
 // ========== 扩展名标签管理 ==========
@@ -4070,11 +4118,11 @@ async function saveRule() {
         if (appState.editingRuleId) {
             await invoke('update_rule', { ruleId: appState.editingRuleId, rule });
             showNotification(`规则 "${name}" 已更新`, 'success');
-            addActivity(`✏️ ${t('activity.ruleUpdated')}: ${name}`);
+            addActivity(`${t('activity.ruleUpdated')}: ${name}`);
         } else {
             await invoke('add_rule', { rule });
             showNotification(`规则 "${name}" 已添加`, 'success');
-            addActivity(`➕ ${t('activity.ruleAdded')}: ${name}`);
+            addActivity(`${t('activity.ruleAdded')}: ${name}`);
         }
         
         await loadRules();
@@ -4143,6 +4191,12 @@ function showDeleteConfirm(item) {
             <br><br>
             <span style="color: #666;">${item.conditionType} ${item.displayText}</span>
         `;
+    } else if (item.type === 'clearLog') {
+        message.innerHTML = `
+            确定要清空日志记录吗？
+            <br><br>
+            <span style="color: #e74c3c; font-size: 13px;">⚠️ 此操作无法撤销，日志文件将被清空</span>
+        `;
     }
     
     // 显示模态框
@@ -4168,14 +4222,14 @@ async function executeDelete() {
             // 删除规则
             await invoke('remove_rule', { ruleId: item.id });
             showNotification(`规则 "${item.name}" 已删除`, 'success');
-            addActivity(`🗑️ ${t('activity.ruleDeleted')}: ${item.name}`);
+            addActivity(`${t('activity.ruleDeleted')}: ${item.name}`);
             await loadRules();
             await loadFolders(); // 重新加载文件夹以更新关联
         } else if (item.type === 'folder') {
             // 删除文件夹
             await invoke('remove_folder', { folderId: item.id });
             showNotification(`文件夹 "${item.name}" 已删除`, 'success');
-            addActivity(`🗑️ ${t('activity.folderDeleted')}: ${item.name}`);
+            addActivity(`${t('activity.folderDeleted')}: ${item.name}`);
             await loadFolders();
         } else if (item.type === 'group') {
             // 删除规则组（删除组内所有规则）
@@ -4190,7 +4244,7 @@ async function executeDelete() {
                 }
             }
             showNotification(`规则组 "${item.destination || '(未设置)'}" 已删除（${deletedCount} 个规则）`, 'success');
-            addActivity(`🗑️ ${t('activity.groupDeleted')} [${item.destination || '(未设置)'}] ${deletedCount} ${t('rules.rulesCount')}`);
+            addActivity(`${t('activity.groupDeleted')} [${item.destination || '(未设置)'}] ${deletedCount} ${t('rules.rulesCount')}`);
             await loadRules();
             await loadFolders(); // 重新加载文件夹以更新关联
         } else if (item.type === 'condition') {
@@ -4202,6 +4256,21 @@ async function executeDelete() {
             showNotification('条件已删除', 'success');
             closeDeleteConfirm();
             return; // 条件删除不需要更新后端统计
+        } else if (item.type === 'clearLog') {
+            // 清空日志
+            await invoke('clear_activity_logs');
+            
+            // 清空前端显示
+            const activityLog = document.getElementById('activityLog');
+            activityLog.innerHTML = '<div class="activity-empty">活动日志已清空</div>';
+            
+            console.log('[活动日志] 日志已清空');
+            
+            // 添加一条清空记录
+            addActivity(`${t('activity.logCleared')}`, 'info');
+            showNotification('日志已清空', 'success');
+            closeDeleteConfirm();
+            return; // 清空日志不需要更新统计
         }
         
         updateStats();
@@ -4286,7 +4355,7 @@ async function exportConfig() {
             // 保存文件
             await invoke('save_file', { path: filePath, content: dataStr });
             showNotification('配置已导出', 'success');
-            addActivity(`📤 ${t('activity.configExported')}: ${filePath}`);
+            addActivity(`${t('activity.configExported')}: ${filePath}`);
         }
     } catch (error) {
         console.error('导出配置失败:', error);
@@ -4317,7 +4386,7 @@ async function importConfig() {
             await invoke('import_config', { config });
             
             showNotification('配置已导入，正在重新加载...', 'success');
-            addActivity(`📥 ${t('activity.configImported')}: ${selected}`);
+            addActivity(`${t('activity.configImported')}: ${selected}`);
             
             // 重新加载所有数据
             setTimeout(async () => {
@@ -4359,7 +4428,7 @@ async function loadActivityLogs() {
     }
 }
 
-function addActivity(message, type = 'info', details = null) {
+function addActivity(message, type = 'info', details = null, customTime = null) {
     const activityLog = document.getElementById('activityLog');
     
     // 如果是空状态提示，先清空
@@ -4371,10 +4440,16 @@ function addActivity(message, type = 'info', details = null) {
     const item = document.createElement('div');
     item.className = 'activity-item';
     
-    const now = new Date();
-    // 使用完整的时间戳格式: YYYY-MM-DD HH:MM:SS
-    const timeStr = `${now.getFullYear()}-${(now.getMonth() + 1).toString().padStart(2, '0')}-${now.getDate().toString().padStart(2, '0')} ` +
-                    `${now.getHours().toString().padStart(2, '0')}:${now.getMinutes().toString().padStart(2, '0')}:${now.getSeconds().toString().padStart(2, '0')}`;
+    // 使用自定义时间或当前时间
+    let timeStr;
+    if (customTime) {
+        timeStr = customTime;
+    } else {
+        const now = new Date();
+        // 使用完整的时间戳格式: YYYY-MM-DD HH:MM:SS
+        timeStr = `${now.getFullYear()}-${(now.getMonth() + 1).toString().padStart(2, '0')}-${now.getDate().toString().padStart(2, '0')} ` +
+                        `${now.getHours().toString().padStart(2, '0')}:${now.getMinutes().toString().padStart(2, '0')}:${now.getSeconds().toString().padStart(2, '0')}`;
+    }
     
     let detailsHtml = '';
     if (details) {
@@ -4430,45 +4505,194 @@ async function saveStabilitySettings() {
 
 // 清空活动日志
 async function clearActivity() {
-    try {
-        // 调用后端清空日志（清空日志文件）
-        await invoke('clear_activity_logs');
-        
-        // 清空前端显示
-        const activityLog = document.getElementById('activityLog');
-        activityLog.innerHTML = '<div class="activity-empty">活动日志已清空</div>';
-        
-        console.log('[活动日志] 日志已清空');
-        
-        // 添加一条清空记录
-        addActivity(`🗑️ ${t('activity.logCleared')}`, 'info');
-    } catch (error) {
-        console.error('[活动日志] 清空失败:', error);
-        showNotification('清空日志失败: ' + error, 'error');
-    }
-}
-
-// 清除已处理文件记录
-async function clearProcessedFiles() {
-    if (!confirm('确定要清除所有已处理文件记录吗？\n\n清除后，之前处理过的文件将可以重新整理。')) {
+    // 统计当前日志数量
+    const activityLog = document.getElementById('activityLog');
+    const activityItems = activityLog.querySelectorAll('.activity-item');
+    const count = activityItems.length;
+    
+    if (count === 0) {
+        showNotification('没有日志可清空', 'info');
         return;
     }
     
-    appState.filesProcessed = 0;
-    appState.processedFiles.clear(); // 清空前端记录
-    
-    // 调用后端清空已处理文件记录
+    // 使用自定义确认对话框
+    showDeleteConfirm({
+        type: 'clearLog'
+    });
+}
+
+// 打开日志文件夹
+async function openLogFolder() {
     try {
-        await invoke('clear_processed_files');
-        console.log('✓ 已处理文件记录已清空');
-        showNotification('已处理文件记录已清除', 'success');
-        addActivity(`🔄 ${t('activity.recordsCleared')}`);
+        await invoke('open_log_folder');
+        console.log('✓ 日志文件夹已打开');
     } catch (error) {
-        console.error('清空已处理文件记录失败:', error);
-        showNotification('清除失败', 'error');
+        console.error('打开日志文件夹失败:', error);
+        showNotification('打开日志文件夹失败: ' + error, 'error');
     }
     
     updateStats();
+}
+
+// 格式化日期为 YYYY-MM-DD
+function formatDate(date) {
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const day = String(date.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+}
+
+// 加载指定日期的日志
+async function loadLogByDate(dateStr) {
+    try {
+        console.log(`[日志加载] 尝试加载日期: ${dateStr}`);
+        const content = await invoke('read_log_by_date', { date: dateStr });
+        console.log(`[日志加载] 接收到内容长度: ${content ? content.length : 0} 字节`);
+        
+        const activityLog = document.getElementById('activityLog');
+        
+        if (!content || content.trim().length === 0) {
+            console.log(`[日志加载] 日志内容为空`);
+            const today = formatDate(new Date());
+            if (dateStr === today) {
+                console.log(`[日志加载] 这是今天，显示默认消息`);
+                activityLog.innerHTML = `<div class="activity-item">
+                    <span class="activity-time">${t('activity.startup')}</span>
+                    <span class="activity-message">${t('activity.appReady')}</span>
+                </div>`;
+            } else {
+                console.log(`[日志加载] 历史日期 ${dateStr} 没有日志`);
+                activityLog.innerHTML = `<div class="activity-empty">${dateStr} ${t('activity.noActivity')}</div>`;
+            }
+            return;
+        }
+        
+        // 解析日志内容并显示
+        const lines = content.trim().split('\n').filter(line => line.trim().length > 0);
+        activityLog.innerHTML = '';
+        
+        let logCount = 0;
+        for (const line of lines) {
+            // 解析日志行：时间戳 + 级别 + 消息
+            // 新格式: 2025-11-01 12:34:56  INFO 消息内容
+            const timeMatch = line.match(/(\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2})/);
+            
+            // 提取消息部分（去掉时间、级别、模块名）
+            let message = line;
+            if (line.includes('INFO')) {
+                message = line.split('INFO')[1].trim();
+            } else if (line.includes('WARN')) {
+                message = line.split('WARN')[1].trim();
+            } else if (line.includes('ERROR')) {
+                message = line.split('ERROR')[1].trim();
+            }
+            
+            // 去掉模块前缀（如 floatsort::file_monitor:）
+            message = message.replace(/^[a-z_:]+:\s*/, '');
+            
+            if (timeMatch && message) {
+                // 使用完整的日期时间：YYYY-MM-DD HH:MM:SS
+                const timeStr = timeMatch[1]; // 保持完整格式 "2025-11-01 12:34:56"
+                
+                // 根据消息内容确定类型
+                let type = 'info';
+                if (message.includes('成功') || message.includes('完成')) type = 'success';
+                else if (message.includes('错误') || message.includes('失败') || line.includes('ERROR')) type = 'error';
+                else if (message.includes('警告') || line.includes('WARN')) type = 'warning';
+                
+                addActivity(message, type, '', timeStr);
+                logCount++;
+            }
+        }
+        
+        console.log(`✓ 已加载 ${dateStr} 的日志，共 ${logCount} 条记录`);
+        if (logCount === 0) {
+            activityLog.innerHTML = `<div class="activity-empty">${dateStr} ${t('activity.noActivity')}</div>`;
+        }
+    } catch (error) {
+        console.error('加载日志失败:', error);
+        showNotification('加载日志失败: ' + error, 'error');
+    }
+}
+
+// 显示上一天的日志
+async function showPreviousDay() {
+    const currentDate = appState.currentLogDate ? new Date(appState.currentLogDate) : new Date();
+    currentDate.setDate(currentDate.getDate() - 1);
+    appState.currentLogDate = formatDate(currentDate);
+    
+    document.getElementById('logDatePicker').value = appState.currentLogDate;
+    await loadLogByDate(appState.currentLogDate);
+}
+
+// 显示下一天的日志
+async function showNextDay() {
+    const currentDate = appState.currentLogDate ? new Date(appState.currentLogDate) : new Date();
+    const nextDate = new Date(currentDate);
+    nextDate.setDate(nextDate.getDate() + 1);
+    
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    nextDate.setHours(0, 0, 0, 0);
+    
+    // 不能查看未来的日志
+    if (nextDate > today) {
+        showNotification('不能查看未来的日志', 'info');
+        return;
+    }
+    
+    appState.currentLogDate = formatDate(nextDate);
+    document.getElementById('logDatePicker').value = appState.currentLogDate;
+    await loadLogByDate(appState.currentLogDate);
+}
+
+// 显示今天的日志
+async function showToday() {
+    appState.currentLogDate = null;
+    const today = formatDate(new Date());
+    document.getElementById('logDatePicker').value = today;
+    
+    // 加载今天的日志文件内容
+    console.log('正在加载今天的日志...');
+    await loadLogByDate(today);
+}
+
+// 日期选择器变化事件
+async function onDatePickerChange(e) {
+    const selectedDate = e.target.value;
+    if (!selectedDate) return;
+    
+    const today = formatDate(new Date());
+    if (selectedDate === today) {
+        await showToday();
+    } else {
+        appState.currentLogDate = selectedDate;
+        await loadLogByDate(selectedDate);
+    }
+}
+
+// 保存日志保留天数设置
+async function saveLogRetentionSetting(e) {
+    const retentionDays = parseInt(e.target.value);
+    appState.logRetentionDays = retentionDays;
+    
+    try {
+        await invoke('save_log_retention_setting', { retentionDays });
+        console.log(`✓ 日志保留天数已保存: ${retentionDays}天`);
+        showNotification(`日志保留天数已设置为 ${retentionDays === -1 ? '永久保留' : retentionDays + '天'}`, 'success');
+        
+        // 立即执行一次清理
+        if (retentionDays > 0) {
+            const removedCount = await invoke('cleanup_old_logs', { retentionDays });
+            if (removedCount > 0) {
+                console.log(`✓ 已清理 ${removedCount} 个过期日志文件`);
+                showNotification(`已清理 ${removedCount} 个过期日志文件`, 'success');
+            }
+        }
+    } catch (error) {
+        console.error('保存日志保留天数设置失败:', error);
+        showNotification('保存设置失败: ' + error, 'error');
+    }
 }
 
 // 选择目标文件夹
@@ -4671,7 +4895,7 @@ async function showBatchConfirm() {
     
     list.innerHTML = html;
     
-    addActivity(`🔔 批量整理确认 (匹配: ${matchedFiles.length}, 未匹配: ${unmatchedFiles.length})`);
+    addActivity(`批量整理确认 (匹配: ${matchedFiles.length}, 未匹配: ${unmatchedFiles.length})`);
 }
 
 function closeBatchModal() {
@@ -4873,7 +5097,7 @@ async function confirmBatch() {
 async function minimizeToTray() {
     try {
         await invoke('hide_to_tray');
-        addActivity(`⏸️ ${t('activity.windowMinimized')}`, 'info');
+        addActivity(`${t('activity.windowMinimized')}`, 'info');
         showNotification('已最小化到托盘', 'info');
     } catch (error) {
         console.error('最小化到托盘失败:', error);
@@ -4884,6 +5108,19 @@ async function minimizeToTray() {
 // 退出程序
 async function exitProgram() {
     try {
+        // 在退出前保存窗口状态
+        const { appWindow } = window.__TAURI__.window;
+        const position = await appWindow.outerPosition();
+        
+        await invoke('save_window_state', {
+            x: position.x,
+            y: position.y,
+            isCollapsed: appState.collapsed,
+            collapsedEdge: appState.lastCollapsedEdge
+        });
+        
+        console.log('[退出] 窗口状态已保存');
+        
         await invoke('exit_app');
     } catch (error) {
         console.error('退出程序失败:', error);
@@ -5671,11 +5908,13 @@ function setupWindowSnap() {
     }
     
     let checkInterval = null;
-    let mouseDown = false;
-    let isDraggingWindow = false;
-    let dragStartPos = { x: 0, y: 0 };
-    let windowStartPos = { x: 0, y: 0 };
     let tempExpandedTimer = null;
+    
+    // 使用 appState 存储拖拽状态，确保全局一致性
+    appState.mouseDown = false;
+    appState.isDraggingWindow = false;
+    appState.dragStartPos = { x: 0, y: 0 };
+    appState.windowStartPos = { x: 0, y: 0 };
     
     // 直接在标题栏上监听鼠标按下事件
     appHeader.addEventListener('mousedown', async (e) => {
@@ -5692,16 +5931,16 @@ function setupWindowSnap() {
             return;
         }
         
-        mouseDown = true;
-        appState.windowDragging = true;
+        appState.mouseDown = true;
+        appState.isDraggingWindow = true;
         appState.isDragging = true; // 保持与其他拖动逻辑一致
         
+        console.log('[窗口折叠] 设置拖拽状态: mouseDown=true, isDraggingWindow=true');
+        
         // 清除临时展开状态（如果有）
-        // 当用户开始拖拽时，说明他想正常使用窗口，不是只是快速查看
         if (appState.tempExpanded) {
-            console.log('[窗口折叠] 用户开始拖拽，清除临时展开状态，窗口变为正常状态');
+            console.log('[窗口折叠] 用户开始拖拽，清除临时展开状态');
             appState.tempExpanded = false;
-            // 清除临时展开定时器
             if (tempExpandedTimer) {
                 clearTimeout(tempExpandedTimer);
                 tempExpandedTimer = null;
@@ -5709,15 +5948,15 @@ function setupWindowSnap() {
         }
         
         // 记录鼠标和窗口的初始位置
-        dragStartPos = { x: e.screenX, y: e.screenY };
+        appState.dragStartPos = { x: e.screenX, y: e.screenY };
         
         try {
             const { appWindow } = window.__TAURI__.window;
             const position = await appWindow.outerPosition();
-            windowStartPos = { x: position.x, y: position.y };
-            isDraggingWindow = true;
+            appState.windowStartPos = { x: position.x, y: position.y };
         } catch (error) {
             console.error('[窗口折叠] 获取窗口位置失败:', error);
+            return;
         }
         
         startSnapCheck();
@@ -5725,16 +5964,19 @@ function setupWindowSnap() {
     
     // 监听鼠标移动事件来拖动窗口
     document.addEventListener('mousemove', async (e) => {
-        if (!isDraggingWindow || !mouseDown) return;
+        // 严格检查拖拽状态
+        if (!appState.isDraggingWindow || !appState.mouseDown) {
+            return;
+        }
         
         try {
             const { appWindow } = window.__TAURI__.window;
-            const deltaX = e.screenX - dragStartPos.x;
-            const deltaY = e.screenY - dragStartPos.y;
+            const deltaX = e.screenX - appState.dragStartPos.x;
+            const deltaY = e.screenY - appState.dragStartPos.y;
             
             await appWindow.setPosition(new window.__TAURI__.window.PhysicalPosition(
-                windowStartPos.x + deltaX,
-                windowStartPos.y + deltaY
+                appState.windowStartPos.x + deltaX,
+                appState.windowStartPos.y + deltaY
             ));
         } catch (error) {
             // 忽略拖拽过程中的错误
@@ -5743,13 +5985,16 @@ function setupWindowSnap() {
     
     // 监听全局鼠标松开事件
     document.addEventListener('mouseup', async () => {
-        if (!mouseDown) return; // 如果没有按下，不处理
+        if (!appState.mouseDown) return; // 如果没有按下，不处理
         
         console.log('[窗口折叠] 鼠标松开, snapEdge:', appState.snapEdge);
-        mouseDown = false;
-        isDraggingWindow = false;
-        appState.windowDragging = false;
-        appState.isDragging = false; // 重置拖动状态
+        console.log('[窗口折叠] 重置所有拖拽状态');
+        
+        // 立即重置所有拖拽状态
+        appState.mouseDown = false;
+        appState.isDraggingWindow = false;
+        appState.isDragging = false;
+        
         stopSnapCheck();
         
         // 如果有准备折叠的边缘，执行折叠
@@ -5761,6 +6006,14 @@ function setupWindowSnap() {
                 appState.tempExpanded = false; // 手动折叠后清除临时展开状态
                 appState.lastCollapsedEdge = appState.snapEdge; // 记住折叠的边缘
                 console.log(`[窗口折叠] 窗口已折叠到${appState.snapEdge}边缘`);
+                
+                // 保存折叠状态
+                await invoke('save_window_state', {
+                    x: null,
+                    y: null,
+                    isCollapsed: true,
+                    collapsedEdge: appState.snapEdge
+                });
             } catch (error) {
                 console.error('[窗口折叠] 折叠窗口失败:', error);
             }
@@ -5780,7 +6033,7 @@ function setupWindowSnap() {
         console.log('[窗口折叠] startSnapCheck 已启动');
         
         checkInterval = setInterval(async () => {
-            if (!mouseDown) {
+            if (!appState.mouseDown) {
                 stopSnapCheck();
                 return;
             }
@@ -5830,6 +6083,8 @@ function setupWindowSnap() {
         appState.collapsed = false;
         appState.tempExpanded = true; // 标记为临时展开
         console.log('[窗口折叠] 窗口已自动展开（临时状态）');
+        
+        // 临时展开不保存状态，只有用户主动操作才保存
     });
     
     // 鼠标进入窗口时，延迟清除临时展开状态
@@ -5877,6 +6132,14 @@ function setupWindowSnap() {
             await invoke('trigger_window_snap', { edge: edge });
             appState.collapsed = true;
             appState.tempExpanded = false; // 重置临时展开状态
+            
+            // 保存折叠状态
+            await invoke('save_window_state', {
+                x: null,
+                y: null,
+                isCollapsed: true,
+                collapsedEdge: edge
+            });
         } catch (error) {
             console.error('[窗口折叠] 自动折叠失败:', error);
         }

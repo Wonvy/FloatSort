@@ -1,6 +1,5 @@
 use crate::models::{ConflictStrategy, FileInfo, Rule, RuleAction};
 use crate::rule_engine::RuleEngine;
-use crate::activity_log;
 use anyhow::{Context, Result};
 use chrono::{DateTime, Utc};
 use std::fs;
@@ -58,34 +57,7 @@ pub fn organize_file(file_info: &FileInfo, rules: &[Rule]) -> Result<Option<Stri
     info!("应用规则 '{}' 到文件 {}", rule_match.rule.name, file_info.name);
 
     // 执行规则动作，传递冲突处理策略和正则捕获组
-    let result = execute_action(&rule_match.rule.action, file_info, &engine, &rule_match.rule.conflict_strategy, &rule_match.regex_captures);
-    
-    // 记录文件操作日志
-    match &result {
-        Ok(Some(dest)) => {
-            let _ = activity_log::log_file_operation(
-                "移动文件",
-                &file_info.path,
-                Some(dest),
-                Some(&rule_match.rule.name),
-                true,
-                None,
-            );
-        }
-        Ok(None) => {}
-        Err(e) => {
-            let _ = activity_log::log_file_operation(
-                "移动文件",
-                &file_info.path,
-                None,
-                Some(&rule_match.rule.name),
-                false,
-                Some(&e.to_string()),
-            );
-        }
-    }
-    
-    result
+    execute_action(&rule_match.rule.action, file_info, &engine, &rule_match.rule.conflict_strategy, &rule_match.regex_captures)
 }
 
 /// 手动整理单个文件
@@ -111,9 +83,9 @@ pub fn organize_single_file(file_path: &str, rules: &[Rule]) -> Result<String> {
         },
         None => {
             if file_info.is_directory {
-                info!("⚠️ 文件夹未匹配任何规则，跳过: {}", file_path);
+                info!("文件夹未匹配任何规则，跳过: {}", file_path);
             } else {
-                info!("⚠️ 文件未匹配任何规则，跳过: {}", file_path);
+                info!("文件未匹配任何规则，跳过: {}", file_path);
             }
             Ok("文件未匹配任何规则".to_string())
         },

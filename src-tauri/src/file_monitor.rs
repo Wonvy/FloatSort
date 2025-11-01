@@ -47,7 +47,7 @@ impl FileMonitor {
             let path_buf = PathBuf::from(&folder.path);
             if path_buf.exists() {
                 watcher
-                    .watch(&path_buf, RecursiveMode::NonRecursive) // ✅ 改为非递归
+                    .watch(&path_buf, RecursiveMode::NonRecursive) // 改为非递归
                     .map_err(|e| format!("无法监控路径 {:?}: {}", folder.path, e))?;
                 info!("开始监控路径（仅根目录文件）: {} ({})", folder.name, folder.path);
             } else {

@@ -1539,21 +1539,20 @@ input:checked + .slider:before {
 .btn-config {
     display: flex;
     align-items: center;
-    gap: 8px;
-    padding: 10px 16px;
+    gap: 6px;
+    padding: 8px 16px;
     background: #667eea;
     color: white;
     border: none;
-    border-radius: 6px;
+    border-radius: 4px;
     cursor: pointer;
-    font-size: 14px;
+    font-size: 13px;
     font-weight: 500;
     transition: all 0.2s;
 }
 
 .btn-config:hover {
-    transform: translateY(-2px);
-    box-shadow: 0 4px 12px rgba(102, 126, 234, 0.3);
+    background: #5568d3;
 }
 
 .btn-config:active {
@@ -3001,18 +3000,19 @@ input[readonly] {
 
 /* ========== 设置界面 ========== */
 .settings-section {
-    margin-bottom: 20px;
-    padding: 20px;
+    margin-bottom: 16px;
+    padding: 16px 20px;
     background: #fff;
     border-radius: 8px;
     border: 1px solid #e8e8e8;
 }
 
 .settings-section h3 {
-    margin: 0 0 8px 0;
-    font-size: 16px;
+    margin: 0 0 12px 0;
+    font-size: 15px;
     font-weight: 600;
-    color: #333;
+    color: #1f2937;
+    cursor: help;
 }
 
 .section-desc {
@@ -3061,10 +3061,11 @@ input[readonly] {
 
 .setting-label {
     display: block;
-    margin-bottom: 10px;
-    font-size: 14px;
+    margin-bottom: 6px;
+    font-size: 13px;
     font-weight: 500;
-    color: #333;
+    color: #6b7280;
+    cursor: help;
 }
 
 .setting-select {
@@ -3098,12 +3099,12 @@ input[readonly] {
 }
 
 .flag-btn {
-    width: 48px;
-    height: 48px;
-    border: 2px solid #e8e8e8;
-    border-radius: 8px;
+    width: 36px;
+    height: 36px;
+    border: 1px solid #d1d5db;
+    border-radius: 4px;
     background: #fff;
-    font-size: 28px;
+    font-size: 20px;
     cursor: pointer;
     transition: all 0.2s;
     display: flex;
@@ -3114,14 +3115,13 @@ input[readonly] {
 
 .flag-btn:hover {
     border-color: #667eea;
-    transform: translateY(-2px);
-    box-shadow: 0 4px 12px rgba(102, 126, 234, 0.15);
+    background: #f9fafb;
 }
 
 .flag-btn.active {
     border-color: #667eea;
     background: #f0f4ff;
-    box-shadow: 0 2px 8px rgba(102, 126, 234, 0.2);
+    border-width: 2px;
 }
 
 .radio-group {

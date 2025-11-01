@@ -6,7 +6,6 @@ mod file_monitor;
 mod rule_engine;
 mod file_ops;
 mod models;
-mod activity_log;
 mod scheduler;
 mod window_snap;
 mod i18n;
@@ -21,7 +20,7 @@ use std::fs;
 use tauri::{State, SystemTray, SystemTrayMenu, SystemTrayMenuItem, CustomMenuItem, SystemTrayEvent, Manager};
 use tracing::info;
 use tracing_subscriber;
-use chrono::Local;
+use chrono::{Local, TimeZone};
 
 // 应用状态
 struct AppState {
@@ -66,6 +65,35 @@ fn save_window_size(width: u32, height: u32, state: State<AppState>) -> Result<(
     config.window_width = width;
     config.window_height = height;
     config.save_to_file("data/config.json").map_err(|e| e.to_string())?;
+    Ok(())
+}
+
+// Tauri 命令：保存窗口状态（位置、折叠状态）
+#[tauri::command]
+fn save_window_state(
+    x: Option<i32>,
+    y: Option<i32>,
+    is_collapsed: Option<bool>,
+    collapsed_edge: Option<String>,
+    state: State<AppState>
+) -> Result<(), String> {
+    let mut config = state.config.lock().map_err(|e| e.to_string())?;
+    
+    if let Some(x_pos) = x {
+        config.window_x = Some(x_pos);
+    }
+    if let Some(y_pos) = y {
+        config.window_y = Some(y_pos);
+    }
+    if let Some(collapsed) = is_collapsed {
+        config.is_collapsed = Some(collapsed);
+    }
+    if let Some(edge) = collapsed_edge {
+        config.collapsed_edge = Some(edge);
+    }
+    
+    config.save_to_file("data/config.json").map_err(|e| e.to_string())?;
+    info!("窗口状态已保存: 折叠={:?}, 边缘={:?}", config.is_collapsed, config.collapsed_edge);
     Ok(())
 }
 
@@ -176,13 +204,119 @@ fn reorder_rules(rule_ids: Vec<String>, state: State<AppState>) -> Result<(), St
     Ok(())
 }
 
-// Tauri 命令：清除已处理文件记录
+// Tauri 命令：打开日志文件夹
 #[tauri::command]
-fn clear_processed_files(state: State<AppState>) -> Result<(), String> {
-    let mut processed = state.processed_files.lock().map_err(|e| e.to_string())?;
-    let count = processed.len();
-    processed.clear();
-    info!("已清除 {} 条已处理文件记录", count);
+fn open_log_folder() -> Result<(), String> {
+    let log_path = std::env::current_dir()
+        .map_err(|e| e.to_string())?
+        .join("logs");
+    
+    // 确保日志目录存在
+    std::fs::create_dir_all(&log_path).map_err(|e| e.to_string())?;
+    
+    #[cfg(target_os = "windows")]
+    {
+        std::process::Command::new("explorer")
+            .arg(&log_path)
+            .spawn()
+            .map_err(|e| format!("无法打开文件夹: {}", e))?;
+    }
+    
+    #[cfg(target_os = "macos")]
+    {
+        std::process::Command::new("open")
+            .arg(&log_path)
+            .spawn()
+            .map_err(|e| format!("无法打开文件夹: {}", e))?;
+    }
+    
+    #[cfg(target_os = "linux")]
+    {
+        std::process::Command::new("xdg-open")
+            .arg(&log_path)
+            .spawn()
+            .map_err(|e| format!("无法打开文件夹: {}", e))?;
+    }
+    
+    info!("日志文件夹已打开");
+    Ok(())
+}
+
+// Tauri 命令：读取指定日期的日志
+#[tauri::command]
+fn read_log_by_date(date: String) -> Result<String, String> {
+    // 文件名格式: floatsort.YYYY-MM-DD.log
+    let log_file = format!("logs/floatsort.{}.log", date);
+    info!("尝试读取日志文件: {}", log_file);
+    match std::fs::read_to_string(&log_file) {
+        Ok(content) => {
+            info!("成功读取日志文件，内容长度: {} 字节", content.len());
+            Ok(content)
+        },
+        Err(e) => {
+            info!("日志文件不存在或读取失败: {} - {}", log_file, e);
+            Ok(String::new()) // 如果文件不存在，返回空字符串
+        }
+    }
+}
+
+// Tauri 命令：清理过期日志
+#[tauri::command]
+fn cleanup_old_logs(retention_days: i32) -> Result<u32, String> {
+    if retention_days < 0 {
+        return Ok(0); // 永久保留，不清理
+    }
+    
+    let log_dir = std::path::Path::new("logs");
+    if !log_dir.exists() {
+        return Ok(0);
+    }
+    
+    let now = Local::now();
+    let cutoff_date = now - chrono::Duration::days(retention_days as i64);
+    let mut removed_count = 0;
+    
+    match fs::read_dir(log_dir) {
+        Ok(entries) => {
+            for entry in entries {
+                if let Ok(entry) = entry {
+                    let path = entry.path();
+                    if let Some(file_name) = path.file_name().and_then(|n| n.to_str()) {
+                        // 解析日志文件名: floatsort.YYYY-MM-DD.log
+                        if file_name.starts_with("floatsort.") && file_name.ends_with(".log") {
+                            let date_str = &file_name[10..file_name.len()-4]; // 提取日期部分（floatsort. = 10个字符）
+                            if let Ok(file_date) = chrono::NaiveDate::parse_from_str(date_str, "%Y-%m-%d") {
+                                let file_datetime = file_date.and_hms_opt(0, 0, 0).unwrap();
+                                let file_datetime = Local.from_local_datetime(&file_datetime).unwrap();
+                                
+                                if file_datetime < cutoff_date {
+                                    if let Err(e) = fs::remove_file(&path) {
+                                        info!("删除日志文件失败: {:?} - {}", path, e);
+                                    } else {
+                                        removed_count += 1;
+                                        info!("删除过期日志: {:?}", path);
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        Err(e) => return Err(format!("无法读取日志目录: {}", e)),
+    }
+    
+    info!("清理完成，删除了 {} 个过期日志文件", removed_count);
+    Ok(removed_count)
+}
+
+// Tauri 命令：保存日志保留天数设置
+#[tauri::command]
+fn save_log_retention_setting(retention_days: i32, state: State<AppState>) -> Result<(), String> {
+    let mut config = state.config.lock().map_err(|e| e.to_string())?;
+    config.log_retention_days = retention_days;
+    config.save_to_file("data/config.json").map_err(|e| e.to_string())?;
+    info!("日志保留天数设置已保存: {}天", retention_days);
     Ok(())
 }
 
@@ -445,19 +579,20 @@ fn stop_monitoring(state: State<AppState>) -> Result<(), String> {
 
 // Tauri 命令：手动整理文件
 #[tauri::command]
-async fn process_file(path: String, state: State<'_, AppState>) -> Result<String, String> {
-    info!("📋 [自动处理] 开始处理文件: {}", path);
+async fn process_file(path: String, window: tauri::Window, state: State<'_, AppState>) -> Result<String, String> {
+    info!("[自动处理] 开始处理文件: {}", path);
     
     // 检查文件是否已处理过
     {
         let processed = state.processed_files.lock().map_err(|e| e.to_string())?;
         if processed.contains(&path) {
-            info!("⏭️ 文件已处理过，跳过: {}", path);
+            info!("文件已处理过，跳过: {}", path);
             return Ok(String::new()); // 返回空字符串表示跳过
         }
     }
     
     let config = state.config.lock().map_err(|e| e.to_string())?.clone();
+    let original_path = path.clone();
     
     let result = file_ops::organize_single_file(&path, &config.rules)
         .map_err(|e| e.to_string())?;
@@ -470,6 +605,20 @@ async fn process_file(path: String, state: State<'_, AppState>) -> Result<String
         let mut processed = state.processed_files.lock().map_err(|e| e.to_string())?;
         processed.insert(path.clone());
         info!("文件已记录为已处理: {}", path);
+        
+        // 发送整理成功事件到前端
+        #[derive(Clone, serde::Serialize)]
+        struct FileOrganizedEvent {
+            from: String,
+            to: String,
+        }
+        
+        if let Err(e) = window.emit("file-organized", FileOrganizedEvent {
+            from: original_path,
+            to: result.clone(),
+        }) {
+            info!("发送文件整理事件失败: {}", e);
+        }
     }
     
     // 更新统计
@@ -485,8 +634,9 @@ async fn process_file(path: String, state: State<'_, AppState>) -> Result<String
 
 // Tauri 命令：使用指定规则整理文件
 #[tauri::command]
-async fn process_file_with_rule(path: String, rule_id: String, state: State<'_, AppState>) -> Result<String, String> {
+async fn process_file_with_rule(path: String, rule_id: String, window: tauri::Window, state: State<'_, AppState>) -> Result<String, String> {
     let config = state.config.lock().map_err(|e| e.to_string())?.clone();
+    let original_path = path.clone();
     
     // 查找指定的规则
     let rule = config.rules.iter()
@@ -497,10 +647,28 @@ async fn process_file_with_rule(path: String, rule_id: String, state: State<'_, 
     let result = file_ops::organize_single_file(&path, &vec![rule.clone()])
         .map_err(|e| e.to_string())?;
     
+    let is_organized = !result.is_empty() && result != "文件未匹配任何规则";
+    
+    // 发送整理成功事件到前端
+    if is_organized {
+        #[derive(Clone, serde::Serialize)]
+        struct FileOrganizedEvent {
+            from: String,
+            to: String,
+        }
+        
+        if let Err(e) = window.emit("file-organized", FileOrganizedEvent {
+            from: original_path,
+            to: result.clone(),
+        }) {
+            info!("发送文件整理事件失败: {}", e);
+        }
+    }
+    
     // 更新统计
     let mut stats = state.stats.lock().map_err(|e| e.to_string())?;
     stats.files_processed += 1;
-    if !result.is_empty() {
+    if is_organized {
         stats.files_organized += 1;
     }
     stats.last_activity = Some(chrono::Local::now().to_rfc3339());
@@ -534,7 +702,7 @@ async fn preview_file_organization(path: String, state: State<'_, AppState>) -> 
                     "matched": true,
                     "rule_name": rule_match.rule.name,
                     "original_path": path,
-                    "target_path": "🗑️ 回收站",
+                    "target_path": "回收站",
                     "is_directory": file_info.is_directory,
                 }));
             }
@@ -599,7 +767,7 @@ async fn preview_file_organization_with_rule(path: String, rule_id: String, stat
                     "matched": true,
                     "rule_name": rule_match.rule.name,
                     "original_path": path,
-                    "target_path": "🗑️ 回收站",
+                    "target_path": "回收站",
                     "is_directory": file_info.is_directory,
                 }));
             }
@@ -750,15 +918,46 @@ fn exit_app(app_handle: tauri::AppHandle) -> Result<(), String> {
 }
 
 fn main() {
-    // 初始化日志系统
+    // 创建日志目录
+    std::fs::create_dir_all("logs").expect("无法创建日志目录");
+    
+    // 初始化日志系统 - 使用本地时区的日期创建日志文件
+    // 创建当天的日志文件（使用本地时间）
+    let log_file_name = format!("floatsort.{}.log", Local::now().format("%Y-%m-%d"));
+    let log_file_path = std::path::Path::new("logs").join(&log_file_name);
+    
+    // 使用标准文件输出，tracing会自动处理
+    let log_file = std::fs::OpenOptions::new()
+        .create(true)
+        .append(true)
+        .open(&log_file_path)
+        .expect("无法创建日志文件");
+    
+    // 使用tracing_appender的non_blocking包装文件
+    let (non_blocking, _guard) = tracing_appender::non_blocking(log_file);
+    
+    // 保持_guard存活，防止日志丢失
+    std::mem::forget(_guard);
+    
+    // 自定义时间格式：使用本地时间
+    use tracing_subscriber::fmt::time::ChronoLocal;
+    
     tracing_subscriber::fmt()
         .with_env_filter(
             tracing_subscriber::EnvFilter::from_default_env()
                 .add_directive(tracing::Level::INFO.into())
         )
+        .with_writer(non_blocking)
+        .with_timer(ChronoLocal::new("%Y-%m-%d %H:%M:%S".to_string()))  // 使用本地时间
+        .with_target(false)  // 去掉模块路径
+        .with_thread_ids(false)  // 去掉线程ID
+        .with_thread_names(false)  // 去掉线程名
+        .with_ansi(false)  // 去掉ANSI颜色代码
+        .compact()  // 使用紧凑格式
         .init();
 
     info!("FloatSort 启动中...");
+    info!("日志文件: {}", log_file_name);
 
     // 加载配置
     let config = AppConfig::load_or_default("data/config.json")
@@ -766,6 +965,21 @@ fn main() {
 
     // 初始化i18n语言设置
     i18n::set_language(&config.language);
+    
+    // 自动清理过期日志
+    let retention_days = config.log_retention_days;
+    if retention_days > 0 {
+        match cleanup_old_logs(retention_days) {
+            Ok(count) => {
+                if count > 0 {
+                    info!("启动时清理了 {} 个过期日志文件", count);
+                }
+            }
+            Err(e) => {
+                info!("清理日志失败: {}", e);
+            }
+        }
+    }
 
     // 创建应用状态
     let app_state = AppState {
@@ -828,6 +1042,7 @@ fn main() {
             get_config,
             save_config,
             save_window_size,
+            save_window_state,
             save_animation_settings,
             save_stability_settings,
             save_language_setting,
@@ -836,7 +1051,10 @@ fn main() {
             remove_rule,
             update_rule,
             reorder_rules,
-            clear_processed_files,
+            open_log_folder,
+            read_log_by_date,
+            cleanup_old_logs,
+            save_log_retention_setting,
             select_folder,
             open_folder,
             open_file_location,
@@ -871,16 +1089,22 @@ fn main() {
         .setup(|app| {
             info!("FloatSort 初始化完成");
             
-            // 自动启动窗口折叠功能
             let window = app.get_window("main").unwrap();
             let app_handle = app.handle();
             
+            // 先居中窗口（默认行为）
+            info!("窗口居中显示");
+            if let Err(e) = window.center() {
+                info!("居中窗口失败: {}", e);
+            }
+            
+            // 启动窗口折叠功能（但不自动恢复折叠状态）
             std::thread::spawn(move || {
-                std::thread::sleep(std::time::Duration::from_secs(1)); // 等待1秒后启动
+                std::thread::sleep(std::time::Duration::from_millis(1000));
                 if let Err(e) = window_snap::start_window_snap(window, app_handle) {
                     info!("自动启动窗口折叠功能失败: {}", e);
                 } else {
-                    info!("窗口折叠功能已自动启动");
+                    info!("窗口折叠功能已启动");
                 }
             });
             

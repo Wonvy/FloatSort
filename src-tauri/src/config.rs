@@ -117,23 +117,23 @@ impl WatchFolder {
     #[allow(dead_code)]
     pub fn get_trigger_display(&self) -> String {
         match &self.trigger_mode {
-            TriggerMode::Immediate => "🚀 立即执行".to_string(),
-            TriggerMode::Manual => "✋ 手动确认".to_string(),
-            TriggerMode::OnStartup => "🔄 启动时执行".to_string(),
+            TriggerMode::Immediate => "立即执行".to_string(),
+            TriggerMode::Manual => "手动确认".to_string(),
+            TriggerMode::OnStartup => "启动时执行".to_string(),
             TriggerMode::Scheduled => {
                 match &self.schedule_type {
                     Some(ScheduleType::Interval) => {
                         let minutes = self.schedule_interval_minutes.unwrap_or(30);
                         if minutes < 60 {
-                            format!("⏱️ 每{}分钟", minutes)
+                            format!("每{}分钟", minutes)
                         } else {
                             let hours = minutes / 60;
-                            format!("⏱️ 每{}小时", hours)
+                            format!("每{}小时", hours)
                         }
                     }
                     Some(ScheduleType::Daily) => {
                         let time = self.schedule_daily_time.as_deref().unwrap_or("09:00");
-                        format!("⏰ 每天 {}", time)
+                        format!("每天 {}", time)
                     }
                     Some(ScheduleType::Weekly) => {
                         let day = self.schedule_weekly_day.unwrap_or(1);
@@ -148,9 +148,9 @@ impl WatchFolder {
                             6 => "周六",
                             _ => "周一",
                         };
-                        format!("📅 每{} {}", day_name, time)
+                        format!("每{} {}", day_name, time)
                     }
-                    None => "⏱️ 定时执行".to_string(),
+                    None => "定时执行".to_string(),
                 }
             }
         }
@@ -209,6 +209,26 @@ pub struct AppConfig {
     #[serde(default = "default_stability_checks")]
     pub file_stability_checks: u32,
     
+    /// 日志保留天数 - 自动清理超过此天数的日志文件，-1表示永久保留
+    #[serde(default = "default_log_retention_days")]
+    pub log_retention_days: i32,
+    
+    /// 窗口X位置
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub window_x: Option<i32>,
+    
+    /// 窗口Y位置
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub window_y: Option<i32>,
+    
+    /// 窗口是否处于折叠状态
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub is_collapsed: Option<bool>,
+    
+    /// 折叠在哪个边缘: Top, Left, Right
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub collapsed_edge: Option<String>,
+    
     // 保留旧字段以支持迁移
     #[serde(skip_serializing, default)]
     pub watch_paths: Option<Vec<String>>,
@@ -226,7 +246,7 @@ fn default_batch_threshold() -> u32 {
 }
 
 fn default_window_width() -> u32 {
-    360
+    500
 }
 
 fn default_animation() -> String {
@@ -249,8 +269,12 @@ fn default_stability_checks() -> u32 {
     2  // 默认检查2次
 }
 
+fn default_log_retention_days() -> i32 {
+    30  // 默认保留30天
+}
+
 fn default_window_height() -> u32 {
-    520
+    750
 }
 
 impl Default for AppConfig {
@@ -309,13 +333,18 @@ impl Default for AppConfig {
             show_notifications: true,
             log_level: "info".to_string(),
             batch_threshold: 1,
-            window_width: 360,
-            window_height: 520,
+            window_width: 500,
+            window_height: 750,
             animation: "none".to_string(),
             animation_speed: "normal".to_string(),
             language: default_language(),
             file_stability_delay: default_stability_delay(),
             file_stability_checks: default_stability_checks(),
+            log_retention_days: default_log_retention_days(),
+            window_x: None,
+            window_y: None,
+            is_collapsed: None,
+            collapsed_edge: None,
             watch_paths: None,
             auto_start: None,
         }
@@ -396,13 +425,18 @@ impl AppConfig {
             show_notifications: old_config.show_notifications,
             log_level: old_config.log_level,
             batch_threshold: 1,
-            window_width: 360,
-            window_height: 520,
+            window_width: 500,
+            window_height: 750,
             animation: "none".to_string(),
             animation_speed: "normal".to_string(),
             language: default_language(),
             file_stability_delay: default_stability_delay(),
             file_stability_checks: default_stability_checks(),
+            log_retention_days: default_log_retention_days(),
+            window_x: None,
+            window_y: None,
+            is_collapsed: None,
+            collapsed_edge: None,
             watch_paths: None,
             auto_start: None,
         })

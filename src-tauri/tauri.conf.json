@@ -74,9 +74,9 @@
     "windows": [
       {
         "title": "FloatSort",
-        "width": 360,
-        "height": 520,
-        "center": true,
+        "width": 500,
+        "height": 750,
+        "center": false,
         "resizable": true,
         "maximizable": false,
         "fullscreen": false,
