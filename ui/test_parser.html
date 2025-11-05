@@ -1,0 +1,370 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>文件内容解析器测试</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 40px 20px;
+        }
+        
+        .container {
+            max-width: 900px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 20px;
+            padding: 40px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+        }
+        
+        h1 {
+            color: #333;
+            margin-bottom: 10px;
+            font-size: 32px;
+        }
+        
+        .subtitle {
+            color: #666;
+            margin-bottom: 40px;
+            font-size: 16px;
+        }
+        
+        .section {
+            margin-bottom: 40px;
+        }
+        
+        .section-title {
+            font-size: 20px;
+            color: #667eea;
+            margin-bottom: 20px;
+            font-weight: 600;
+        }
+        
+        .btn-group {
+            display: flex;
+            gap: 15px;
+            flex-wrap: wrap;
+        }
+        
+        button {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 8px;
+            font-size: 14px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            font-weight: 500;
+        }
+        
+        button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(102, 126, 234, 0.4);
+        }
+        
+        button:active {
+            transform: translateY(0);
+        }
+        
+        .parser-list {
+            background: #f8f9fa;
+            padding: 20px;
+            border-radius: 12px;
+            border-left: 4px solid #667eea;
+        }
+        
+        .parser-item {
+            padding: 15px;
+            background: white;
+            margin-bottom: 12px;
+            border-radius: 8px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+        }
+        
+        .parser-item:last-child {
+            margin-bottom: 0;
+        }
+        
+        .parser-name {
+            font-weight: 600;
+            color: #333;
+            margin-bottom: 8px;
+            font-size: 16px;
+        }
+        
+        .parser-extensions {
+            color: #666;
+            font-size: 14px;
+        }
+        
+        .extension-tag {
+            display: inline-block;
+            background: #667eea;
+            color: white;
+            padding: 4px 10px;
+            border-radius: 4px;
+            margin-right: 6px;
+            font-size: 12px;
+            font-weight: 500;
+        }
+        
+        .result-box {
+            background: #f8f9fa;
+            padding: 20px;
+            border-radius: 12px;
+            border-left: 4px solid #28a745;
+            margin-top: 20px;
+            max-height: 600px;
+            overflow-y: auto;
+        }
+        
+        .result-box pre {
+            white-space: pre-wrap;
+            word-wrap: break-word;
+            font-family: 'Courier New', monospace;
+            font-size: 13px;
+            line-height: 1.6;
+            color: #333;
+        }
+        
+        .result-title {
+            font-weight: 600;
+            color: #28a745;
+            margin-bottom: 15px;
+            font-size: 16px;
+        }
+        
+        .error-box {
+            background: #fff3cd;
+            border-left: 4px solid #ffc107;
+            padding: 15px;
+            border-radius: 8px;
+            color: #856404;
+            margin-top: 20px;
+        }
+        
+        .metadata-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+            margin-top: 15px;
+        }
+        
+        .metadata-item {
+            background: white;
+            padding: 12px;
+            border-radius: 8px;
+            border: 1px solid #e0e0e0;
+        }
+        
+        .metadata-key {
+            font-size: 12px;
+            color: #666;
+            text-transform: uppercase;
+            margin-bottom: 4px;
+        }
+        
+        .metadata-value {
+            font-size: 14px;
+            color: #333;
+            font-weight: 600;
+        }
+        
+        .text-content {
+            background: white;
+            padding: 15px;
+            border-radius: 8px;
+            margin-top: 15px;
+            max-height: 300px;
+            overflow-y: auto;
+            border: 1px solid #e0e0e0;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🔍 文件内容解析器测试</h1>
+        <p class="subtitle">测试PDF、图片等文件的内容提取功能</p>
+        
+        <div class="section">
+            <div class="section-title">📋 可用的解析器</div>
+            <div class="btn-group">
+                <button onclick="loadParsers()">加载解析器列表</button>
+            </div>
+            <div id="parserList"></div>
+        </div>
+        
+        <div class="section">
+            <div class="section-title">🧪 测试解析功能</div>
+            <div class="btn-group">
+                <button onclick="selectAndParse()">选择文件并解析</button>
+            </div>
+            <div id="result"></div>
+        </div>
+    </div>
+    
+    <script>
+        const { invoke } = window.__TAURI__.tauri;
+        const { open } = window.__TAURI__.dialog;
+        
+        async function loadParsers() {
+            try {
+                const parsers = await invoke('get_available_parsers');
+                console.log('可用解析器:', parsers);
+                
+                const container = document.getElementById('parserList');
+                container.innerHTML = `
+                    <div class="parser-list">
+                        ${parsers.map(parser => `
+                            <div class="parser-item">
+                                <div class="parser-name">${parser.name}</div>
+                                <div class="parser-extensions">
+                                    ${parser.extensions.map(ext => 
+                                        `<span class="extension-tag">.${ext}</span>`
+                                    ).join('')}
+                                </div>
+                            </div>
+                        `).join('')}
+                    </div>
+                `;
+            } catch (error) {
+                console.error('加载解析器失败:', error);
+                document.getElementById('parserList').innerHTML = `
+                    <div class="error-box">加载失败: ${error}</div>
+                `;
+            }
+        }
+        
+        async function selectAndParse() {
+            try {
+                // 选择文件
+                const filePath = await open({
+                    multiple: false,
+                    filters: [
+                        {
+                            name: '支持的文件',
+                            extensions: ['pdf', 'jpg', 'jpeg', 'png', 'gif', 'bmp', 'webp', 'tiff']
+                        }
+                    ]
+                });
+                
+                if (!filePath) {
+                    return;
+                }
+                
+                console.log('选择的文件:', filePath);
+                
+                // 显示加载中
+                document.getElementById('result').innerHTML = `
+                    <div class="result-box">
+                        <div class="result-title">⏳ 正在解析文件...</div>
+                    </div>
+                `;
+                
+                // 解析文件
+                const result = await invoke('parse_file_content', { filePath });
+                console.log('解析结果:', result);
+                
+                // 显示结果
+                displayResult(result, filePath);
+                
+            } catch (error) {
+                console.error('解析失败:', error);
+                document.getElementById('result').innerHTML = `
+                    <div class="error-box">
+                        <strong>解析失败:</strong> ${error}
+                    </div>
+                `;
+            }
+        }
+        
+        function displayResult(result, filePath) {
+            const fileName = filePath.split(/[/\\]/).pop();
+            
+            let html = `
+                <div class="result-box">
+                    <div class="result-title">✅ 解析成功 (耗时: ${result.parse_time_ms}ms)</div>
+                    <div style="margin-bottom: 15px; color: #666;">
+                        <strong>文件:</strong> ${fileName}<br>
+                        <strong>解析器:</strong> ${result.parser_name}
+                    </div>
+            `;
+            
+            // 显示元数据
+            if (result.metadata && Object.keys(result.metadata).length > 0) {
+                html += `
+                    <div style="margin-top: 20px;">
+                        <div style="font-weight: 600; margin-bottom: 10px;">📊 元数据信息:</div>
+                        <div class="metadata-grid">
+                            ${Object.entries(result.metadata).map(([key, value]) => `
+                                <div class="metadata-item">
+                                    <div class="metadata-key">${key}</div>
+                                    <div class="metadata-value">${formatValue(value)}</div>
+                                </div>
+                            `).join('')}
+                        </div>
+                    </div>
+                `;
+            }
+            
+            // 显示文本内容
+            if (result.text) {
+                const preview = result.text.substring(0, 1000);
+                const hasMore = result.text.length > 1000;
+                
+                html += `
+                    <div style="margin-top: 20px;">
+                        <div style="font-weight: 600; margin-bottom: 10px;">
+                            📝 提取的文本内容 (${result.text.length} 字符):
+                        </div>
+                        <div class="text-content">
+                            ${escapeHtml(preview)}
+                            ${hasMore ? '<br><br><em>... (内容过长，已截断)</em>' : ''}
+                        </div>
+                    </div>
+                `;
+            }
+            
+            html += `</div>`;
+            document.getElementById('result').innerHTML = html;
+        }
+        
+        function formatValue(value) {
+            if (typeof value === 'object') {
+                if (Array.isArray(value)) {
+                    return value.join(', ');
+                }
+                return JSON.stringify(value);
+            }
+            if (typeof value === 'number') {
+                return value.toLocaleString();
+            }
+            return value;
+        }
+        
+        function escapeHtml(text) {
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML.replace(/\n/g, '<br>');
+        }
+        
+        // 页面加载时自动加载解析器列表
+        window.addEventListener('DOMContentLoaded', () => {
+            loadParsers();
+        });
+    </script>
+</body>
+</html>
+
+

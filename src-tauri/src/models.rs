@@ -61,6 +61,26 @@ pub enum RuleCondition {
         /// 绝对时间：ISO 8601格式的日期时间字符串
         datetime: Option<String>,
     },
+    
+    /// 内容关键词匹配
+    ContentKeywords {
+        /// 关键词列表
+        keywords: Vec<String>,
+        /// 匹配模式：any(任意) 或 all(全部)
+        match_mode: String,
+        /// 是否区分大小写
+        case_sensitive: bool,
+    },
+    
+    /// 内容元数据条件
+    ContentMetadata {
+        /// 元数据键名
+        key: String,
+        /// 比较运算符：equals(等于), contains(包含), greater_than(大于), less_than(小于)
+        operator: String,
+        /// 比较值
+        value: String,
+    },
 }
 
 /// 文件冲突处理策略

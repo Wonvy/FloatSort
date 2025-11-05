@@ -1,6 +1,8 @@
 use crate::models::{FileInfo, Rule, RuleAction, RuleCondition};
+use crate::content_parser::ParserRegistry;
 use regex::Regex;
 use std::path::Path;
+use std::sync::Arc;
 use tracing::debug;
 use chrono::Utc;
 
@@ -14,12 +16,25 @@ pub struct RuleMatch<'a> {
 /// 规则引擎
 pub struct RuleEngine {
     rules: Vec<Rule>,
+    parser_registry: Option<Arc<ParserRegistry>>,  // 内容解析器注册表（可选）
 }
 
 impl RuleEngine {
     /// 创建新的规则引擎
     pub fn new(rules: Vec<Rule>) -> Self {
-        Self { rules }
+        Self { 
+            rules,
+            parser_registry: None,
+        }
+    }
+    
+    /// 创建带内容解析器的规则引擎
+    #[allow(dead_code)]
+    pub fn with_parser(rules: Vec<Rule>, parser_registry: Arc<ParserRegistry>) -> Self {
+        Self {
+            rules,
+            parser_registry: Some(parser_registry),
+        }
     }
 
     /// 为文件查找匹配的规则（返回匹配结果，包含捕获组）
@@ -214,6 +229,123 @@ impl RuleEngine {
                         "before" => modified < target_time,
                         "after" => modified > target_time,
                         _ => false,
+                    }
+                } else {
+                    false
+                }
+            }
+            
+            RuleCondition::ContentKeywords { keywords, match_mode, case_sensitive } => {
+                // 需要解析器支持
+                if let Some(ref registry) = self.parser_registry {
+                    let path = Path::new(&file_info.path);
+                    
+                    // 检查是否可以解析
+                    if !registry.can_parse(path) {
+                        debug!("文件 {} 不支持内容解析", file_info.name);
+                        return false;
+                    }
+                    
+                    // 解析文件内容
+                    match registry.parse(path) {
+                        Ok(parsed) => {
+                            if let Some(text) = parsed.text {
+                                let text_to_match = if *case_sensitive {
+                                    text
+                                } else {
+                                    text.to_lowercase()
+                                };
+                                
+                                match match_mode.as_str() {
+                                    "any" => {
+                                        // 包含任意关键词
+                                        keywords.iter().any(|kw| {
+                                            let keyword = if *case_sensitive {
+                                                kw.clone()
+                                            } else {
+                                                kw.to_lowercase()
+                                            };
+                                            text_to_match.contains(&keyword)
+                                        })
+                                    }
+                                    "all" => {
+                                        // 包含所有关键词
+                                        keywords.iter().all(|kw| {
+                                            let keyword = if *case_sensitive {
+                                                kw.clone()
+                                            } else {
+                                                kw.to_lowercase()
+                                            };
+                                            text_to_match.contains(&keyword)
+                                        })
+                                    }
+                                    _ => false,
+                                }
+                            } else {
+                                debug!("文件 {} 没有提取到文本内容", file_info.name);
+                                false
+                            }
+                        }
+                        Err(e) => {
+                            debug!("解析文件 {} 失败: {}", file_info.name, e);
+                            false
+                        }
+                    }
+                } else {
+                    debug!("内容解析器未初始化");
+                    false
+                }
+            }
+            
+            RuleCondition::ContentMetadata { key, operator, value } => {
+                // 需要解析器支持
+                if let Some(ref registry) = self.parser_registry {
+                    let path = Path::new(&file_info.path);
+                    
+                    // 检查是否可以解析
+                    if !registry.can_parse(path) {
+                        return false;
+                    }
+                    
+                    // 解析文件内容
+                    match registry.parse(path) {
+                        Ok(parsed) => {
+                            if let Some(meta_value) = parsed.metadata.get(key) {
+                                match operator.as_str() {
+                                    "equals" => {
+                                        // 等于
+                                        meta_value.as_string().map_or(false, |v| v == *value)
+                                    }
+                                    "contains" => {
+                                        // 包含
+                                        meta_value.as_string().map_or(false, |v| v.contains(value))
+                                    }
+                                    "greater_than" => {
+                                        // 大于
+                                        if let (Some(mv), Ok(target)) = (meta_value.as_number(), value.parse::<f64>()) {
+                                            mv > target
+                                        } else {
+                                            false
+                                        }
+                                    }
+                                    "less_than" => {
+                                        // 小于
+                                        if let (Some(mv), Ok(target)) = (meta_value.as_number(), value.parse::<f64>()) {
+                                            mv < target
+                                        } else {
+                                            false
+                                        }
+                                    }
+                                    _ => false,
+                                }
+                            } else {
+                                false
+                            }
+                        }
+                        Err(e) => {
+                            debug!("解析文件 {} 失败: {}", file_info.name, e);
+                            false
+                        }
                     }
                 } else {
                     false

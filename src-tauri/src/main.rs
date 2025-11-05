@@ -9,11 +9,13 @@ mod models;
 mod scheduler;
 mod window_snap;
 mod i18n;
+mod content_parser;
 
 use config::{AppConfig, WatchFolder};
 use file_monitor::FileMonitor;
 use scheduler::Scheduler;
 use models::Rule;
+use content_parser::ParserRegistry;
 use std::sync::{Arc, Mutex};
 use std::collections::HashSet;
 use std::fs;
@@ -29,6 +31,7 @@ struct AppState {
     stats: Arc<Mutex<Statistics>>,
     processed_files: Arc<Mutex<HashSet<String>>>, // 记录已处理的文件路径
     window_snap_running: Arc<Mutex<bool>>, // 窗口折叠功能是否运行中
+    parser_registry: Arc<ParserRegistry>, // 内容解析器注册表
 }
 
 // 统计信息
@@ -917,6 +920,32 @@ fn exit_app(app_handle: tauri::AppHandle) -> Result<(), String> {
     Ok(())
 }
 
+// Tauri 命令：解析文件内容
+#[tauri::command]
+fn parse_file_content(file_path: String, state: State<AppState>) -> Result<content_parser::ParsedContent, String> {
+    use std::path::Path;
+    
+    let path = Path::new(&file_path);
+    info!("前端请求解析文件: {}", file_path);
+    
+    state.parser_registry.parse(path)
+}
+
+// Tauri 命令：获取所有可用的解析器信息
+#[tauri::command]
+fn get_available_parsers(state: State<AppState>) -> Result<Vec<content_parser::ParserInfo>, String> {
+    Ok(state.parser_registry.get_parsers_info())
+}
+
+// Tauri 命令：检查文件是否可以被解析
+#[tauri::command]
+fn can_parse_file(file_path: String, state: State<AppState>) -> Result<bool, String> {
+    use std::path::Path;
+    
+    let path = Path::new(&file_path);
+    Ok(state.parser_registry.can_parse(path))
+}
+
 fn main() {
     // 创建日志目录
     std::fs::create_dir_all("logs").expect("无法创建日志目录");
@@ -981,6 +1010,10 @@ fn main() {
         }
     }
 
+    // 初始化内容解析器注册表
+    info!("初始化内容解析器...");
+    let parser_registry = Arc::new(ParserRegistry::new());
+    
     // 创建应用状态
     let app_state = AppState {
         config: Arc::new(Mutex::new(config)),
@@ -988,6 +1021,7 @@ fn main() {
         stats: Arc::new(Mutex::new(Statistics::default())),
         processed_files: Arc::new(Mutex::new(HashSet::new())),
         window_snap_running: Arc::new(Mutex::new(false)),
+        parser_registry,
     };
 
     // 创建系统托盘菜单
@@ -1081,6 +1115,9 @@ fn main() {
             save_file,
             read_file,
             exit_app,
+            parse_file_content,
+            get_available_parsers,
+            can_parse_file,
             window_snap::start_window_snap,
             window_snap::stop_window_snap,
             window_snap::check_window_near_edge,

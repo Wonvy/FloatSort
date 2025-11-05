@@ -179,7 +179,7 @@ function updateUILanguage() {
     const interfaceTitle = document.getElementById('interfaceSettingsTitle');
     if (interfaceTitle) interfaceTitle.textContent = t('settings.interface');
     
-    const animationTitle = document.getElementById('animationSettingsTitle');
+    const animationTitle = document.getElementById('windowAnimationTitle');
     if (animationTitle) animationTitle.textContent = t('settings.animation');
     
     const stabilityTitle = document.getElementById('stabilitySettingsTitle');
@@ -2129,6 +2129,12 @@ function renderRules() {
                 } else if (cond.max) {
                     return `修改: ${cond.max}天内`;
                 }
+            } else if (cond.type === 'CreatedTime' || cond.type === 'ModifiedTime') {
+                return cond.displayText || `时间条件`;
+            } else if (cond.type === 'ContentKeywords') {
+                return cond.displayText || `内容关键词`;
+            } else if (cond.type === 'ContentMetadata') {
+                return cond.displayText || `元数据条件`;
             } else {
                 return `条件: ${cond.type}`;
             }
@@ -2418,6 +2424,12 @@ function renderSplitView() {
                             } else {
                                 return `大小: 不限`;
                             }
+                        } else if (cond.type === 'CreatedTime' || cond.type === 'ModifiedTime') {
+                            return cond.displayText || `时间条件`;
+                        } else if (cond.type === 'ContentKeywords') {
+                            return cond.displayText || `内容关键词`;
+                        } else if (cond.type === 'ContentMetadata') {
+                            return cond.displayText || `元数据条件`;
                         } else {
                             return `条件: ${cond.type}`;
                         }
@@ -3347,8 +3359,144 @@ function updateConditionInputs() {
                 }
             });
             break;
+        case 'pdf_text':
+            container.innerHTML = `
+                <div style="display: flex; flex-direction: column; gap: 10px;">
+                    <div style="display: flex; align-items: center; gap: 8px;">
+                        <input type="text" id="pdfKeywords" placeholder="输入关键词，用逗号分隔。例如：合同,协议,甲方" style="flex: 1;" />
+                        <span class="help-icon" title="在PDF文档全文中搜索关键词，例如：'合同,协议'可筛选合同文件">?</span>
+                    </div>
+                    <div style="display: flex; gap: 10px; align-items: center;">
+                        <select id="pdfMatchMode" style="flex: 1;">
+                            <option value="any">包含任意一个</option>
+                            <option value="all">包含全部</option>
+                        </select>
+                        <label style="display: flex; align-items: center; gap: 6px; cursor: pointer;">
+                            <input type="checkbox" id="pdfCaseSensitive" />
+                            <span>区分大小写</span>
+                        </label>
+                    </div>
+                </div>
+            `;
+            break;
+        case 'pdf_pages':
+            container.innerHTML = `
+                <div style="display: flex; flex-direction: column; gap: 10px;">
+                    <div style="display: flex; gap: 10px; align-items: center;">
+                        <input type="number" id="pdfMinPages" placeholder="最少页数" min="1" style="flex: 1;" />
+                        <span>至</span>
+                        <input type="number" id="pdfMaxPages" placeholder="最多页数" min="1" style="flex: 1;" />
+                        <span>页</span>
+                        <span class="help-icon" title="按页数筛选，适合区分报告、手册等不同类型文档">?</span>
+                    </div>
+                    <div style="display: flex; gap: 8px; flex-wrap: wrap;">
+                        <button type="button" class="quick-btn" onclick="setPdfPages(null, 10)">短文档 (≤10页)</button>
+                        <button type="button" class="quick-btn" onclick="setPdfPages(10, 50)">中等 (10-50页)</button>
+                        <button type="button" class="quick-btn" onclick="setPdfPages(50, null)">长文档 (≥50页)</button>
+                    </div>
+                </div>
+            `;
+            break;
+        case 'pdf_author':
+            container.innerHTML = `
+                <div style="display: flex; flex-direction: column; gap: 10px;">
+                    <div style="display: flex; gap: 8px; align-items: center;">
+                        <select id="pdfMetaField" style="flex: 1;">
+                            <option value="title">文档标题</option>
+                            <option value="author">作者</option>
+                            <option value="subject">主题</option>
+                        </select>
+                        <span class="help-icon" title="匹配PDF的元数据信息（需文档包含相应属性）">?</span>
+                    </div>
+                    <input type="text" id="pdfMetaValue" placeholder="输入要匹配的内容" />
+                </div>
+            `;
+            break;
+        case 'image_resolution':
+            container.innerHTML = `
+                <div style="display: flex; flex-direction: column; gap: 10px;">
+                    <div style="display: flex; gap: 10px; align-items: center;">
+                        <label style="display: flex; align-items: center; gap: 6px; flex: 1;">
+                            <input type="radio" name="resMode" value="preset" checked />
+                            <span>预设分辨率</span>
+                        </label>
+                        <label style="display: flex; align-items: center; gap: 6px; flex: 1;">
+                            <input type="radio" name="resMode" value="custom" />
+                            <span>自定义</span>
+                        </label>
+                        <span class="help-icon" title="按分辨率筛选，适合整理高清照片">?</span>
+                    </div>
+                    <select id="imageResPreset" style="width: 100%;">
+                        <option value="high">高清照片 (≥1200万像素)</option>
+                        <option value="medium">标清照片 (300万-1200万)</option>
+                        <option value="low">低清照片 (<300万)</option>
+                    </select>
+                    <input type="number" id="imageResCustom" placeholder="自定义百万像素数" min="0" step="0.1" style="display: none;" />
+                </div>
+            `;
+            // 添加事件监听
+            setTimeout(() => {
+                const presetRadio = document.querySelector('input[name="resMode"][value="preset"]');
+                const customRadio = document.querySelector('input[name="resMode"][value="custom"]');
+                const presetSelect = document.getElementById('imageResPreset');
+                const customInput = document.getElementById('imageResCustom');
+                
+                presetRadio?.addEventListener('change', () => {
+                    presetSelect.style.display = '';
+                    customInput.style.display = 'none';
+                });
+                
+                customRadio?.addEventListener('change', () => {
+                    presetSelect.style.display = 'none';
+                    customInput.style.display = '';
+                });
+            }, 0);
+            break;
+        case 'image_camera':
+            container.innerHTML = `
+                <div style="display: flex; flex-direction: column; gap: 10px;">
+                    <div style="display: flex; gap: 8px; align-items: center;">
+                        <select id="imageCameraField" style="flex: 1;">
+                            <option value="camera_make">相机品牌</option>
+                            <option value="camera_model">相机型号</option>
+                        </select>
+                        <span class="help-icon" title="按相机品牌或型号筛选（需照片包含EXIF信息）">?</span>
+                    </div>
+                    <input type="text" id="imageCameraValue" placeholder="例如：Canon, Nikon, iPhone" />
+                </div>
+            `;
+            break;
+        case 'image_size':
+            container.innerHTML = `
+                <div style="display: flex; flex-direction: column; gap: 10px;">
+                    <div style="display: flex; gap: 10px; align-items: center;">
+                        <input type="number" id="imageMinWidth" placeholder="最小宽度" min="1" style="flex: 1;" />
+                        <span>×</span>
+                        <input type="number" id="imageMinHeight" placeholder="最小高度" min="1" style="flex: 1;" />
+                        <span>像素</span>
+                        <span class="help-icon" title="按尺寸筛选，适合整理特定规格的图片">?</span>
+                    </div>
+                    <div style="display: flex; gap: 8px; flex-wrap: wrap;">
+                        <button type="button" class="quick-btn" onclick="setImageSize(1920, 1080)">全高清 (1920×1080)</button>
+                        <button type="button" class="quick-btn" onclick="setImageSize(3840, 2160)">4K (3840×2160)</button>
+                        <button type="button" class="quick-btn" onclick="setImageSize(7680, 4320)">8K (7680×4320)</button>
+                    </div>
+                </div>
+            `;
+            break;
     }
 }
+
+// 快捷按钮辅助函数
+window.setPdfPages = function(min, max) {
+    if (min !== null) document.getElementById('pdfMinPages').value = min;
+    if (max !== null) document.getElementById('pdfMaxPages').value = max;
+};
+
+window.setImageSize = function(width, height) {
+    document.getElementById('imageMinWidth').value = width;
+    document.getElementById('imageMinHeight').value = height;
+};
 
 // 添加条件
 function addCondition() {
@@ -3361,8 +3509,14 @@ function addCondition() {
             'name': 'NameContains',
             'regex': 'NameRegex',
             'size': 'SizeRange',
-            'created': ['CreatedTime', 'CreatedDaysAgo'],  // 兼容新旧条件类型
-            'modified': ['ModifiedTime', 'ModifiedDaysAgo']  // 兼容新旧条件类型
+            'created': ['CreatedTime', 'CreatedDaysAgo'],
+            'modified': ['ModifiedTime', 'ModifiedDaysAgo'],
+            'pdf_text': 'ContentKeywords',
+            'pdf_pages': 'ContentMetadata',
+            'pdf_author': 'ContentMetadata',
+            'image_resolution': 'ContentMetadata',
+            'image_camera': 'ContentMetadata',
+            'image_size': 'ContentMetadata'
         };
         
         const backendTypes = typeMap[type];
@@ -3503,6 +3657,198 @@ function addCondition() {
             };
             break;
         }
+        case 'pdf_text': {
+            const keywordsInput = document.getElementById('pdfKeywords').value.trim();
+            if (!keywordsInput) {
+                showNotification('请输入至少一个关键词', 'error');
+                return;
+            }
+            
+            const keywords = keywordsInput.split(',').map(k => k.trim()).filter(k => k);
+            if (keywords.length === 0) {
+                showNotification('请输入有效的关键词', 'error');
+                return;
+            }
+            
+            const matchMode = document.getElementById('pdfMatchMode').value;
+            const caseSensitive = document.getElementById('pdfCaseSensitive').checked;
+            
+            const matchModeText = matchMode === 'any' ? '任意' : '全部';
+            const caseText = caseSensitive ? '(区分大小写)' : '';
+            
+            condition = {
+                type: 'ContentKeywords',
+                keywords: keywords,
+                match_mode: matchMode,
+                case_sensitive: caseSensitive,
+                displayText: `📄 PDF包含${matchModeText}: ${keywords.join(', ')} ${caseText}`
+            };
+            break;
+        }
+        case 'pdf_pages': {
+            const minPages = document.getElementById('pdfMinPages').value;
+            const maxPages = document.getElementById('pdfMaxPages').value;
+            
+            if (!minPages && !maxPages) {
+                showNotification('请输入至少一个页数限制', 'error');
+                return;
+            }
+            
+            let displayText = '📄 PDF页数: ';
+            let operator = 'greater_than';
+            let value = minPages;
+            
+            if (minPages && maxPages) {
+                displayText += `${minPages}-${maxPages}页`;
+                // 使用page_count作为key，保存范围信息
+                condition = {
+                    type: 'ContentMetadata',
+                    key: 'page_count',
+                    operator: 'range',
+                    value: `${minPages},${maxPages}`,
+                    displayText: displayText
+                };
+            } else if (minPages) {
+                displayText += `≥${minPages}页`;
+                condition = {
+                    type: 'ContentMetadata',
+                    key: 'page_count',
+                    operator: 'greater_than',
+                    value: String(parseInt(minPages) - 1),
+                    displayText: displayText
+                };
+            } else {
+                displayText += `≤${maxPages}页`;
+                condition = {
+                    type: 'ContentMetadata',
+                    key: 'page_count',
+                    operator: 'less_than',
+                    value: String(parseInt(maxPages) + 1),
+                    displayText: displayText
+                };
+            }
+            break;
+        }
+        case 'pdf_author': {
+            const field = document.getElementById('pdfMetaField').value;
+            const value = document.getElementById('pdfMetaValue').value.trim();
+            
+            if (!value) {
+                showNotification('请输入要匹配的内容', 'error');
+                return;
+            }
+            
+            const fieldNames = {
+                'title': '标题',
+                'author': '作者',
+                'subject': '主题'
+            };
+            
+            condition = {
+                type: 'ContentMetadata',
+                key: field,
+                operator: 'contains',
+                value: value,
+                displayText: `📄 PDF${fieldNames[field]}: ${value}`
+            };
+            break;
+        }
+        case 'image_resolution': {
+            const resMode = document.querySelector('input[name="resMode"]:checked').value;
+            let megapixels;
+            let displayText;
+            
+            if (resMode === 'preset') {
+                const preset = document.getElementById('imageResPreset').value;
+                const presetMap = {
+                    'high': { value: '12', text: '高清照片 (≥1200万像素)', operator: 'greater_than' },
+                    'medium': { value: '12', text: '标清照片 (300万-1200万)', operator: 'range', range: '3,12' },
+                    'low': { value: '3', text: '低清照片 (<300万)', operator: 'less_than' }
+                };
+                
+                const selected = presetMap[preset];
+                displayText = `📷 ${selected.text}`;
+                
+                if (selected.operator === 'range') {
+                    condition = {
+                        type: 'ContentMetadata',
+                        key: 'megapixels',
+                        operator: 'range',
+                        value: selected.range,
+                        displayText: displayText
+                    };
+                } else {
+                    condition = {
+                        type: 'ContentMetadata',
+                        key: 'megapixels',
+                        operator: selected.operator,
+                        value: selected.value,
+                        displayText: displayText
+                    };
+                }
+            } else {
+                megapixels = document.getElementById('imageResCustom').value;
+                if (!megapixels) {
+                    showNotification('请输入百万像素数', 'error');
+                    return;
+                }
+                condition = {
+                    type: 'ContentMetadata',
+                    key: 'megapixels',
+                    operator: 'greater_than',
+                    value: String(megapixels),
+                    displayText: `📷 图片分辨率 ≥${megapixels}MP`
+                };
+            }
+            break;
+        }
+        case 'image_camera': {
+            const field = document.getElementById('imageCameraField').value;
+            const value = document.getElementById('imageCameraValue').value.trim();
+            
+            if (!value) {
+                showNotification('请输入相机品牌或型号', 'error');
+                return;
+            }
+            
+            const fieldNames = {
+                'camera_make': '品牌',
+                'camera_model': '型号'
+            };
+            
+            condition = {
+                type: 'ContentMetadata',
+                key: field,
+                operator: 'contains',
+                value: value,
+                displayText: `📷 相机${fieldNames[field]}: ${value}`
+            };
+            break;
+        }
+        case 'image_size': {
+            const minWidth = document.getElementById('imageMinWidth').value;
+            const minHeight = document.getElementById('imageMinHeight').value;
+            
+            if (!minWidth && !minHeight) {
+                showNotification('请输入至少一个尺寸限制', 'error');
+                return;
+            }
+            
+            if (!minWidth || !minHeight) {
+                showNotification('请同时输入宽度和高度', 'error');
+                return;
+            }
+            
+            condition = {
+                type: 'ContentMetadata',
+                key: 'width',
+                operator: 'greater_than',
+                value: minWidth,
+                displayText: `📷 图片尺寸 ≥${minWidth}×${minHeight}像素`,
+                _extraCheck: { key: 'height', operator: 'greater_than', value: minHeight }
+            };
+            break;
+        }
     }
     
     if (condition) {
@@ -3544,10 +3890,18 @@ function editCondition(index) {
             typeSelect.value = 'size';
             break;
         case 'CreatedDaysAgo':
+        case 'CreatedTime':
             typeSelect.value = 'created';
             break;
         case 'ModifiedDaysAgo':
+        case 'ModifiedTime':
             typeSelect.value = 'modified';
+            break;
+        case 'ContentKeywords':
+            typeSelect.value = 'content_keywords';
+            break;
+        case 'ContentMetadata':
+            typeSelect.value = 'content_metadata';
             break;
     }
     
@@ -3571,6 +3925,16 @@ function editCondition(index) {
             case 'ModifiedDaysAgo':
                 if (condition.min) document.getElementById('minDays').value = condition.min;
                 if (condition.max) document.getElementById('maxDays').value = condition.max;
+                break;
+            case 'ContentKeywords':
+                document.getElementById('keywordsInput').value = condition.keywords.join(', ');
+                document.getElementById('matchMode').value = condition.match_mode;
+                document.getElementById('caseSensitive').checked = condition.case_sensitive;
+                break;
+            case 'ContentMetadata':
+                document.getElementById('metadataKey').value = condition.key;
+                document.getElementById('metadataOperator').value = condition.operator;
+                document.getElementById('metadataValue').value = condition.value;
                 break;
         }
         
@@ -3721,7 +4085,11 @@ function getConditionTypeLabel(type) {
         'NameRegex': '',
         'SizeRange': '',
         'CreatedDaysAgo': '',
-        'ModifiedDaysAgo': ''
+        'ModifiedDaysAgo': '',
+        'CreatedTime': '',
+        'ModifiedTime': '',
+        'ContentKeywords': '📄',
+        'ContentMetadata': '🔍'
     };
     return labels[type] || '';
 }
@@ -3762,6 +4130,105 @@ function updateExtensionState() {
         extensionContainer.classList.remove('disabled');
     } else {
         extensionContainer.classList.add('disabled');
+    }
+}
+
+// 智能显示条件选项 - 根据扩展名类型动态显示PDF/图片条件
+function updateSmartConditions() {
+    const basicGroup = document.getElementById('basicConditionGroup');
+    const pdfGroup = document.getElementById('pdfConditionGroup');
+    const imageGroup = document.getElementById('imageConditionGroup');
+    const extensionHint = document.getElementById('extensionHint');
+    
+    if (!pdfGroup || !imageGroup || !basicGroup) return;
+    
+    // 获取当前匹配模式
+    const matchMode = document.querySelector('input[name="matchMode"]:checked')?.value || 'simple';
+    
+    // 定义PDF和图片扩展名
+    const pdfExtensions = ['pdf'];
+    const imageExtensions = ['jpg', 'jpeg', 'png', 'gif', 'bmp', 'webp', 'tiff', 'tif', 'heic', 'heif'];
+    
+    // 检查当前扩展名是否包含PDF
+    const hasPdf = appState.currentExtensions.some(ext => pdfExtensions.includes(ext.toLowerCase()));
+    
+    // 检查当前扩展名是否包含图片
+    const hasImage = appState.currentExtensions.some(ext => imageExtensions.includes(ext.toLowerCase()));
+    
+    if (matchMode === 'simple') {
+        // 简单匹配模式：只显示基础条件
+        basicGroup.style.display = '';
+        pdfGroup.style.display = 'none';
+        imageGroup.style.display = 'none';
+        
+        if (extensionHint) {
+            extensionHint.style.display = 'none';
+        }
+    } else {
+        // 高级匹配模式：根据扩展名类型显示对应的高级条件
+        basicGroup.style.display = '';  // 仍然允许基础条件
+        
+        if (appState.currentExtensions.length === 0) {
+            // 没有选择扩展名
+            pdfGroup.style.display = 'none';
+            imageGroup.style.display = 'none';
+            
+            if (extensionHint) {
+                extensionHint.style.display = 'block';
+                extensionHint.innerHTML = '💡 请先选择一种文件类型（PDF或图片），以使用对应的高级条件';
+                extensionHint.style.background = '#e8f4f8';
+                extensionHint.style.borderLeftColor = '#3b82f6';
+                extensionHint.style.color = '#1e40af';
+            }
+        } else if (hasPdf && hasImage) {
+            // 混合类型：不允许
+            pdfGroup.style.display = 'none';
+            imageGroup.style.display = 'none';
+            
+            if (extensionHint) {
+                extensionHint.style.display = 'block';
+                extensionHint.innerHTML = '⚠️ 高级匹配只允许单一文件类型，请只选择PDF或图片';
+                extensionHint.style.background = '#fef3c7';
+                extensionHint.style.borderLeftColor = '#f59e0b';
+                extensionHint.style.color = '#92400e';
+            }
+        } else if (hasPdf) {
+            // 只有PDF：显示PDF条件
+            pdfGroup.style.display = '';
+            imageGroup.style.display = 'none';
+            
+            if (extensionHint) {
+                extensionHint.style.display = 'block';
+                extensionHint.innerHTML = '📄 PDF文档 - 可使用文本搜索、页数、作者等专属条件';
+                extensionHint.style.background = '#e8f4f8';
+                extensionHint.style.borderLeftColor = '#3b82f6';
+                extensionHint.style.color = '#1e40af';
+            }
+        } else if (hasImage) {
+            // 只有图片：显示图片条件
+            pdfGroup.style.display = 'none';
+            imageGroup.style.display = '';
+            
+            if (extensionHint) {
+                extensionHint.style.display = 'block';
+                extensionHint.innerHTML = '📷 图片文件 - 可使用分辨率、相机信息、尺寸等专属条件';
+                extensionHint.style.background = '#fef3c7';
+                extensionHint.style.borderLeftColor = '#f59e0b';
+                extensionHint.style.color = '#92400e';
+            }
+        } else {
+            // 没有扩展名或其他类型：隐藏专属条件
+            pdfGroup.style.display = 'none';
+            imageGroup.style.display = 'none';
+            
+            if (extensionHint) {
+                extensionHint.style.display = 'block';
+                extensionHint.innerHTML = '💡 当前扩展名不支持高级匹配，可使用基础条件';
+                extensionHint.style.background = '#f3f4f6';
+                extensionHint.style.borderLeftColor = '#d1d5db';
+                extensionHint.style.color = '#6b7280';
+            }
+        }
     }
 }
 
@@ -3826,9 +4293,34 @@ function addExtension() {
         return;
     }
     
+    // 高级匹配模式下的额外验证
+    const matchMode = document.querySelector('input[name="matchMode"]:checked')?.value || 'simple';
+    if (matchMode === 'advanced' && appState.currentExtensions.length > 0) {
+        const pdfExtensions = ['pdf'];
+        const imageExtensions = ['jpg', 'jpeg', 'png', 'gif', 'bmp', 'webp', 'tiff', 'tif', 'heic', 'heif'];
+        
+        // 判断当前已有扩展名的类型
+        const existingExt = appState.currentExtensions[0];
+        const existingIsPdf = pdfExtensions.includes(existingExt);
+        const existingIsImage = imageExtensions.includes(existingExt);
+        
+        // 判断新扩展名的类型
+        const newIsPdf = pdfExtensions.includes(extension);
+        const newIsImage = imageExtensions.includes(extension);
+        
+        // 检查类型是否一致
+        if ((existingIsPdf && !newIsPdf) || (existingIsImage && !newIsImage) || 
+            (!existingIsPdf && !existingIsImage && (newIsPdf || newIsImage)) ||
+            ((newIsPdf || newIsImage) && !existingIsPdf && !existingIsImage)) {
+            showNotification('高级匹配模式下只能选择同一类型的文件扩展名', 'error');
+            return;
+        }
+    }
+    
     // 添加扩展名
     appState.currentExtensions.push(extension);
     renderExtensionTags();
+    updateSmartConditions(); // 智能显示条件选项
     
     // 清空输入框
     input.value = '';
@@ -3838,6 +4330,7 @@ function addExtension() {
 window.removeExtension = function(extension) {
     appState.currentExtensions = appState.currentExtensions.filter(ext => ext !== extension);
     renderExtensionTags();
+    updateSmartConditions(); // 智能显示条件选项
 };
 
 // ========== 规则管理函数 ==========
@@ -3881,6 +4374,49 @@ async function openRuleModal(ruleId = null) {
     
     const conflictStrategyLabel = document.getElementById('conflictStrategyLabel');
     if (conflictStrategyLabel) conflictStrategyLabel.textContent = t('rules.conflictHandling');
+    
+    // 更新section标题
+    const sectionTitleBasic = document.getElementById('sectionTitleBasic');
+    if (sectionTitleBasic) sectionTitleBasic.textContent = t('rules.basicInfo');
+    
+    const sectionTitleMatch = document.getElementById('sectionTitleMatch');
+    if (sectionTitleMatch) sectionTitleMatch.textContent = t('rules.matchMode');
+    
+    const sectionTitleExtensions = document.getElementById('sectionTitleExtensions');
+    if (sectionTitleExtensions) sectionTitleExtensions.textContent = t('rules.fileExtensions');
+    
+    const sectionTitleConditions = document.getElementById('sectionTitleConditions');
+    if (sectionTitleConditions) sectionTitleConditions.textContent = t('rules.otherConditions');
+    
+    const sectionTitleTarget = document.getElementById('sectionTitleTarget');
+    if (sectionTitleTarget) sectionTitleTarget.textContent = t('rules.targetSettings');
+    
+    // 更新匹配模式按钮
+    const matchModeSimple = document.getElementById('matchModeSimple');
+    if (matchModeSimple) matchModeSimple.textContent = t('rules.matchModeSimple');
+    
+    const matchModeAdvanced = document.getElementById('matchModeAdvanced');
+    if (matchModeAdvanced) matchModeAdvanced.textContent = t('rules.matchModeAdvanced');
+    
+    // 更新占位符标题
+    const placeholderTagsTitle = document.getElementById('placeholderTagsTitle');
+    if (placeholderTagsTitle) placeholderTagsTitle.textContent = '📋 ' + t('rules.placeholderTags');
+    
+    // 更新左侧导航
+    const navBasic = document.getElementById('navBasic');
+    if (navBasic) navBasic.textContent = t('rules.basicInfo');
+    
+    const navMatch = document.getElementById('navMatch');
+    if (navMatch) navMatch.textContent = t('rules.matchMode');
+    
+    const navExtensions = document.getElementById('navExtensions');
+    if (navExtensions) navExtensions.textContent = t('rules.fileExtensions');
+    
+    const navConditions = document.getElementById('navConditions');
+    if (navConditions) navConditions.textContent = t('rules.otherConditions');
+    
+    const navTarget = document.getElementById('navTarget');
+    if (navTarget) navTarget.textContent = t('rules.targetSettings');
     
     // 更新占位符标签
     const filePropsLabel = document.getElementById('filePropsLabel');
@@ -4036,7 +4572,99 @@ async function openRuleModal(ruleId = null) {
     updateExtensionAvailability();
     updateExtensionState();
     
+    // 添加匹配模式切换监听器
+    const matchModeRadios = document.querySelectorAll('input[name="matchMode"]');
+    matchModeRadios.forEach(radio => {
+        radio.addEventListener('change', () => {
+            updateSmartConditions();
+        });
+    });
+    
+    // 初始化时更新一次智能条件显示
+    updateSmartConditions();
+    
+    // 初始化左侧导航功能
+    initRuleNavigation();
+    
     modal.style.display = 'flex';
+}
+
+// 切换占位符标签的展开/折叠
+window.togglePlaceholderTags = function() {
+    const wrapper = document.querySelector('.placeholder-tags-wrapper');
+    if (wrapper) {
+        wrapper.classList.toggle('collapsed');
+    }
+};
+
+// 初始化规则编辑器的导航功能
+function initRuleNavigation() {
+    const navItems = document.querySelectorAll('.rule-nav-item');
+    const ruleContent = document.getElementById('ruleContent');
+    const sections = document.querySelectorAll('.rule-section');
+    
+    if (!ruleContent || navItems.length === 0 || sections.length === 0) {
+        return;
+    }
+    
+    // 点击导航项跳转到对应section
+    navItems.forEach(item => {
+        // 移除旧的事件监听器（如果存在）
+        const newItem = item.cloneNode(true);
+        item.parentNode.replaceChild(newItem, item);
+    });
+    
+    // 重新获取替换后的元素
+    const newNavItems = document.querySelectorAll('.rule-nav-item');
+    
+    newNavItems.forEach(item => {
+        item.addEventListener('click', (e) => {
+            e.preventDefault();
+            const targetId = item.getAttribute('href');
+            const targetSection = document.querySelector(targetId);
+            
+            if (targetSection && ruleContent) {
+                // 移除所有active
+                newNavItems.forEach(nav => nav.classList.remove('active'));
+                // 添加当前active
+                item.classList.add('active');
+                
+                // 滚动到目标section
+                const offsetTop = targetSection.offsetTop - ruleContent.offsetTop;
+                ruleContent.scrollTo({ 
+                    top: offsetTop, 
+                    behavior: 'smooth' 
+                });
+            }
+        });
+    });
+    
+    // 监听滚动，自动高亮当前section
+    ruleContent.addEventListener('scroll', () => {
+        let currentSection = null;
+        const scrollTop = ruleContent.scrollTop;
+        
+        sections.forEach(section => {
+            const sectionTop = section.offsetTop - ruleContent.offsetTop - 30;
+            const sectionBottom = sectionTop + section.offsetHeight;
+            
+            if (scrollTop >= sectionTop && scrollTop < sectionBottom) {
+                currentSection = section;
+            }
+        });
+        
+        if (currentSection) {
+            const currentId = currentSection.getAttribute('id');
+            newNavItems.forEach(nav => {
+                const href = nav.getAttribute('href');
+                if (href === `#${currentId}`) {
+                    nav.classList.add('active');
+                } else {
+                    nav.classList.remove('active');
+                }
+            });
+        }
+    });
 }
 
 function closeRuleModal() {

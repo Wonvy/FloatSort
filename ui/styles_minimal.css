@@ -1180,7 +1180,7 @@ body {
     min-width: 100px;
     margin-bottom: 0 !important;
     padding-top: 8px;
-    text-align: right;
+    text-align: left;
     padding-right: 12px;
 }
 
@@ -1209,26 +1209,18 @@ body {
 }
 
 /* 文件扩展名包装器 */
-.extension-wrapper {
-    display: flex;
-    align-items: flex-start;
-    gap: 8px;
+.extension-tags-container {
     width: 100%;
-}
-
-.extension-wrapper .extension-tags-container {
-    flex: 1;
 }
 
 /* 启用/禁用按钮 */
 .btn-toggle-extension {
-    flex-shrink: 0;
-    padding: 6px 12px;
+    padding: 4px 10px;
     border: 1px solid #d1d5db;
-    border-radius: 6px;
+    border-radius: 4px;
     background: #fff;
     color: #10b981;
-    font-size: 13px;
+    font-size: 12px;
     font-weight: 500;
     cursor: pointer;
     transition: all 0.2s;
@@ -1630,6 +1622,10 @@ input:checked + .slider:before {
     flex-direction: column;
 }
 
+.modal-content-wide {
+    max-width: 800px;
+}
+
 .modal-header {
     display: flex;
     justify-content: space-between;
@@ -1667,6 +1663,78 @@ input:checked + .slider:before {
     flex: 1;
     padding: 20px;
     overflow-y: auto;
+}
+
+/* 规则编辑器 - 左右分栏布局 */
+.modal-body-split {
+    flex: 1;
+    display: flex;
+    overflow: hidden;
+}
+
+/* 左侧导航 */
+.rule-nav {
+    width: 140px;
+    flex-shrink: 0;
+    background: #fafbfc;
+    border-right: 1px solid #e5e7eb;
+    overflow-y: auto;
+    padding: 16px 0;
+}
+
+.rule-nav-item {
+    display: flex;
+    align-items: center;
+    padding: 10px 16px;
+    color: #6b7280;
+    text-decoration: none;
+    font-size: 13px;
+    font-weight: 500;
+    transition: all 0.2s;
+    border-left: 3px solid transparent;
+    cursor: pointer;
+}
+
+.rule-nav-item:hover {
+    background: #f3f4f6;
+    color: #374151;
+}
+
+.rule-nav-item.active {
+    background: #eef2ff;
+    color: #667eea;
+    border-left-color: #667eea;
+    font-weight: 600;
+}
+
+/* 右侧内容区 */
+.rule-content {
+    flex: 1;
+    overflow-y: auto;
+    padding: 20px;
+    scroll-behavior: smooth;
+}
+
+/* 规则内容区段 */
+.rule-section {
+    margin-bottom: 32px;
+    scroll-margin-top: 20px;
+}
+
+.rule-section:last-child {
+    margin-bottom: 0;
+}
+
+.section-title {
+    font-size: 15px;
+    font-weight: 600;
+    color: #667eea;
+    margin: 0 0 16px 0;
+    padding-bottom: 8px;
+    border-bottom: 2px solid #667eea;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
 }
 
 .modal-footer {
@@ -1981,8 +2049,8 @@ input[readonly] {
 
 /* ========== 触发模式选择器 ========== */
 .trigger-mode-selector {
-    display: flex;
-    flex-direction: column;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
     gap: 8px;
     padding: 12px;
     background: #f9fafb;
@@ -3231,15 +3299,59 @@ input[readonly] {
 }
 
 /* ========== 占位符标签 ========== */
+.placeholder-tags-wrapper {
+    margin-top: 8px;
+}
+
+.placeholder-tags-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 10px 12px;
+    background: #f9fafb;
+    border: 1px solid #e5e7eb;
+    border-radius: 6px;
+    cursor: pointer;
+    transition: all 0.2s;
+    font-size: 13px;
+    font-weight: 500;
+    color: #374151;
+}
+
+.placeholder-tags-header:hover {
+    background: #f3f4f6;
+    border-color: #d1d5db;
+}
+
+.placeholder-tags-header .collapse-icon {
+    transition: transform 0.3s ease;
+    flex-shrink: 0;
+}
+
+.placeholder-tags-wrapper.collapsed .collapse-icon {
+    transform: rotate(-90deg);
+}
+
 .placeholder-tags {
     display: flex;
     flex-direction: column;
     gap: 10px;
-    margin-top: 8px;
+    margin-top: 4px;
     padding: 12px;
     background: #f9fafb;
-    border-radius: 6px;
     border: 1px solid #e5e7eb;
+    border-top: none;
+    border-radius: 0 0 6px 6px;
+    max-height: 500px;
+    overflow: hidden;
+    transition: max-height 0.3s ease, opacity 0.3s ease, padding 0.3s ease;
+}
+
+.placeholder-tags-wrapper.collapsed .placeholder-tags {
+    max-height: 0;
+    opacity: 0;
+    padding: 0 12px;
+    border: none;
 }
 
 .tag-group {
@@ -3509,3 +3621,86 @@ input[readonly] {
     }
 }
 
+
+/* 快捷按钮样式 */
+.quick-btn {
+    padding: 6px 12px;
+    font-size: 12px;
+    border: 1px solid #d1d5db;
+    background: #f9fafb;
+    color: #374151;
+    border-radius: 6px;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.quick-btn:hover {
+    background: #e5e7eb;
+    border-color: #9ca3af;
+}
+
+/* 帮助图标样式 */
+.help-icon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 18px;
+    height: 18px;
+    border-radius: 50%;
+    background: #e5e7eb;
+    color: #6b7280;
+    font-size: 12px;
+    font-weight: bold;
+    cursor: help;
+    flex-shrink: 0;
+    transition: all 0.2s;
+}
+
+.help-icon:hover {
+    background: #3b82f6;
+    color: white;
+}
+
+/* 匹配模式选择器 */
+.match-mode-selector {
+    display: flex;
+    gap: 8px;
+}
+
+.match-mode-option {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex: 1;
+    padding: 8px 12px;
+    background: #f9fafb;
+    border: 1px solid #e5e7eb;
+    border-radius: 4px;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.match-mode-option:hover {
+    background: #f3f4f6;
+}
+
+.match-mode-option input[type="radio"] {
+    display: none;
+}
+
+.match-mode-option:has(input[type="radio"]:checked) {
+    background: #667eea;
+    border-color: #667eea;
+    color: white;
+}
+
+.match-mode-option:has(input[type="radio"]:checked) .match-mode-label {
+    color: white;
+}
+
+.match-mode-label {
+    font-size: 13px;
+    font-weight: 500;
+    color: #6b7280;
+    transition: color 0.2s;
+}
