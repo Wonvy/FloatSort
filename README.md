@@ -30,6 +30,13 @@ FloatSort 是一个基于 Rust + Tauri 构建的桌面文件整理工具，提�
 - ⚡ **高性能**：Rust 构建，轻量高效
 - 🎨 **现代界面**：简洁美观的用户体验
 
+## 📸 界面预览
+
+<div align="center">
+  <img src="docs/screenshots/main-window.png" width="700" alt="FloatSort 主界面">
+  <p><em>简洁现代的主界面，支持中文、英文、日文三种语言</em></p>
+</div>
+
 ## 🛠️ 技术栈
 
 - **后端**: Rust + Tauri
