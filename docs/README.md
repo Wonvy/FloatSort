@@ -7,7 +7,8 @@
 ### 👥 用户文档
 
 - **[用户指南](USER_GUIDE.md)** - 详细的功能使用说明
-- **[快速开始](../QUICKSTART.md)** - 5 分钟快速上手
+- **[快速参考](QUICK_REFERENCE.md)** - 常用命令速查
+- **[Mac 安装指南](MAC_INSTALLATION.md)** - Mac 用户必读
 - **[常见问题](FAQ.md)** - 常见问题解答
 
 ### 💻 开发者文档
@@ -35,6 +36,8 @@
 docs/
 ├── README.md              # 文档导航（本文件）
 ├── USER_GUIDE.md          # 用户使用指南
+├── QUICK_REFERENCE.md     # 快速参考
+├── MAC_INSTALLATION.md    # Mac 安装指南
 ├── DEVELOPMENT.md         # 开发指南
 ├── BUILD.md               # 构建指南
 ├── ARCHITECTURE.md        # 架构设计文档
@@ -46,13 +49,16 @@ docs/
 │   ├── v2.7.md           # V2.7 界面简化
 │   └── ...
 │
-├── troubleshooting/       # 问题修复文档
-│   ├── compile-errors.md # 编译错误修复
-│   ├── ui-issues.md      # UI 问题修复
+├── features/              # 功能说明文档
+│   ├── drag-drop.md      # 拖拽功能
+│   ├── monitor.md        # 监控功能
+│   ├── mini-window.md    # Mini 悬浮窗
 │   └── ...
 │
-└── features/              # 功能说明文档
-    ├── mini-window.md    # Mini 悬浮窗
+└── troubleshooting/       # 问题修复文档
+    ├── compile-errors.md # 编译错误修复
+    ├── ui-issues.md      # UI 问题修复
+    └── ...
     ├── batch-preview.md  # 批量预览
     ├── drag-drop.md      # 拖拽功能
     └── ...

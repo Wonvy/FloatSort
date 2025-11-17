@@ -291,6 +291,17 @@
     "grouped": "Grouped View",
     "list": "List View",
     "split": "Split View"
+  },
+  "update": {
+    "checking_update": "Checking for updates...",
+    "new_version_available": "New version available",
+    "current_version": "Current version",
+    "release_notes": "Release notes",
+    "update_available": "Update Available",
+    "download": "Download",
+    "already_latest": "You are already on the latest version",
+    "no_update": "No Update",
+    "check_update_failed": "Failed to check for updates"
   }
 }
 

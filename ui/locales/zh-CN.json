@@ -277,6 +277,8 @@
     "settingsSaved": "设置已保存",
     "languageChanged": "语言已切换",
     "noPendingFiles": "没有待处理文件",
+    "checkingUpdate": "正在检查更新...",
+    "checkUpdateFailed": "检查更新失败",
     "invalidPath": "路径无效",
     "duplicateRule": "规则名称重复",
     "duplicateFolder": "文件夹已存在"
@@ -291,5 +293,16 @@
     "grouped": "分组视图",
     "list": "列表视图",
     "split": "分栏视图"
+  },
+  "update": {
+    "checking_update": "正在检查更新...",
+    "new_version_available": "发现新版本",
+    "current_version": "当前版本",
+    "release_notes": "更新内容",
+    "update_available": "更新可用",
+    "download": "下载",
+    "already_latest": "当前已是最新版本",
+    "no_update": "无需更新",
+    "check_update_failed": "检查更新失败"
   }
 }

@@ -19,10 +19,11 @@ use content_parser::ParserRegistry;
 use std::sync::{Arc, Mutex};
 use std::collections::HashSet;
 use std::fs;
-use tauri::{State, SystemTray, SystemTrayMenu, SystemTrayMenuItem, CustomMenuItem, SystemTrayEvent, Manager};
+use tauri::{State, SystemTray, SystemTrayMenu, SystemTrayMenuItem, CustomMenuItem, SystemTrayEvent, Manager, AppHandle};
 use tracing::info;
 use tracing_subscriber;
 use chrono::{Local, TimeZone};
+use serde::{Deserialize, Serialize};
 
 // 应用状态
 struct AppState {
@@ -40,6 +41,26 @@ struct Statistics {
     files_processed: u64,
     files_organized: u64,
     last_activity: Option<String>,
+}
+
+// GitHub Release 信息
+#[derive(Debug, Clone, Serialize, Deserialize)]
+struct GithubRelease {
+    tag_name: String,
+    name: String,
+    body: String,
+    html_url: String,
+    published_at: String,
+}
+
+// 版本更新信息
+#[derive(Debug, Clone, Serialize, Deserialize)]
+struct UpdateInfo {
+    current_version: String,
+    latest_version: String,
+    has_update: bool,
+    download_url: String,
+    release_notes: String,
 }
 
 // Tauri 命令：获取配置
@@ -248,8 +269,15 @@ fn open_log_folder() -> Result<(), String> {
 // Tauri 命令：读取指定日期的日志
 #[tauri::command]
 fn read_log_by_date(date: String) -> Result<String, String> {
+    // 根据编译模式选择日志目录
+    let log_dir = if cfg!(debug_assertions) {
+        "target/logs"
+    } else {
+        "logs"
+    };
+    
     // 文件名格式: floatsort.YYYY-MM-DD.log
-    let log_file = format!("logs/floatsort.{}.log", date);
+    let log_file = format!("{}/floatsort.{}.log", log_dir, date);
     info!("尝试读取日志文件: {}", log_file);
     match std::fs::read_to_string(&log_file) {
         Ok(content) => {
@@ -946,14 +974,168 @@ fn can_parse_file(file_path: String, state: State<AppState>) -> Result<bool, Str
     Ok(state.parser_registry.can_parse(path))
 }
 
+// Tauri 命令：获取当前版本
+#[tauri::command]
+fn get_app_version() -> Result<String, String> {
+    Ok(env!("CARGO_PKG_VERSION").to_string())
+}
+
+// Tauri 命令：检查更新
+#[tauri::command]
+async fn check_update() -> Result<UpdateInfo, String> {
+    let current_version = env!("CARGO_PKG_VERSION");
+    info!("检查更新，当前版本: {}", current_version);
+    
+    // GitHub API endpoint
+    let url = "https://api.github.com/repos/Wonvy/FloatSort/releases/latest";
+    
+    // 创建 HTTP 客户端
+    let client = reqwest::Client::builder()
+        .user_agent("FloatSort")
+        .build()
+        .map_err(|e| format!("创建HTTP客户端失败: {}", e))?;
+    
+    // 发送请求
+    let response = client
+        .get(url)
+        .send()
+        .await
+        .map_err(|e| format!("请求失败: {}", e))?;
+    
+    if !response.status().is_success() {
+        return Err(format!("HTTP错误: {}", response.status()));
+    }
+    
+    // 解析响应
+    let release: GithubRelease = response
+        .json()
+        .await
+        .map_err(|e| format!("解析响应失败: {}", e))?;
+    
+    info!("最新版本: {}", release.tag_name);
+    
+    // 移除 'v' 前缀（如果有）
+    let latest_version = release.tag_name.trim_start_matches('v');
+    
+    // 比较版本
+    let has_update = version_compare(current_version, latest_version);
+    
+    Ok(UpdateInfo {
+        current_version: current_version.to_string(),
+        latest_version: latest_version.to_string(),
+        has_update,
+        download_url: release.html_url.clone(),
+        release_notes: release.body,
+    })
+}
+
+// 比较版本号（简单实现）
+fn version_compare(current: &str, latest: &str) -> bool {
+    let current_parts: Vec<u32> = current
+        .split('.')
+        .filter_map(|s| s.parse().ok())
+        .collect();
+    let latest_parts: Vec<u32> = latest
+        .split('.')
+        .filter_map(|s| s.parse().ok())
+        .collect();
+    
+    for i in 0..std::cmp::max(current_parts.len(), latest_parts.len()) {
+        let c = current_parts.get(i).unwrap_or(&0);
+        let l = latest_parts.get(i).unwrap_or(&0);
+        
+        if l > c {
+            return true;
+        } else if l < c {
+            return false;
+        }
+    }
+    
+    false
+}
+
+// Tauri 命令：更新托盘菜单（支持国际化）
+#[tauri::command]
+fn update_tray_menu(app_handle: AppHandle, language: String) -> Result<(), String> {
+    info!("更新托盘菜单语言: {}", language);
+    
+    // 根据语言获取菜单文本
+    let (show_text, check_update_text, quit_text) = match language.as_str() {
+        "en-US" => ("Show Window", "Check for Updates", "Quit"),
+        "ja-JP" => ("ウィンドウを表示", "アップデートを確認", "終了"),
+        _ => ("显示窗口", "检查更新", "退出程序"), // zh-CN 默认
+    };
+    
+    // 创建新菜单
+    let show = CustomMenuItem::new("show".to_string(), show_text);
+    let check_update_item = CustomMenuItem::new("check_update".to_string(), check_update_text);
+    let quit = CustomMenuItem::new("quit".to_string(), quit_text);
+    
+    let tray_menu = SystemTrayMenu::new()
+        .add_item(show)
+        .add_native_item(SystemTrayMenuItem::Separator)
+        .add_item(check_update_item)
+        .add_native_item(SystemTrayMenuItem::Separator)
+        .add_item(quit);
+    
+    // 更新托盘菜单
+    app_handle
+        .tray_handle()
+        .set_menu(tray_menu)
+        .map_err(|e| format!("更新托盘菜单失败: {}", e))?;
+    
+    Ok(())
+}
+
+// Tauri 命令：在浏览器中打开 URL
+#[tauri::command]
+fn open_url_in_browser(url: String) -> Result<(), String> {
+    info!("打开URL: {}", url);
+    
+    #[cfg(target_os = "windows")]
+    {
+        std::process::Command::new("cmd")
+            .args(&["/c", "start", &url])
+            .spawn()
+            .map_err(|e| format!("打开URL失败: {}", e))?;
+    }
+    
+    #[cfg(target_os = "macos")]
+    {
+        std::process::Command::new("open")
+            .arg(&url)
+            .spawn()
+            .map_err(|e| format!("打开URL失败: {}", e))?;
+    }
+    
+    #[cfg(target_os = "linux")]
+    {
+        std::process::Command::new("xdg-open")
+            .arg(&url)
+            .spawn()
+            .map_err(|e| format!("打开URL失败: {}", e))?;
+    }
+    
+    Ok(())
+}
+
 fn main() {
+    // 根据编译模式选择日志目录
+    // 开发模式：使用 target/logs（不触发热重载）
+    // 发布模式：使用 logs（用户数据目录）
+    let log_dir = if cfg!(debug_assertions) {
+        "target/logs"
+    } else {
+        "logs"
+    };
+    
     // 创建日志目录
-    std::fs::create_dir_all("logs").expect("无法创建日志目录");
+    std::fs::create_dir_all(log_dir).expect("无法创建日志目录");
     
     // 初始化日志系统 - 使用本地时区的日期创建日志文件
     // 创建当天的日志文件（使用本地时间）
     let log_file_name = format!("floatsort.{}.log", Local::now().format("%Y-%m-%d"));
-    let log_file_path = std::path::Path::new("logs").join(&log_file_name);
+    let log_file_path = std::path::Path::new(log_dir).join(&log_file_name);
     
     // 使用标准文件输出，tracing会自动处理
     let log_file = std::fs::OpenOptions::new()
@@ -1014,6 +1196,9 @@ fn main() {
     info!("初始化内容解析器...");
     let parser_registry = Arc::new(ParserRegistry::new());
     
+    // 在创建AppState之前保存语言设置（因为config会被移动）
+    let language = config.language.clone();
+    
     // 创建应用状态
     let app_state = AppState {
         config: Arc::new(Mutex::new(config)),
@@ -1024,11 +1209,20 @@ fn main() {
         parser_registry,
     };
 
-    // 创建系统托盘菜单
-    let show = CustomMenuItem::new("show".to_string(), "显示窗口");
-    let quit = CustomMenuItem::new("quit".to_string(), "退出程序");
+    // 创建系统托盘菜单（使用配置的语言）
+    let (show_text, check_update_text, quit_text) = match language.as_str() {
+        "en-US" => ("Show Window", "Check for Updates", "Quit"),
+        "ja-JP" => ("ウィンドウを表示", "アップデートを確認", "終了"),
+        _ => ("显示窗口", "检查更新", "退出程序"), // zh-CN 默认
+    };
+    
+    let show = CustomMenuItem::new("show".to_string(), show_text);
+    let check_update_item = CustomMenuItem::new("check_update".to_string(), check_update_text);
+    let quit = CustomMenuItem::new("quit".to_string(), quit_text);
     let tray_menu = SystemTrayMenu::new()
         .add_item(show)
+        .add_native_item(SystemTrayMenuItem::Separator)
+        .add_item(check_update_item)
         .add_native_item(SystemTrayMenuItem::Separator)
         .add_item(quit);
     
@@ -1063,6 +1257,11 @@ fn main() {
                         let window = app.get_window("main").unwrap();
                         window.show().unwrap();
                         window.set_focus().unwrap();
+                    }
+                    "check_update" => {
+                        // 触发前端的检查更新
+                        let window = app.get_window("main").unwrap();
+                        window.emit("check-update-from-tray", ()).unwrap();
                     }
                     "quit" => {
                         std::process::exit(0);
@@ -1118,6 +1317,10 @@ fn main() {
             parse_file_content,
             get_available_parsers,
             can_parse_file,
+            get_app_version,
+            check_update,
+            update_tray_menu,
+            open_url_in_browser,
             window_snap::start_window_snap,
             window_snap::stop_window_snap,
             window_snap::check_window_near_edge,

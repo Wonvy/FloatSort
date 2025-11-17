@@ -29,6 +29,7 @@ pdf-extract = "0.7"
 lopdf = "0.32"
 kamadak-exif = "0.5"
 lru = "0.12"
+reqwest = { version = "0.11", features = ["json"] }
 
 [target.'cfg(windows)'.dependencies]
 winapi = { version = "0.3", features = ["winuser"] }

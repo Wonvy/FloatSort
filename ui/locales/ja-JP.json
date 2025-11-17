@@ -252,6 +252,17 @@
     "grouped": "グループ表示",
     "list": "リスト表示",
     "split": "分割表示"
+  },
+  "update": {
+    "checking_update": "アップデートを確認中...",
+    "new_version_available": "新しいバージョンがあります",
+    "current_version": "現在のバージョン",
+    "release_notes": "更新内容",
+    "update_available": "アップデート可能",
+    "download": "ダウンロード",
+    "already_latest": "最新バージョンです",
+    "no_update": "更新不要",
+    "check_update_failed": "アップデート確認に失敗しました"
   }
 }
 

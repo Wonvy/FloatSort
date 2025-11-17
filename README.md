@@ -42,45 +42,70 @@ FloatSort 是一个基于 Rust + Tauri 构建的桌面文件整理工具，提�
 
 ## 🚀 快速开始
 
-### 环境要求
+### 前置要求
 
-- Rust 1.70+
-- Node.js 16+ (可选)
-- Visual Studio Build Tools (Windows)
+| 工具 | 版本要求 | 说明 |
+|------|---------|------|
+| **Rust** | 1.70+ | [安装指南](https://rustup.rs/) |
+| **Cargo** | 自动安装 | Rust 自带包管理器 |
+| **Visual Studio Build Tools** | - | 仅 Windows 需要 |
 
-### 安装依赖
+### 一键启动
 
 ```bash
-# 克隆项目
-git clone <your-repo-url>
+# 1. 克隆项目
+git clone https://github.com/Wonvy/FloatSort.git
 cd FloatSort
 
-# Rust 依赖会在构建时自动安装
+# 2. 启动项目（首次会自动下载依赖）
+cargo tauri dev
 ```
+
+### 详细步骤
+
+#### 1️⃣ 安装 Rust
+
+**Windows:**
+- 访问 [https://rustup.rs/](https://rustup.rs/) 下载并运行安装程序
+
+**Linux/macOS:**
+```bash
+curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
+```
+
+#### 2️⃣ 克隆项目
+
+```bash
+git clone https://github.com/Wonvy/FloatSort.git
+cd FloatSort
+```
+
+#### 3️⃣ 运行项目
 
 ### 开发模式
 
 ```bash
-# Windows
-.\scripts\dev-cn.bat
-# 或使用 PowerShell
-.\scripts\dev.ps1
+# Tauri 开发模式（推荐，支持热重载）
+cargo tauri dev
 
-# Linux/macOS
-chmod +x scripts/dev.sh
-./scripts/dev.sh
-
-# 手动启动
+# 或直接运行（无热重载）
 cd src-tauri
 cargo run
 ```
 
+> 💡 **提示**：`cargo tauri dev` 提供更好的开发体验，包括热重载和自动重启功能。
+
 ### 构建发布版本
 
 ```bash
-cd src-tauri
-cargo build --release
+# 发布版本（优化构建）
+cargo tauri build
+
+# 调试版本（快速构建）
+cargo tauri build --debug
 ```
+
+> **📱 Mac 用户特别提示**：首次运行可能会提示"无法验证开发者"，请查看 [Mac 安装指南](docs/MAC_INSTALLATION.md) 了解解决方法。
 
 ## 📁 项目结构
 
@@ -93,13 +118,16 @@ FloatSort/
 │   │   ├── models.rs    # 数据模型
 │   │   ├── file_ops.rs  # 文件操作
 │   │   ├── file_monitor.rs  # 文件监控
-│   │   └── rule_engine.rs   # 规则引擎
+│   │   ├── rule_engine.rs   # 规则引擎
+│   │   └── content_parser/  # 内容解析器
 │   ├── Cargo.toml
 │   └── tauri.conf.json
 ├── ui/                  # 前端界面
 │   ├── index.html
-│   ├── styles.css
-│   └── app.js
+│   ├── styles_minimal.css
+│   ├── app_v2.js
+│   └── locales/         # 多语言支持
+├── docs/                # 文档目录
 ├── data/                # 数据目录
 │   └── config.json      # 配置文件（自动生成）
 └── README.md
@@ -111,6 +139,8 @@ FloatSort/
 
 - ✅ **智能规则引擎**
   - 多条件判断（扩展名、大小、名称、正则、时间）
+  - 内容关键词匹配（PDF 文本、图片 EXIF）
+  - 文件元数据匹配（PDF 属性、图片信息）
   - 正则表达式捕获组支持（`$1`, `$2`, `$3`...）
   - 时间条件（相对时间/绝对时间）
   - 规则优先级和排序
@@ -128,27 +158,22 @@ FloatSort/
   - 回收站支持
 
 - ✅ **用户界面**
-  - 现代化深色主题
+  - 现代化极简主题
+  - 多语言支持（中文、英文、日文）
   - 拖拽文件快速整理
   - Mini 悬浮窗
   - 系统托盘支持
   - 实时活动日志
-
-### 开发中
-
-- 🚧 文件夹实时监控
-- 🚧 规则管理界面
-- 🚧 批量操作
-- 🚧 撤销/恢复功能
-- 🚧 统计分析
+  - 智能条件显示（根据文件类型自动调整）
 
 ### 计划中
 
 - 📅 预设规则模板
 - 📅 智能文件分类建议
-- 📅 多语言支持
 - 📅 主题定制
 - 📅 快捷键支持
+- 📅 更多文件类型支持（Office 文档、音视频）
+- 📅 云存储集成
 
 ## 🎮 使用指南
 
@@ -215,13 +240,17 @@ cargo build
 
 ## 📚 文档
 
+### 用户文档
 - [📖 用户指南](docs/USER_GUIDE.md) - 详细的使用说明
+- [⚡ 快速参考](docs/QUICK_REFERENCE.md) - 常用命令速查
+- [🍎 Mac 安装指南](docs/MAC_INSTALLATION.md) - Mac 用户必读
+- [❓ 常见问题](docs/FAQ.md) - FAQ
+
+### 开发文档
 - [💻 开发文档](docs/DEVELOPMENT.md) - 开发环境配置
 - [🏗️ 架构设计](docs/ARCHITECTURE.md) - 技术架构说明
 - [🔨 构建指南](docs/BUILD.md) - 编译打包说明
-- [❓ 常见问题](docs/FAQ.md) - FAQ
-- [🚀 GitHub Actions](docs/GITHUB_ACTIONS_GUIDE.md) - CI/CD 使用
-- [✨ 功能列表](docs/FEATURES.md) - 完整功能清单
+- [📚 完整文档](docs/README.md) - 文档导航中心
 
 ## 🛡️ 安全
 

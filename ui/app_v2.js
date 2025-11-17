@@ -83,6 +83,9 @@ window.changeLanguage = async function(lang) {
             // 更新整个界面的文本
             updateUILanguage();
             
+            // 更新托盘菜单语言
+            await updateTrayMenuLanguage(lang);
+            
             // 显示通知
             showNotification(t('notifications.languageChanged'), 'success');
         } catch (error) {
@@ -553,6 +556,9 @@ async function initTauriAPI() {
 async function initializeApp() {
     console.log('FloatSort V2 初始化中...');
     
+    // 0. 获取并显示版本号
+    await loadAppVersion();
+    
     // 1. 首先加载设置以获取用户的语言偏好
     const settings = await getSettings();
     const savedLanguage = settings?.language || 'zh-CN';
@@ -566,6 +572,7 @@ async function initializeApp() {
     setupBackendListeners();
     setupWindowListeners();
     setupWindowSnap(); // 新的窗口折叠功能
+    setupUpdateChecker(); // 检查更新监听
     
     // 4. 加载数据（会触发渲染，需要在语言加载后）
     await loadAppData();
@@ -576,6 +583,9 @@ async function initializeApp() {
     
     // 6. 更新界面语言（确保所有静态文本都被翻译）
     updateUILanguage();
+    
+    // 7. 更新托盘菜单（使用当前语言）
+    await updateTrayMenuLanguage(savedLanguage);
     
     // ❌ 移除定时刷新：会覆盖前端添加的实时日志
     // setInterval(loadActivityLogs, 10000);
@@ -6775,3 +6785,76 @@ function setupWindowSnap() {
 }
 
 
+
+//========== 版本管理和更新检查 ==========
+
+// 加载并显示应用版本号
+async function loadAppVersion() {
+    try {
+        const version = await invoke('get_app_version');
+        const versionEl = document.getElementById('appVersion');
+        if (versionEl) {
+            versionEl.textContent = `v${version}`;
+        }
+        console.log('✓ 应用版本:', version);
+    } catch (error) {
+        console.error('获取版本失败:', error);
+    }
+}
+
+// 设置更新检查器
+function setupUpdateChecker() {
+    // 监听来自托盘菜单的检查更新事件
+    listen('check-update-from-tray', async () => {
+        console.log('收到托盘菜单的检查更新请求');
+        await checkForUpdates();
+    });
+}
+
+// 检查更新
+async function checkForUpdates() {
+    try {
+        showNotification(t('update.checking_update') || '正在检查更新...', 'info');
+        
+        const updateInfo = await invoke('check_update');
+        
+        if (updateInfo.has_update) {
+            // 有新版本
+            const message = `${t('update.new_version_available') || '发现新版本'}: ${updateInfo.latest_version}\n\n${t('update.current_version') || '当前版本'}: ${updateInfo.current_version}\n\n${t('update.release_notes') || '更新内容'}:\n${updateInfo.release_notes.substring(0, 200)}...`;
+            
+            const confirmed = await dialog.confirm(message, {
+                title: t('update.update_available') || '更新可用',
+                okLabel: t('update.download') || '下载',
+                cancelLabel: t('common.cancel') || '取消',
+                type: 'info'
+            });
+            
+            if (confirmed) {
+                // 打开下载页面
+                await invoke('open_url_in_browser', { url: updateInfo.download_url });
+            }
+        } else {
+            // 已是最新版本
+            await dialog.message(
+                `${t('update.already_latest') || '当前已是最新版本'}: ${updateInfo.current_version}`,
+                {
+                    title: t('update.no_update') || '无需更新',
+                    type: 'info'
+                }
+            );
+        }
+    } catch (error) {
+        console.error('检查更新失败:', error);
+        showNotification(t('update.check_update_failed') || '检查更新失败: ' + error, 'error');
+    }
+}
+
+// 更新托盘菜单语言
+async function updateTrayMenuLanguage(language) {
+    try {
+        await invoke('update_tray_menu', { language });
+        console.log('✓ 托盘菜单语言已更新:', language);
+    } catch (error) {
+        console.error('更新托盘菜单语言失败:', error);
+    }
+}

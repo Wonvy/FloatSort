@@ -5,7 +5,9 @@
     "beforeBuildCommand": "",
     "devPath": "../ui",
     "distDir": "../ui",
-    "withGlobalTauri": true
+    "withGlobalTauri": true,
+    "features": [],
+    "runner": null
   },
   "package": {
     "productName": "FloatSort",
